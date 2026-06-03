@@ -12,7 +12,11 @@ from kafka.errors import (
     UnknownMemberIdError,
     UnsupportedVersionError,
 )
-from kafka.protocol.admin import ListGroupsRequest, ListGroupsResponse
+from kafka.protocol.admin import (
+    DeleteGroupsRequest, DeleteGroupsResponse,
+    DescribeGroupsRequest, DescribeGroupsResponse,
+    ListGroupsRequest, ListGroupsResponse,
+)
 from kafka.protocol.consumer import (
     LeaveGroupRequest, LeaveGroupResponse,
     ListOffsetsRequest, ListOffsetsResponse,
@@ -26,6 +30,24 @@ from kafka.protocol.metadata import (
 )
 from kafka.protocol.consumer.group import DEFAULT_GENERATION_ID, UNKNOWN_MEMBER_ID
 from kafka.structs import OffsetAndMetadata, TopicPartition
+
+
+def _find_coordinator_response(group_id, node_id=0):
+    """Build a FindCoordinatorResponse that decodes correctly at any version.
+
+    Sets both the v0-v3 top-level fields and the v4+ coordinators array;
+    the encoder picks whichever shape matches the negotiated version.
+    """
+    Coordinator = FindCoordinatorResponse.Coordinator
+    return FindCoordinatorResponse(
+        throttle_time_ms=0,
+        error_code=0,
+        error_message=None,
+        node_id=node_id, host='localhost', port=9092,
+        coordinators=[Coordinator(
+            key=group_id, node_id=node_id, host='localhost', port=9092,
+            error_code=0, error_message=None)],
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -586,7 +608,7 @@ def _offset_commit_response(partitions):
 class TestResetGroupOffsetsMockBroker:
     def test_clamps_explicit_offset_above_latest(self, broker, admin):
         _set_metadata_for_topic(broker, 'topic-a', num_partitions=1)
-        broker.respond(FindCoordinatorRequest, FindCoordinatorResponse(node_id=0)),
+        broker.respond(FindCoordinatorRequest, _find_coordinator_response('g1')),
         broker.respond(OffsetFetchRequest, _offset_fetch_response(
             [('topic-a', 0, 50, '', 0)]))
         # Bounds: earliest=10, latest=100
@@ -615,7 +637,7 @@ class TestResetGroupOffsetsMockBroker:
 
     def test_clamps_explicit_offset_below_earliest(self, broker, admin):
         _set_metadata_for_topic(broker, 'topic-a', num_partitions=1)
-        broker.respond(FindCoordinatorRequest, FindCoordinatorResponse(node_id=0)),
+        broker.respond(FindCoordinatorRequest, _find_coordinator_response('g1')),
         broker.respond(OffsetFetchRequest, _offset_fetch_response(
             [('topic-a', 0, 50, '', 0)]))
         broker.respond(ListOffsetsRequest, _list_offsets_response(
@@ -643,7 +665,7 @@ class TestResetGroupOffsetsMockBroker:
     def test_clamps_unknown_offset_to_latest(self, broker, admin):
         # Simulate a timestamp beyond the last record: ListOffsets returns -1.
         _set_metadata_for_topic(broker, 'topic-a', num_partitions=1)
-        broker.respond(FindCoordinatorRequest, FindCoordinatorResponse(node_id=0)),
+        broker.respond(FindCoordinatorRequest, _find_coordinator_response('g1')),
         broker.respond(OffsetFetchRequest, _offset_fetch_response(
             [('topic-a', 0, 50, '', 0)]))
         broker.respond(ListOffsetsRequest, _list_offsets_response(
@@ -672,7 +694,7 @@ class TestResetGroupOffsetsMockBroker:
 
     def test_offset_in_range_not_clamped(self, broker, admin):
         _set_metadata_for_topic(broker, 'topic-a', num_partitions=1)
-        broker.respond(FindCoordinatorRequest, FindCoordinatorResponse(node_id=0)),
+        broker.respond(FindCoordinatorRequest, _find_coordinator_response('g1')),
         broker.respond(OffsetFetchRequest, _offset_fetch_response(
             [('topic-a', 0, 50, 'm', 3)]))
         broker.respond(ListOffsetsRequest, _list_offsets_response(
@@ -833,3 +855,222 @@ class TestListGroupOffsetsMockBroker:
         assert sorted(captured['group_ids']) == ['g1', 'g2']
         assert captured['api_version'] == 7  # negotiated to v7 on 2.8
         assert set(result.keys()) == {'g1', 'g2'}
+
+
+# ---------------------------------------------------------------------------
+# FindCoordinator batching (KIP-699 / v4)
+# ---------------------------------------------------------------------------
+
+
+def _empty_describe_groups_response(group_ids):
+    Group = DescribeGroupsResponse.DescribedGroup
+    if isinstance(group_ids, str):
+        group_ids = [group_ids]
+    return DescribeGroupsResponse(
+        throttle_time_ms=0,
+        groups=[Group(
+            error_code=0, error_message=None,
+            group_id=gid, group_state='Empty',
+            protocol_type='consumer', protocol_data='',
+            members=[], authorized_operations=set()) for gid in group_ids])
+
+
+def _delete_groups_response(group_ids):
+    Result = DeleteGroupsResponse.DeletableGroupResult
+    return DeleteGroupsResponse(
+        throttle_time_ms=0,
+        results=[Result(group_id=g, error_code=0) for g in group_ids])
+
+
+class TestFindCoordinatorBatched:
+    def test_v4_batched_single_request_for_many_groups(self, broker, admin):
+        captured = {}
+
+        def find_handler(api_key, api_version, correlation_id, request_bytes):
+            req = FindCoordinatorRequest.decode(
+                request_bytes, version=api_version, header=True)
+            captured['api_version'] = api_version
+            captured['key_type'] = req.key_type
+            captured['coordinator_keys'] = list(req.coordinator_keys)
+            captured['count'] = captured.get('count', 0) + 1
+            Coordinator = FindCoordinatorResponse.Coordinator
+            return FindCoordinatorResponse(
+                throttle_time_ms=0,
+                error_code=0, error_message=None,
+                node_id=0, host='localhost', port=9092,
+                coordinators=[Coordinator(
+                    key=k, node_id=0, host='localhost', port=9092,
+                    error_code=0, error_message=None) for k in req.coordinator_keys])
+
+        broker.respond_fn(FindCoordinatorRequest, find_handler)
+        broker.respond(DescribeGroupsRequest,
+                       _empty_describe_groups_response(['g1', 'g2', 'g3']))
+
+        admin.describe_groups(['g1', 'g2', 'g3'])
+
+        assert captured['count'] == 1
+        assert captured['api_version'] >= 4
+        assert captured['key_type'] == 0
+        assert sorted(captured['coordinator_keys']) == ['g1', 'g2', 'g3']
+        assert admin._coordinator_cache == {'g1': 0, 'g2': 0, 'g3': 0}
+
+    def test_v4_batched_per_key_error_raises(self, broker, admin):
+        def find_handler(api_key, api_version, correlation_id, request_bytes):
+            req = FindCoordinatorRequest.decode(
+                request_bytes, version=api_version, header=True)
+            Coordinator = FindCoordinatorResponse.Coordinator
+            coordinators = []
+            for key in req.coordinator_keys:
+                if key == 'g2':
+                    coordinators.append(Coordinator(
+                        key=key, node_id=-1, host='', port=-1,
+                        error_code=Errors.GroupAuthorizationFailedError.errno,
+                        error_message='nope'))
+                else:
+                    coordinators.append(Coordinator(
+                        key=key, node_id=0, host='localhost', port=9092,
+                        error_code=0, error_message=None))
+            return FindCoordinatorResponse(
+                throttle_time_ms=0,
+                error_code=0, error_message=None,
+                node_id=0, host='localhost', port=9092,
+                coordinators=coordinators)
+
+        broker.respond_fn(FindCoordinatorRequest, find_handler)
+        with pytest.raises(Errors.GroupAuthorizationFailedError):
+            admin.describe_groups(['g1', 'g2'])
+
+    @pytest.mark.parametrize("broker", [(2, 8, 0)], indirect=True)
+    def test_v3_fallback_issues_one_request_per_group(self, broker, admin):
+        # Kafka 2.8 caps FindCoordinator at v3 -> no batch, fan out one request
+        # per group with the single-key shape.
+        captured = {'count': 0, 'keys': [], 'used_coordinator_keys': []}
+
+        def find_handler(api_key, api_version, correlation_id, request_bytes):
+            req = FindCoordinatorRequest.decode(
+                request_bytes, version=api_version, header=True)
+            captured['count'] += 1
+            captured['api_version'] = api_version
+            captured['keys'].append(req.key)
+            captured['used_coordinator_keys'].append(list(req.coordinator_keys))
+            return _find_coordinator_response(req.key, node_id=0)
+
+        broker.respond_fn(FindCoordinatorRequest, find_handler)
+        broker.respond_fn(FindCoordinatorRequest, find_handler)
+        broker.respond_fn(FindCoordinatorRequest, find_handler)
+        broker.respond(DescribeGroupsRequest,
+                       _empty_describe_groups_response(['g1', 'g2', 'g3']))
+
+        admin.describe_groups(['g1', 'g2', 'g3'])
+
+        assert captured['count'] == 3
+        assert captured['api_version'] == 3
+        assert sorted(captured['keys']) == ['g1', 'g2', 'g3']
+        assert captured['used_coordinator_keys'] == [[], [], []]  # v3 has no batch field
+
+    def test_cache_reuse_skips_already_resolved_groups(self, broker, admin):
+        admin._coordinator_cache['g1'] = 0
+        captured = {}
+
+        def find_handler(api_key, api_version, correlation_id, request_bytes):
+            req = FindCoordinatorRequest.decode(
+                request_bytes, version=api_version, header=True)
+            captured['coordinator_keys'] = list(req.coordinator_keys)
+            Coordinator = FindCoordinatorResponse.Coordinator
+            return FindCoordinatorResponse(
+                throttle_time_ms=0,
+                error_code=0, error_message=None,
+                node_id=0, host='localhost', port=9092,
+                coordinators=[Coordinator(
+                    key=k, node_id=0, host='localhost', port=9092,
+                    error_code=0, error_message=None) for k in req.coordinator_keys])
+
+        broker.respond_fn(FindCoordinatorRequest, find_handler)
+        broker.respond(DescribeGroupsRequest,
+                       _empty_describe_groups_response(['g1', 'g2']))
+
+        admin.describe_groups(['g1', 'g2'])
+
+        # Only g2 should have hit the network; g1 came from the cache.
+        assert captured['coordinator_keys'] == ['g2']
+        assert admin._coordinator_cache == {'g1': 0, 'g2': 0}
+
+    def test_delete_groups_uses_batched_lookup(self, broker, admin):
+        captured = {}
+
+        def find_handler(api_key, api_version, correlation_id, request_bytes):
+            req = FindCoordinatorRequest.decode(
+                request_bytes, version=api_version, header=True)
+            captured['coordinator_keys'] = list(req.coordinator_keys)
+            captured['count'] = captured.get('count', 0) + 1
+            Coordinator = FindCoordinatorResponse.Coordinator
+            return FindCoordinatorResponse(
+                throttle_time_ms=0,
+                error_code=0, error_message=None,
+                node_id=0, host='localhost', port=9092,
+                coordinators=[Coordinator(
+                    key=k, node_id=0, host='localhost', port=9092,
+                    error_code=0, error_message=None) for k in req.coordinator_keys])
+
+        broker.respond_fn(FindCoordinatorRequest, find_handler)
+        broker.respond(DeleteGroupsRequest, _delete_groups_response(['g1', 'g2']))
+
+        result = admin.delete_groups(['g1', 'g2'])
+
+        assert captured['count'] == 1
+        assert sorted(captured['coordinator_keys']) == ['g1', 'g2']
+        assert result == {'g1': 'OK', 'g2': 'OK'}
+
+    def test_list_group_offsets_uses_batched_lookup(self, broker, admin):
+        captured = {}
+
+        def find_handler(api_key, api_version, correlation_id, request_bytes):
+            req = FindCoordinatorRequest.decode(
+                request_bytes, version=api_version, header=True)
+            captured['coordinator_keys'] = list(req.coordinator_keys)
+            captured['count'] = captured.get('count', 0) + 1
+            Coordinator = FindCoordinatorResponse.Coordinator
+            return FindCoordinatorResponse(
+                throttle_time_ms=0,
+                error_code=0, error_message=None,
+                node_id=0, host='localhost', port=9092,
+                coordinators=[Coordinator(
+                    key=k, node_id=0, host='localhost', port=9092,
+                    error_code=0, error_message=None) for k in req.coordinator_keys])
+
+        _Group = OffsetFetchResponse.OffsetFetchResponseGroup
+        broker.respond_fn(FindCoordinatorRequest, find_handler)
+        broker.respond(OffsetFetchRequest, OffsetFetchResponse(
+            throttle_time_ms=0, error_code=0, topics=[],
+            groups=[
+                _Group(group_id='g1', error_code=0, topics=[]),
+                _Group(group_id='g2', error_code=0, topics=[]),
+            ]))
+
+        admin.list_group_offsets(['g1', 'g2'])
+
+        assert captured['count'] == 1
+        assert sorted(captured['coordinator_keys']) == ['g1', 'g2']
+
+    def test_describe_groups_batches_request_per_coordinator(self, broker, admin):
+        # All three groups share coordinator 0, so describe_groups should send
+        # exactly one DescribeGroups containing all three group_ids.
+        admin._coordinator_cache['g1'] = 0
+        admin._coordinator_cache['g2'] = 0
+        admin._coordinator_cache['g3'] = 0
+        captured = {'count': 0, 'groups_per_request': []}
+
+        def describe_handler(api_key, api_version, correlation_id, request_bytes):
+            req = DescribeGroupsRequest.decode(
+                request_bytes, version=api_version, header=True)
+            captured['count'] += 1
+            captured['groups_per_request'].append(list(req.groups))
+            return _empty_describe_groups_response(list(req.groups))
+
+        broker.respond_fn(DescribeGroupsRequest, describe_handler)
+
+        result = admin.describe_groups(['g1', 'g2', 'g3'])
+
+        assert captured['count'] == 1
+        assert sorted(captured['groups_per_request'][0]) == ['g1', 'g2', 'g3']
+        assert set(result.keys()) == {'g1', 'g2', 'g3'}

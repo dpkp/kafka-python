@@ -612,6 +612,9 @@ class TestAddPartitionsToTxnHandlerMockBroker:
 class TestFindCoordinatorHandlerMockBroker:
 
     def _response(self, error_code=0, node_id=0, host='localhost', port=9092):
+        # Set both the v0-v3 top-level fields and the v4+ Coordinators array so
+        # the encoder picks the right shape regardless of the negotiated version.
+        Coordinator = FindCoordinatorResponse.Coordinator
         return FindCoordinatorResponse(
             throttle_time_ms=0,
             error_code=error_code,
@@ -619,7 +622,9 @@ class TestFindCoordinatorHandlerMockBroker:
             node_id=node_id,
             host=host,
             port=port,
-            coordinators=[],
+            coordinators=[Coordinator(
+                key=_TXN_ID, node_id=node_id, host=host, port=port,
+                error_code=error_code, error_message='')],
         )
 
     @pytest.mark.parametrize("error", [
