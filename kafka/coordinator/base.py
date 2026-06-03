@@ -789,10 +789,13 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         if node_id is None:
             raise Errors.NodeNotReadyError('coordinator')
 
-        max_version = 3
+        # Setting key, key_type, and coordinator_keys all at once lets the
+        # connection layer negotiate any version: v0-v3 emit `key`/`key_type`,
+        # v4+ (KIP-699) emit `key_type`/`coordinator_keys`.
         request = FindCoordinatorRequest(
             key=self.group_id,
-            max_version=max_version)
+            key_type=0,
+            coordinator_keys=[self.group_id])
         log.debug("Sending group coordinator request for group %s to broker %s: %s",
                   self.group_id, node_id, request)
 
@@ -806,10 +809,13 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
     def _handle_find_coordinator_response(self, response):
         log.debug("Received find coordinator response %s", response)
 
-        error_type = Errors.for_code(response.error_code)
+        # v4+ returns results in a Coordinators array; we always send a single
+        # key, so the first entry is ours. v0-v3 returns top-level fields.
+        result = response.coordinators[0] if response.coordinators else response
+        error_type = Errors.for_code(result.error_code)
         if error_type is Errors.NoError:
             with self._lock:
-                coordinator_id = self._cluster.add_coordinator(response, 'group', self.group_id)
+                coordinator_id = self._cluster.add_coordinator(result, 'group', self.group_id)
                 if not coordinator_id:
                     # This could happen if coordinator metadata is different
                     # than broker metadata
