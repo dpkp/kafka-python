@@ -62,7 +62,14 @@ class Task:
         return id(self) < id(other)
 
     def __call__(self, arg=None):
-        ret, exc = (None, arg) if isinstance(arg, Exception) else (arg, None)
+        if self.is_done:
+            raise RuntimeError('Task is already done!')
+        elif self._exc is not None:
+            exc, self._exc = self._exc, None
+            ret = None
+        else:
+            ret = None
+            exc = None
         while True:
             coro = self._stack[0]
             if callable(coro) and not inspect.isgenerator(coro) and not inspect.iscoroutine(coro):
@@ -105,6 +112,15 @@ class Task:
 
     def push_stack(self, coro):
         self._stack = (_initialize_coro(coro), self._stack)
+
+    def inject_exc(self, exc):
+        if self.is_done:
+            raise RuntimeError('Task is already done!')
+        elif not isinstance(exc, BaseException):
+            raise TypeError('exc is not a BaseException')
+        elif self._exc is not None:
+            raise RuntimeError('Task exception is already set!')
+        self._exc = exc
 
     @property
     def is_done(self):
