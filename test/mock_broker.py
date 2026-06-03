@@ -378,7 +378,7 @@ class MockBroker:
         """
         broker = self
 
-        async def _mock_build_transport(node):
+        async def _mock_build_transport(node, timeout_at=None):
             return MockTransport(
                 manager._net, broker,
                 node_id=node.node_id, host=node.host, port=node.port)

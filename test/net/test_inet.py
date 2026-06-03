@@ -157,7 +157,7 @@ class TestCreateConnectionWithProxy:
              patch('kafka.net.socks5.Socks5Proxy.connect', return_value=mock_sock) as mock_connect:
             result = net.run(
                 create_connection(net, 'broker', 9092, proxy_url='socks5://proxy:1080'))
-            mock_connect.assert_called_once_with(net, fake_addr, ())
+            mock_connect.assert_called_once_with(net, fake_addr, (), timeout_at=None)
             assert result is mock_sock
 
     def test_proxy_remote_dns_skips_local_lookup(self):
@@ -342,8 +342,8 @@ class TestKafkaNetSocketExtensionPattern:
             SCHEMES = ('test-asyncio',)
             def __init__(self, proxy_url):
                 self.proxy_url = proxy_url
-            async def connect(self, net, addrinfo, socket_options=()):
-                connect_calls.append((addrinfo, tuple(socket_options)))
+            async def connect(self, net, addrinfo, socket_options=(), timeout_at=None):
+                connect_calls.append((addrinfo, tuple(socket_options), timeout_at))
                 return 'asyncio-stream-handle'
 
         try:
@@ -353,9 +353,10 @@ class TestKafkaNetSocketExtensionPattern:
                  patch('kafka.net.inet.socket.socket') as mock_sock_cls:
                 result = net.run(
                     create_connection(net, 'broker', 9092,
-                                      proxy_url='test-asyncio://x'))
+                                      proxy_url='test-asyncio://x',
+                                      timeout_at=123))
             assert result == 'asyncio-stream-handle'
-            assert connect_calls == [(fake_addr, ())]
+            assert connect_calls == [(fake_addr, (), 123)]
             mock_sock_cls.assert_not_called()
         finally:
             KafkaNetSocket._registry.pop('test-asyncio', None)

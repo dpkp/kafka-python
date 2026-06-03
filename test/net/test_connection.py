@@ -61,8 +61,8 @@ class TestKafkaConnectionInit:
         assert 'test-0' in s
 
 
-class TestKafkaConnectionCheckVersion:
-    """Test ApiVersionsRequest version negotiation in _check_version."""
+class TestKafkaConnectionCheckApiVersions:
+    """Test ApiVersionsRequest version negotiation in _get_api_versions."""
 
     def _make_conn(self, net, **kwargs):
         conn = KafkaConnection(net, node_id='test-0', **kwargs)
@@ -83,8 +83,8 @@ class TestKafkaConnectionCheckVersion:
             response.api_keys = api_keys or []
         return response
 
-    def _run_check_version(self, net, conn, responses):
-        """Run _check_version with mocked _send_request returning given responses.
+    def _run_initialize(self, net, conn, responses):
+        """Run initialize() with mocked _send_request returning given responses.
         Returns list of (request_version,) for each call."""
         requests_sent = []
         response_iter = iter(responses)
@@ -105,13 +105,13 @@ class TestKafkaConnectionCheckVersion:
             return f
 
         conn._send_request = mock_send_request
-        net.run(conn._check_version())
+        net.run(conn.initialize())
         return requests_sent
 
     def test_first_request_is_max_version(self, net):
         conn = self._make_conn(net)
         response = self._make_api_versions_response(error_code=0, broker_version=(1, 0))
-        versions = self._run_check_version(net, conn, [response])
+        versions = self._run_initialize(net, conn, [response])
         assert versions[0] == ApiVersionsRequest.max_version
         assert conn.broker_version == (1, 0)
 
@@ -126,7 +126,7 @@ class TestKafkaConnectionCheckVersion:
         unsupported = self._make_api_versions_response(
             error_code=35, api_keys=[api_key_entry])  # 35 = UnsupportedVersionError
         # Second response: success at version 2
-        versions = self._run_check_version(net, conn, [unsupported])
+        versions = self._run_initialize(net, conn, [unsupported])
         assert versions[0] == ApiVersionsRequest.max_version
         assert versions[1] == 2
 
@@ -135,7 +135,7 @@ class TestKafkaConnectionCheckVersion:
         # First response: UnsupportedVersionError with no matching api_key
         unsupported = self._make_api_versions_response(error_code=35, api_keys=[])
         # Second response: success at version 0
-        versions = self._run_check_version(net, conn, [unsupported])
+        versions = self._run_initialize(net, conn, [unsupported])
         assert versions[0] == ApiVersionsRequest.max_version
         assert versions[1] == 0
 
@@ -143,7 +143,7 @@ class TestKafkaConnectionCheckVersion:
         # Pre-configure with 1.0, which supports ApiVersions 0+1
         conn = self._make_conn(net)
         conn.broker_version_data = BrokerVersionData((1, 0))
-        versions = self._run_check_version(net, conn, [])
+        versions = self._run_initialize(net, conn, [])
         assert versions[0] == 1
 
     def test_preconfigured_version_without_api_versions_skips(self, net):
@@ -151,14 +151,14 @@ class TestKafkaConnectionCheckVersion:
         conn = self._make_conn(net)
         conn.broker_version_data = BrokerVersionData((0, 9))
         # Should not send any request -- just call _init_complete
-        versions = self._run_check_version(net, conn, [])
+        versions = self._run_initialize(net, conn, [])
         assert versions == []
         assert conn.connected
         assert conn.init_future.succeeded()
 
     def test_request_failure_closes_connection(self, net):
         conn = self._make_conn(net)
-        versions = self._run_check_version(
+        versions = self._run_initialize(
             net, conn, [Errors.KafkaConnectionError('disconnected')])
         assert versions == [ApiVersionsRequest.max_version]
         # Connection should be closed
@@ -434,7 +434,7 @@ class TestKafkaConnectionSasl:
         f.success(handshake_response)
         conn._send_request = MagicMock(return_value=f)
 
-        net.run(conn._sasl_authenticate())
+        net.run(conn.initialize())
         transport.abort.assert_called_once()
 
     def test_sasl_authenticate_mechanism_not_supported(self, net):
@@ -459,7 +459,7 @@ class TestKafkaConnectionSasl:
         f.success(handshake_response)
         conn._send_request = MagicMock(return_value=f)
 
-        net.run(conn._sasl_authenticate())
+        net.run(conn.initialize())
         transport.abort.assert_called_once()
 
     def test_sasl_authenticate_success(self, net):
@@ -489,15 +489,16 @@ class TestKafkaConnectionSasl:
         auth_response.auth_bytes = b''
 
         responses = iter([handshake_response, auth_response])
-        def mock_send_request(request):
+        def mock_send_request(request, **kwargs):
             f = Future()
             f.success(next(responses))
             return f
         conn._send_request = mock_send_request
 
-        net.run(conn._sasl_authenticate())
+        net.run(conn.initialize())
         # Should not have closed -- auth succeeded
-        assert conn.initializing  # still initializing, _init_complete not called by _sasl_authenticate
+        assert conn.connected
+        assert conn.init_future.succeeded()
 
     def test_sasl_authenticate_auth_failure(self, net):
         conn = KafkaConnection(net, node_id='test',
@@ -526,13 +527,13 @@ class TestKafkaConnectionSasl:
         auth_response.error_message = 'Authentication failed'
 
         responses = iter([handshake_response, auth_response])
-        def mock_send_request(request):
+        def mock_send_request(request, **kwargs):
             f = Future()
             f.success(next(responses))
             return f
         conn._send_request = mock_send_request
 
-        net.run(conn._sasl_authenticate())
+        net.run(conn.initialize())
         transport.abort.assert_called_once()
 
     def _drive_handshake_with_recording_mechanism(self, net, conn):
@@ -546,7 +547,7 @@ class TestKafkaConnectionSasl:
         auth_response.error_code = 0
         auth_response.auth_bytes = b''
         responses = iter([handshake_response, auth_response])
-        def mock_send_request(_):
+        def mock_send_request(request, **kwargs):
             f = Future()
             f.success(next(responses))
             return f
@@ -562,7 +563,7 @@ class TestKafkaConnectionSasl:
                 super().__init__(**config)
         register_sasl_mechanism('PLAIN', RecordingPlain, overwrite=True)
         try:
-            net.run(conn._sasl_authenticate())
+            net.run(conn.initialize())
         finally:
             register_sasl_mechanism('PLAIN', SaslMechanismPlain, overwrite=True)
         return captured
