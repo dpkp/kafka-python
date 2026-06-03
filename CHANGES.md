@@ -1,3 +1,11 @@
+# 2.3.2 (Jun 3, 2026)
+
+Fixes
+* kafka.conn: Improve error handling for sasl authenticate mechanisms
+* kafka.net: Validate SASL/SCRAM iterations (#3026)
+* KafkaProtocol: validate network frame size (backport of #3019)
+* Clear `_callbacks`/`_errbacks` list when future `is_done` to avoid reference cycles (#2891)
+
 # 2.3.1 (Apr 9, 2026)
 
 Fixes
