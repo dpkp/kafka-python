@@ -181,7 +181,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
 
         if self.config['group_instance_id'] is not None:
             if self.config['group_id'] is None:
-                raise KafkaConfigurationError("group_instance_id requires group_id")
+                raise Errors.KafkaConfigurationError("group_instance_id requires group_id")
 
         if self.config['api_version'] < (0, 10, 1):
             if self.config['max_poll_interval_ms'] != self.config['session_timeout_ms']:
