@@ -4,6 +4,11 @@ from kafka import ConsumerGroupMetadata, KafkaConsumer, TopicPartition
 from kafka.errors import KafkaConfigurationError, IllegalStateError
 
 
+def test_session_timeout_different_from_max_poll_timeout_raises():
+    with pytest.raises(KafkaConfigurationError):
+        KafkaConsumer(bootstrap_servers='localhost:9092', api_version=(0, 9), group_id='foo', session_timeout_ms=50000, max_poll_timeout_ms=40000)
+
+
 def test_fetch_max_wait_larger_than_request_timeout_raises():
     with pytest.raises(KafkaConfigurationError):
         KafkaConsumer(bootstrap_servers='localhost:9092', fetch_max_wait_ms=50000, request_timeout_ms=40000)

@@ -109,7 +109,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
     DEFAULT_CONFIG = {
         'group_id': 'kafka-python-default-group',
         'group_instance_id': None,
-        'session_timeout_ms': 10000,
+        'session_timeout_ms': 45000,
         'heartbeat_interval_ms': 3000,
         'max_poll_interval_ms': 300000,
         'request_timeout_ms': 30000,
@@ -118,6 +118,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         'metrics': None,
         'metric_group_prefix': '',
     }
+    DEFAULT_SESSION_TIMEOUT_MS_PRE_KIP_735 = 30000
 
     def __init__(self, client, **configs):
         """
@@ -125,8 +126,23 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
             group_id (str): name of the consumer group to join for dynamic
                 partition assignment (if enabled), and to use for fetching and
                 committing offsets. Default: 'kafka-python-default-group'
+            group_instance_id (str): A unique identifier of the consumer instance
+                provided by end user. Only non-empty strings are permitted. If set,
+                the consumer is treated as a static member, which means that only
+                one instance with this ID is allowed in the consumer group at any
+                time. This can be used in combination with a larger session timeout
+                to avoid group rebalances caused by transient unavailability (e.g.
+                process restarts). If not set, the consumer will join the group as
+                a dynamic member, which is the traditional behavior. Default: None
             session_timeout_ms (int): The timeout used to detect failures when
-                using Kafka's group management facilities. Default: 30000
+                using Kafka's group management facilities. The consumer sends
+                periodic heartbeats to indicate its liveness to the broker. If
+                no heartbeats are received by the broker before the expiration of
+                this session timeout, then the broker will remove this consumer
+                from the group and initiate a rebalance. Note that the value must
+                be in the allowable range as configured in the broker configuration
+                by group.min.session.timeout.ms and group.max.session.timeout.ms.
+                Default: 45000 for brokers 3.0+, otherwise 30000.
             heartbeat_interval_ms (int): The expected time in milliseconds
                 between heartbeats to the consumer coordinator when using
                 Kafka's group management feature. Heartbeats are used to ensure
@@ -143,6 +159,29 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         for key in self.config:
             if key in configs:
                 self.config[key] = configs[key]
+
+        # Coordinator configurations are different for older brokers
+        # max_poll_interval_ms is not supported directly -- it must the be
+        # the same as session_timeout_ms. If the user provides one of them,
+        # use it for both.
+        user_supplied_session_timeout = 'session_timeout_ms' in configs
+        user_supplied_max_poll_interval = 'max_poll_interval_ms' in configs
+
+        if not user_supplied_session_timeout:
+            if self.config['api_version'] < (0, 10, 1) and user_supplied_max_poll_interval:
+                self.config['session_timeout_ms'] = self.config['max_poll_interval_ms']
+
+            elif self.config['api_version'] < (3, 0):
+                # Prior to 3.0 the broker-side default max session timeout was 30000
+                self.config['session_timeout_ms'] = self.DEFAULT_SESSION_TIMEOUT_MS_PRE_KIP_735
+
+        if not user_supplied_max_poll_interval:
+            if self.config['api_version'] < (0, 10, 1):
+                self.config['max_poll_interval_ms'] = self.config['session_timeout_ms']
+
+        if self.config['group_instance_id'] is not None:
+            if self.config['group_id'] is None:
+                raise KafkaConfigurationError("group_instance_id requires group_id")
 
         if self.config['api_version'] < (0, 10, 1):
             if self.config['max_poll_interval_ms'] != self.config['session_timeout_ms']:

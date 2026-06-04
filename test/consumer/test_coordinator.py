@@ -34,9 +34,7 @@ from kafka.util import WeakMethod
 def coordinator(broker, client, metrics):
     coord = ConsumerCoordinator(client, SubscriptionState(),
                                 metrics=metrics,
-                                api_version=broker.broker_version,
-                                max_poll_interval_ms=300000 if broker.broker_version >= (0, 10, 1) else 10000,
-                                session_timeout_ms=10000)
+                                api_version=broker.broker_version)
     try:
         yield coord
     finally:
@@ -560,8 +558,6 @@ def test_maybe_auto_commit_offsets_sync(mocker, client, api_version, group_id, e
     mock_exc = mocker.patch('kafka.coordinator.consumer.log.exception')
     coordinator = ConsumerCoordinator(client, SubscriptionState(),
                                       api_version=api_version,
-                                      session_timeout_ms=30000,
-                                      max_poll_interval_ms=30000,
                                       enable_auto_commit=enable,
                                       group_id=group_id)
     commit_sync = mocker.patch.object(coordinator, 'commit_offsets_sync',
@@ -864,9 +860,7 @@ def test_send_offset_fetch_request_sets_require_stable(
     coord = ConsumerCoordinator(client, SubscriptionState(),
                                 metrics=metrics,
                                 api_version=broker.broker_version,
-                                isolation_level=isolation_level,
-                                max_poll_interval_ms=300000,
-                                session_timeout_ms=10000)
+                                isolation_level=isolation_level)
     try:
         client._manager.bootstrap(timeout_ms=5000)
         coord._subscription.subscribe(topics=['foobar'])
@@ -1571,8 +1565,6 @@ def _cooperative_coordinator(client, metrics):
         client, SubscriptionState(),
         metrics=metrics,
         api_version=(2, 4),
-        max_poll_interval_ms=300000,
-        session_timeout_ms=10000,
         assignors=(CooperativeStickyAssignor,))
 
 
@@ -1605,8 +1597,6 @@ class TestKip429RebalanceProtocolValidation:
                 client, SubscriptionState(),
                 metrics=metrics,
                 api_version=(2, 4),
-                max_poll_interval_ms=300000,
-                session_timeout_ms=10000,
                 assignors=(RangePartitionAssignor, CooperativeStickyAssignor))
 
 
