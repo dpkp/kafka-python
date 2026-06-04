@@ -109,11 +109,11 @@ class TestSaslReauthentication:
     def test_reauth_fires_and_runs_second_handshake(self, sasl_manager, sasl_broker, monkeypatch):
         monkeypatch.setattr('kafka.net.connection.random.uniform', lambda a, b: a)
 
-        conn = _bootstrap_and_open(sasl_manager, sasl_broker, lifetime_ms=200)
+        conn = _bootstrap_and_open(sasl_manager, sasl_broker, lifetime_ms=1000)
         # Queue responses for the re-auth that's about to fire.
         _script_sasl(sasl_broker, session_lifetime_ms=0)
 
-        assert conn._reauth.session_lifetime_ms == 200
+        assert conn._reauth.session_lifetime_ms == 1000
         initial_auth_at = conn._reauth.authenticated_at
 
         # Drive the loop past the jittered delay (200ms * 0.85 = 170ms)

@@ -500,8 +500,13 @@ class SaslReauthenticator:
 
     def session_updated(self, session_lifetime_ms):
         """Capture broker-advertised session lifetime after each successful
-        auth round (initial and subsequent re-auths)."""
+        auth round (initial and subsequent re-auths). Clamp negative values to 0,
+        and require minimum non-zero lifetime of 1sec (1000)."""
         self.session_lifetime_ms = session_lifetime_ms or 0
+        if self.session_lifetime_ms < 0:
+            self.session_lifetime_ms = 0
+        elif 0 < self.session_lifetime_ms <= 1000:
+            self.session_lifetime_ms = 1000
         self.authenticated_at = time.monotonic()
 
     def schedule(self):
@@ -513,7 +518,7 @@ class SaslReauthenticator:
         if not self._conn.sasl_enabled or not self.session_lifetime_ms:
             return
         pct = random.uniform(0.85, 0.95)
-        delay = max(0.1, (self.session_lifetime_ms * pct) / 1000)
+        delay = (self.session_lifetime_ms * pct) / 1000
         log.debug('%s: Scheduling SASL re-authentication in %.3fs (session_lifetime_ms=%d)',
                   self._conn, delay, self.session_lifetime_ms)
         self._task = self._conn.net.call_later(delay, self._run)
