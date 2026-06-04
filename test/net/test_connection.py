@@ -487,6 +487,8 @@ class TestKafkaConnectionSasl:
         auth_response = MagicMock()
         auth_response.error_code = 0
         auth_response.auth_bytes = b''
+        # KIP-368: explicit 0 so _schedule_reauthenticate() short-circuits
+        auth_response.session_lifetime_ms = 0
 
         responses = iter([handshake_response, auth_response])
         def mock_send_request(request, **kwargs):
@@ -546,6 +548,8 @@ class TestKafkaConnectionSasl:
         auth_response = MagicMock()
         auth_response.error_code = 0
         auth_response.auth_bytes = b''
+        # KIP-368: explicit 0 so _schedule_reauthenticate() short-circuits
+        auth_response.session_lifetime_ms = 0
         responses = iter([handshake_response, auth_response])
         def mock_send_request(request, **kwargs):
             f = Future()
