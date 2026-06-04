@@ -63,6 +63,9 @@ class MockTransport:
         self._broker = broker
         self._node_id = node_id
         self._host = host
+        # Public mirror -- KafkaTCPTransport / KafkaSSLTransport both expose
+        # `host` for the SASL hostname fallback.
+        self.host = host
         self._port = port
         self._protocol = None
         self._closed = False
