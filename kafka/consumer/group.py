@@ -219,15 +219,12 @@ class KafkaConsumer:
             or other configuration forbids use of all the specified ciphers),
             an ssl.SSLError will be raised. See ssl.SSLContext.set_ciphers
         api_version (tuple): Specify which Kafka API version to use. If set to
-            None, the client will attempt to determine the broker version via
+            None, the client will infer the broker version from the results of
             ApiVersionsRequest API or, for brokers earlier than 0.10, probing
-            various known APIs. Dynamic version checking is performed eagerly
-            during __init__ and can raise KafkaTimeoutError if no connection
-            was made before timeout (see api_version_auto_timeout_ms below).
-            Different versions enable different functionality.
+            various known APIs.  Different versions enable different functionality.
 
             Examples:
-                (3, 9) most recent broker release, enable all supported features
+                (4, 2) most recent broker release, enable all supported features
                 (0, 11) enables message format v2 (internal)
                 (0, 10, 0) enables sasl authentication and message format v1
                 (0, 9) enables full group coordination features with automatic
@@ -240,10 +237,12 @@ class KafkaConsumer:
                     partition assignment and offset management.
 
             Default: None
-        api_version_auto_timeout_ms (int): number of milliseconds to throw a
-            timeout exception from the constructor when checking the broker
-            api version. Only applies if api_version set to None.
-            Default: 2000
+        bootstrap_timeout_ms (int): number of milliseconds to wait for first
+            successful cluster bootstrap. If provided, an attempt to bootstrap
+            will raise KafkaTimeoutError if it is unable to fetch cluster
+            metadata before the configured timeout. Note that bootstrap will
+            be called eagerly from __init__() if api_version is None.
+            Default: 30000
         connections_max_idle_ms: Close idle connections after the number of
             milliseconds specified by this config. The broker closes idle
             connections after connections.max.idle.ms, so this avoids hitting
@@ -335,7 +334,7 @@ class KafkaConsumer:
         'ssl_password': None,
         'ssl_ciphers': None,
         'api_version': None,
-        'api_version_auto_timeout_ms': 2000,
+        'bootstrap_timeout_ms': 30000,
         'connections_max_idle_ms': 9 * 60 * 1000,
         'metric_reporters': [],
         'metrics_enabled': True,
@@ -407,11 +406,11 @@ class KafkaConsumer:
         # poll() timing.
         self._net.start()
 
-        # If api_version was not passed explicitly, bootstrap to auto-discover
-        # it. bootstrap is passed as a deferred coroutine so that once the IO
-        # thread is introduced in a later phase it runs on the IO thread.
+        # We currently depend on eager-resolution of api_version.
+        # If it wasn't provided as a config option, we need to bootstrap
+        # to get it.
         if self._manager.broker_version_data is None:
-            self._manager.bootstrap(self.config['api_version_auto_timeout_ms'])
+            self._manager.bootstrap(self.config['bootstrap_timeout_ms'])
         self.config['api_version'] = self._manager.broker_version
 
         # Coordinator configurations are different for older brokers
