@@ -1,6 +1,7 @@
 # pylint: skip-file
 
 import socket
+import uuid
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -125,6 +126,125 @@ class TestClusterMetadataUpdateMetadata:
 
         # topic should be added to unauthorized list
         assert 'unauthorized-topic' in cluster.unauthorized_topics
+
+
+def _make_metadata_response_with_id(version, name, topic_id, partition=0,
+                                    leader_id=0, leader_epoch=0):
+    """v10+ MetadataResponse builder that carries a topic_id."""
+    topic = Topic(
+        version=version,
+        error_code=0,
+        name=name,
+        topic_id=topic_id,
+        is_internal=False,
+        partitions=[
+            Partition(
+                version=version,
+                error_code=0,
+                partition_index=partition,
+                leader_id=leader_id,
+                leader_epoch=leader_epoch,
+                replica_nodes=[leader_id],
+                isr_nodes=[leader_id],
+                offline_replicas=[],
+            ),
+        ],
+    )
+    return MetadataResponse(
+        version=version,
+        throttle_time_ms=0,
+        brokers=[Broker(node_id=leader_id, host='foo', port=12, rack=None,
+                        version=version)],
+        cluster_id='cluster-foo',
+        controller_id=leader_id,
+        topics=[topic])
+
+
+class TestClusterMetadataTopicIds:
+    """KIP-516: ClusterMetadata indexes topic UUIDs from MetadataResponse
+    v10+ and detects topic recreation (same name, different id)."""
+
+    def _apply(self, cluster, version, name, topic_id, **kwargs):
+        response = _make_metadata_response_with_id(version, name, topic_id, **kwargs)
+        response = MetadataResponse.decode(response.encode(), version=version)
+        cluster.update_metadata(response)
+        return response
+
+    def test_populates_indexes_from_v10_response(self, cluster):
+        u = uuid.uuid4()
+        self._apply(cluster, 10, 'topic-1', u)
+        assert cluster.topic_id('topic-1') == u
+        assert cluster.topic_name_for_id(u) == 'topic-1'
+
+    def test_topic_id_unknown_returns_none(self, cluster):
+        assert cluster.topic_id('not-a-topic') is None
+        assert cluster.topic_name_for_id(uuid.uuid4()) is None
+
+    def test_pre_v10_response_does_not_populate(self, cluster):
+        # Pre-v10 schemas don't carry topic_id; the codec returns the field
+        # default (None for uuid). The cache should record nothing.
+        response = _make_metadata_response(9)
+        response = MetadataResponse.decode(response.encode(), version=9)
+        cluster.update_metadata(response)
+        assert cluster.topic_id('topic-1') is None
+
+    def test_pre_v10_response_preserves_prior_index(self, cluster):
+        # Once we know an id from a modern broker, a stray older reply
+        # (e.g. mid-rolling-upgrade) must not clobber it.
+        u = uuid.uuid4()
+        self._apply(cluster, 10, 'topic-1', u)
+        response = _make_metadata_response(9)
+        response = MetadataResponse.decode(response.encode(), version=9)
+        cluster.update_metadata(response)
+        assert cluster.topic_id('topic-1') == u
+        assert cluster.topic_name_for_id(u) == 'topic-1'
+
+    def test_zero_uuid_not_indexed(self, cluster):
+        # ZERO_UUID is the "no id" sentinel; codec decodes it to None.
+        # Build a response with topic_id=None and confirm nothing is recorded.
+        self._apply(cluster, 10, 'topic-1', None)
+        assert cluster.topic_id('topic-1') is None
+
+    def test_recreation_resets_leader_epoch_and_updates_index(self, cluster, caplog):
+        u1 = uuid.uuid4()
+        u2 = uuid.uuid4()
+        self._apply(cluster, 10, 'topic-1', u1, leader_epoch=7)
+        assert cluster._partitions['topic-1'][0].leader_epoch == 7
+
+        with caplog.at_level('WARNING', logger='kafka.cluster'):
+            self._apply(cluster, 10, 'topic-1', u2, leader_epoch=9)
+
+        assert cluster.topic_id('topic-1') == u2
+        assert cluster.topic_name_for_id(u2) == 'topic-1'
+        assert cluster.topic_name_for_id(u1) is None
+        # Leader epoch must be reset on recreation (mirrors Java's
+        # Metadata.updateLatestMetadata behaviour).
+        assert cluster._partitions['topic-1'][0].leader_epoch == -1
+        assert any('topic_id changed' in rec.message for rec in caplog.records)
+
+    def test_stable_id_keeps_leader_epoch(self, cluster):
+        # Same id across two updates -> no recreation, epoch trusted (v10).
+        u = uuid.uuid4()
+        self._apply(cluster, 10, 'topic-1', u, leader_epoch=4)
+        self._apply(cluster, 10, 'topic-1', u, leader_epoch=8)
+        assert cluster._partitions['topic-1'][0].leader_epoch == 8
+
+    def test_topic_drop_from_response_clears_index(self, cluster):
+        # If a topic vanishes from a v10+ response, its index entry goes too.
+        u = uuid.uuid4()
+        self._apply(cluster, 10, 'topic-1', u)
+        # Now apply a v10 response with no topics.
+        response = MetadataResponse(
+            version=10,
+            throttle_time_ms=0,
+            brokers=[Broker(node_id=0, host='foo', port=12, rack=None, version=10)],
+            cluster_id='cluster-foo',
+            controller_id=0,
+            topics=[])
+        response = MetadataResponse.decode(response.encode(), version=10)
+        cluster.update_metadata(response)
+        assert cluster.topic_id('topic-1') is None
+        assert cluster.topic_name_for_id(u) is None
 
 
 class TestClusterMetadataPartitionLookups:

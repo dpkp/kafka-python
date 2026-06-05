@@ -38,8 +38,11 @@ class TopicAdminMixin:
         """Fetch metadata for the specified topics or all topics if None.
 
         Keyword Arguments:
-            topics ([str], optional) A list of topic names. If None, metadata for all
-                topics is retrieved.
+            topics (list, optional): A list of topic names or
+                :class:`uuid.UUID` topic ids (KIP-516). Strings and UUIDs may
+                be mixed. Describing by id requires broker >= 2.8
+                (MetadataRequest v12+); name-based describe works on any
+                broker. If None, metadata for all topics is retrieved.
 
         Returns:
             A list of dicts describing each topic (including partition info).
@@ -110,7 +113,7 @@ class TopicAdminMixin:
                 in broker metadata with a leader assigned for every partition. Default: False
 
         Returns:
-            dict of CreateTopicResponse key/vals
+            dict of CreateTopicsResponse key/vals.
         """
         if validate_only and wait_for_metadata:
             raise ValueError('validate_only and wait_for_metadata are mutually exclusive')
@@ -131,7 +134,6 @@ class TopicAdminMixin:
             topics=topics,
             timeout_ms=timeout_ms,
             validate_only=validate_only,
-            max_version=3,
         )
         def response_errors(r):
             for topic in r.topics:

@@ -6,6 +6,7 @@ import re
 import socket
 import threading
 import time
+import uuid
 import weakref
 
 from kafka import errors as Errors
@@ -53,6 +54,8 @@ class ClusterMetadata:
         self._brokers = {}  # node_id -> MetadataResponseBroker
         self._partitions = {}  # topic -> partition -> PartitionMetadata
         self._broker_partitions = collections.defaultdict(set)  # node_id -> {TopicPartition...}
+        self._topic_ids = {}  # topic name -> uuid.UUID
+        self._topic_names_by_id = {}  # uuid.UUID -> topic name
         self._coordinators = {}  # (key_type, key) -> node_id
         self._last_refresh_ms = 0
         self._last_successful_refresh_ms = 0
@@ -472,6 +475,22 @@ class ClusterMetadata:
             include_topic_authorized_operations=False,
         )
 
+    def topic_id(self, topic_name):
+        """Return the topic UUID for ``topic_name``, or None if unknown.
+
+        Populated from MetadataResponse v10+ (Kafka 2.8+, KIP-516). Older
+        responses leave this empty.
+        """
+        return self._topic_ids.get(topic_name)
+
+    def topic_name_for_id(self, topic_id):
+        """Return the topic name for ``topic_id`` (uuid.UUID), or None.
+
+        Reverse lookup of :meth:`topic_id`. Populated from MetadataResponse
+        v10+ (KIP-516).
+        """
+        return self._topic_names_by_id.get(topic_id)
+
     def failed_update(self, exception):
         """Update cluster state given a failed MetadataRequest."""
         f = None
@@ -520,6 +539,8 @@ class ClusterMetadata:
         _new_broker_partitions = collections.defaultdict(set)
         _new_unauthorized_topics = set()
         _new_internal_topics = set()
+        _new_topic_ids = {}
+        _new_topic_names_by_id = {}
         _retry_topics = set()
 
         # KAFKA-9212: pre-2.4 brokers may emit stale leader_epoch values
@@ -537,11 +558,23 @@ class ClusterMetadata:
             if t.is_internal:
                 _new_internal_topics.add(topic)
             error_type = Errors.for_code(t.error_code)
+            new_topic_id = t.topic_id
+            recreated = False
+            if new_topic_id is not None and topic is not None:
+                prior = self._topic_ids.get(topic)
+                if prior is not None and prior != new_topic_id:
+                    log.warning(
+                        "Topic %s topic_id changed from %s to %s -- likely"
+                        " recreated; resetting cached leader epochs.",
+                        topic, prior, new_topic_id)
+                    recreated = True
+                _new_topic_ids[topic] = new_topic_id
+                _new_topic_names_by_id[new_topic_id] = topic
             if error_type is Errors.NoError:
                 _new_partitions[topic] = {}
                 for p_data in t.partitions:
                     partition = p_data.partition_index
-                    if not epoch_reliable:
+                    if not epoch_reliable or recreated:
                         p_data.leader_epoch = -1
                     _new_partitions[topic][partition] = p_data
                     if p_data.leader_id != -1:
@@ -576,6 +609,13 @@ class ClusterMetadata:
             self._broker_partitions = _new_broker_partitions
             self.unauthorized_topics = _new_unauthorized_topics
             self.internal_topics = _new_internal_topics
+            # Pre-v10 responses don't carry topic_id, so the wholesale swap
+            # would clobber known ids during a rolling downgrade (or any
+            # cross-broker version skew). Only replace the index when the
+            # response actually had a chance to populate it.
+            if metadata.API_VERSION >= 10:
+                self._topic_ids = _new_topic_ids
+                self._topic_names_by_id = _new_topic_names_by_id
             self._need_update = len(_retry_topics) > 0
             f = None
             if self._future:

@@ -6,6 +6,7 @@ from collections import defaultdict
 from enum import IntEnum
 import logging
 from typing import TYPE_CHECKING
+import uuid
 
 import kafka.errors as Errors
 from kafka.protocol.api_key import ApiKey
@@ -30,11 +31,20 @@ class ClusterAdminMixin:
     _manager: KafkaConnectionManager
 
     async def _get_cluster_metadata(self, topics):
-        """topics = [] for no topics, None for all."""
+        """topics = [] for no topics, None for all. Items may be topic-name
+        strings or :class:`uuid.UUID` topic ids (KIP-516, requires broker
+        >= 2.8 / MetadataRequest v12+)."""
+        _Topic = MetadataRequest.MetadataRequestTopic
+        if topics is None:
+            request_topics = None
+        else:
+            request_topics = [
+                _Topic(name=None, topic_id=t) if isinstance(t, uuid.UUID)
+                else _Topic(name=t)
+                for t in topics
+            ]
         request = MetadataRequest(
-            topics=[
-                MetadataRequest.MetadataRequestTopic(name=topic)
-                for topic in topics] if topics is not None else None,
+            topics=request_topics,
             allow_auto_topic_creation=False,
             include_cluster_authorized_operations=True,
             include_topic_authorized_operations=True,
