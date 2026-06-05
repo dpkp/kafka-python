@@ -104,35 +104,50 @@ class ConfigAdminMixin:
             min_version=min_version)
 
     @staticmethod
-    def _describe_configs_process_responses(responses, config_filter='modified'):
+    def _get_config_source(config, resource_type):
+        if 'config_source' in config:
+            return ConfigSourceType.build_from(config['config_source'])
+        elif config['read_only'] and resource_type is ConfigResourceType.BROKER:
+            return ConfigSourceType.STATIC_BROKER_CONFIG
+        elif config.get('is_default', False):
+            return ConfigSourceType.DEFAULT_CONFIG
+        else:
+            return ConfigSourceType.dynamic_for_resource_type(resource_type)
+
+    @classmethod
+    def _should_skip_config(cls, config, config_filter, resource_type):
+        if config_filter == ConfigFilterType.DYNAMIC and config['read_only']:
+            return True
+        config_source = cls._get_config_source(config, resource_type)
+        if config_filter.should_skip(config_source):
+            return True
+        return False
+
+    @classmethod
+    def _process_config(cls, config, resource_type):
+        name = config.pop('name')
+        config_source = cls._get_config_source(config, resource_type)
+        config['config_source'] = config_source.name
+        if 'synonyms' in config:
+            for synonym in config['synonyms']:
+                synonym['source'] = ConfigSourceType(synonym['source']).name
+        if 'config_type' in config:
+            config['config_type'] = ConfigType(config['config_type']).name
+        return name
+
+    @classmethod
+    def _describe_configs_process_responses(cls, responses, config_filter='modified'):
         config_filter = ConfigFilterType.build_from(config_filter)
         ret = defaultdict(dict)
         for response in responses:
             for result in response.results:
                 resource_type = ConfigResourceType(result.resource_type)
                 resource_configs = {}
-                for config in result.configs:
-                    config = config.to_dict()
-                    name = config.pop('name')
-                    if config_filter == ConfigFilterType.DYNAMIC and config['read_only']:
-                        continue
-                    if 'config_source' in config:
-                        config_source = ConfigSourceType(config['config_source'])
-                    elif config['read_only'] and resource_type is ConfigResourceType.BROKER:
-                        config_source = ConfigSourceType.STATIC_BROKER_CONFIG
-                    elif config['is_default']:
-                        config_source = ConfigSourceType.DEFAULT_CONFIG
-                    else:
-                        config_source = ConfigSourceType.dynamic_for_resource_type(resource_type)
-                    if config_filter.should_skip(config_source):
-                        continue
-                    config['config_source'] = config_source.name
-                    if 'synonyms' in config:
-                        for synonym in config['synonyms']:
-                            synonym['source'] = ConfigSourceType(synonym['source']).name
-                    if 'config_type' in config:
-                        config['config_type'] = ConfigType(config['config_type']).name
-                    resource_configs[name] = config
+                for config_struct in result.configs:
+                    config = config_struct.to_dict()
+                    name = cls._process_config(config, resource_type)
+                    if not cls._should_skip_config(config, config_filter, resource_type):
+                        resource_configs[name] = config
                 ret[resource_type.name.lower()][result.resource_name] = resource_configs
         return dict(ret)
 
@@ -419,7 +434,7 @@ class ConfigResource:
         return f"ConfigResource({self.resource_type}, {self.name}, {self.configs})"
 
 
-class ConfigType(IntEnum):
+class ConfigType(EnumHelper, IntEnum):
     UNKNOWN  = 0
     BOOLEAN  = 1
     STRING   = 2
@@ -432,7 +447,7 @@ class ConfigType(IntEnum):
     PASSWORD = 9
 
 
-class ConfigSourceType(IntEnum):
+class ConfigSourceType(EnumHelper, IntEnum):
     UNKNOWN = 0
     DYNAMIC_TOPIC_CONFIG = 1
     DYNAMIC_BROKER_CONFIG = 2

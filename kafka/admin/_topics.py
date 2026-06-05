@@ -13,6 +13,7 @@ import uuid
 import kafka.errors as Errors
 from kafka.errors import IncompatibleBrokerVersion
 from kafka.protocol.admin import CreateTopicsRequest, DeleteTopicsRequest, CreatePartitionsRequest
+from ._configs import ConfigResourceType
 
 if TYPE_CHECKING:
     from kafka.net.manager import KafkaConnectionManager
@@ -143,6 +144,14 @@ class TopicAdminMixin:
             self.wait_for_topics([new_topic.name for new_topic in request.topics])
         result = response.to_dict()
         result.pop('throttle_time_ms', None)
+        for topic in result['topics']:
+            configs = topic.pop('configs', None)
+            if configs:
+                processed_configs = {}
+                for config in configs:
+                    name = self._process_config(config, ConfigResourceType.TOPIC)
+                    processed_configs[name] = config
+                topic['configs'] = processed_configs
         return result
 
     def wait_for_topics(self, topic_names, timeout_ms=10000):
