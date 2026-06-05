@@ -33,7 +33,7 @@ on:
       kafka_version:
         description: "Kafka broker version"
         required: true
-        default: "4.2.0"
+        default: "4.3.0"
       python_version:
         description: "Python version"
         required: true

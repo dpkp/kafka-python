@@ -1,12 +1,12 @@
 Compatibility
 -------------
 
-.. image:: https://img.shields.io/badge/kafka-4.0--0.8-brightgreen.svg
+.. image:: https://img.shields.io/badge/kafka-4.3--0.8-brightgreen.svg
     :target: https://kafka-python.readthedocs.io/compatibility.html
 .. image:: https://img.shields.io/pypi/pyversions/kafka-python.svg
     :target: https://pypi.python.org/pypi/kafka-python
 
-kafka-python is compatible with (and tested against) broker versions 4.0
+kafka-python is compatible with (and tested against) broker versions 4.3
 through 0.8.0 . kafka-python is not compatible with the 0.8.2-beta release.
 
 Because the kafka server protocol is backwards compatible, kafka-python is
@@ -18,5 +18,6 @@ PRs welcome!
 
 kafka-python is tested on python 3.8-3.14.
 python 2.7 was supported through kafka-python release 2.3.
+python 3 is required for kafka-python release 3.0.
 
 Builds and tests via Github Actions Workflows.  See https://github.com/dpkp/kafka-python/actions
