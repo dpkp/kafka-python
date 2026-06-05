@@ -1,7 +1,16 @@
+import uuid
+
 import pytest
 
 from kafka.admin import KafkaAdminClient, NewTopic, NewPartitions
 from kafka.errors import KafkaTimeoutError, UnknownTopicOrPartitionError
+from kafka.protocol.admin import (
+    CreateTopicsRequest,
+    CreateTopicsResponse,
+    DeleteTopicsRequest,
+    DeleteTopicsResponse,
+)
+from kafka.protocol.metadata import MetadataRequest, MetadataResponse
 
 
 def test_new_partitions():
@@ -190,3 +199,112 @@ def test_wait_for_topics_describe_exception_keeps_retrying(monkeypatch):
     monkeypatch.setattr(admin, 'describe_topics', fake_describe_topics)
     admin.wait_for_topics(['foo'], timeout_ms=5000)
     assert state['calls'] == 2
+
+
+# ---------------------------------------------------------------------------
+# KIP-516: topic UUIDs in admin requests/responses
+# ---------------------------------------------------------------------------
+
+
+class TestTopicIdAdmin:
+    """KIP-516 topic ids in the admin surface: delete-by-id, describe-by-id,
+    and CreateTopics surfacing topic_id from v7+ responses."""
+
+    def test_delete_topics_by_id_encodes_topic_id(self, broker, admin):
+        """delete_topics already accepts uuid.UUID items; pin the wire shape."""
+        captured = {}
+
+        def handler(api_key, api_version, correlation_id, request_bytes):
+            decoded = DeleteTopicsRequest.decode(
+                request_bytes, version=api_version, header=True)
+            captured['request'] = decoded
+            captured['version'] = api_version
+            return DeleteTopicsResponse(throttle_time_ms=0, responses=[])
+
+        broker.respond_fn(DeleteTopicsRequest, handler)
+
+        u = uuid.uuid4()
+        admin.delete_topics([u])
+
+        req = captured['request']
+        # v6+ uses the structured DeleteTopicState carrying topic_id.
+        assert captured['version'] >= 6
+        assert len(req.topics) == 1
+        assert req.topics[0].topic_id == u
+        assert req.topics[0].name is None
+
+    def test_describe_topics_by_id_sends_topic_id(self, broker, admin):
+        captured = {}
+
+        def handler(api_key, api_version, correlation_id, request_bytes):
+            decoded = MetadataRequest.decode(
+                request_bytes, version=api_version, header=True)
+            captured['request'] = decoded
+            captured['version'] = api_version
+            return MetadataResponse(throttle_time_ms=0, brokers=[], cluster_id='c',
+                                    controller_id=0, topics=[])
+
+        broker.respond_fn(MetadataRequest, handler)
+
+        u = uuid.uuid4()
+        admin.describe_topics([u])
+
+        req = captured['request']
+        # MetadataRequest must be v12+ for name=null + topic_id to work.
+        assert captured['version'] >= 12
+        assert len(req.topics) == 1
+        assert req.topics[0].topic_id == u
+        assert req.topics[0].name is None
+
+    def test_describe_topics_mixed_name_and_id(self, broker, admin):
+        captured = {}
+
+        def handler(api_key, api_version, correlation_id, request_bytes):
+            decoded = MetadataRequest.decode(
+                request_bytes, version=api_version, header=True)
+            captured['request'] = decoded
+            return MetadataResponse(throttle_time_ms=0, brokers=[], cluster_id='c',
+                                    controller_id=0, topics=[])
+
+        broker.respond_fn(MetadataRequest, handler)
+
+        u = uuid.uuid4()
+        admin.describe_topics(['by-name', u])
+
+        req = captured['request']
+        assert len(req.topics) == 2
+        assert req.topics[0].name == 'by-name'
+        assert req.topics[0].topic_id is None
+        assert req.topics[1].name is None
+        assert req.topics[1].topic_id == u
+
+    def test_create_topics_negotiates_v7_and_surfaces_topic_id(self, broker, admin):
+        """With max_version=3 dropped, negotiation should reach v7+ on a
+        modern MockBroker and the response's topic_id flows through to_dict()."""
+        captured = {}
+        u = uuid.uuid4()
+
+        def handler(api_key, api_version, correlation_id, request_bytes):
+            captured['version'] = api_version
+            _Result = CreateTopicsResponse.CreatableTopicResult
+            return CreateTopicsResponse(
+                throttle_time_ms=0,
+                topics=[_Result(
+                    name='foo',
+                    topic_id=u,
+                    error_code=0,
+                    error_message=None,
+                    num_partitions=1,
+                    replication_factor=1,
+                    configs=[],
+                )],
+            )
+
+        broker.respond_fn(CreateTopicsRequest, handler)
+
+        result = admin.create_topics({'foo': {'num_partitions': 1, 'replication_factor': 1}})
+
+        # Default MockBroker is (4, 2); negotiation should land on v7+.
+        assert captured['version'] >= 7
+        # to_dict() stringifies the UUID; compare via uuid.UUID round-trip.
+        assert uuid.UUID(result['topics'][0]['topic_id']) == u
