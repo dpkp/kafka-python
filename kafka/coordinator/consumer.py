@@ -27,24 +27,16 @@ log = logging.getLogger(__name__)
 
 class ConsumerCoordinator(BaseCoordinator):
     """This class manages the coordination process with the consumer coordinator."""
-    DEFAULT_CONFIG = {
-        'group_id': 'kafka-python-default-group',
-        'group_instance_id': None,
+    DEFAULT_CONFIG = BaseCoordinator.DEFAULT_CONFIG.copy()
+    DEFAULT_CONFIG.update({
         'enable_auto_commit': True,
         'auto_commit_interval_ms': 5000,
         'default_offset_commit_callback': None,
         'assignors': (RangePartitionAssignor, RoundRobinPartitionAssignor, StickyPartitionAssignor),
-        'session_timeout_ms': 10000,
-        'heartbeat_interval_ms': 3000,
-        'max_poll_interval_ms': 300000,
-        'request_timeout_ms': 30000,
-        'retry_backoff_ms': 100,
-        'api_version': (0, 10, 1),
         'exclude_internal_topics': True,
         'isolation_level': 'read_uncommitted',
-        'metrics': None,
         'metric_group_prefix': 'consumer'
-    }
+    })
 
     def __init__(self, client, subscription, **configs):
         """Initialize the coordination manager.
@@ -53,14 +45,6 @@ class ConsumerCoordinator(BaseCoordinator):
             group_id (str): name of the consumer group to join for dynamic
                 partition assignment (if enabled), and to use for fetching and
                 committing offsets. Default: 'kafka-python-default-group'
-            group_instance_id (str): A unique identifier of the consumer instance
-                provided by end user. Only non-empty strings are permitted. If set,
-                the consumer is treated as a static member, which means that only
-                one instance with this ID is allowed in the consumer group at any
-                time. This can be used in combination with a larger session timeout
-                to avoid group rebalances caused by transient unavailability (e.g.
-                process restarts). If not set, the consumer will join the group as
-                a dynamic member, which is the traditional behavior. Default: None
             enable_auto_commit (bool): If true the consumer's offset will be
                 periodically committed in the background. Default: True.
             auto_commit_interval_ms (int): milliseconds between automatic
@@ -72,17 +56,6 @@ class ConsumerCoordinator(BaseCoordinator):
             assignors (list): List of objects to use to distribute partition
                 ownership amongst consumer instances when group management is
                 used. Default: [RangePartitionAssignor, RoundRobinPartitionAssignor, StickyPartitionAssignor]
-            heartbeat_interval_ms (int): The expected time in milliseconds
-                between heartbeats to the consumer coordinator when using
-                Kafka's group management feature. Heartbeats are used to ensure
-                that the consumer's session stays active and to facilitate
-                rebalancing when new consumers join or leave the group. The
-                value must be set lower than session_timeout_ms, but typically
-                should be set no higher than 1/3 of that value. It can be
-                adjusted even lower to control the expected time for normal
-                rebalances. Default: 3000
-            session_timeout_ms (int): The timeout used to detect failures when
-                using Kafka's group management facilities. Default: 30000
             retry_backoff_ms (int): Milliseconds to backoff when retrying on
                 errors. Default: 100.
             exclude_internal_topics (bool): Whether records from internal topics
@@ -121,11 +94,6 @@ class ConsumerCoordinator(BaseCoordinator):
             if self._use_group_apis:
                 if not self.config['assignors']:
                     raise Errors.KafkaConfigurationError('Coordinator requires assignors')
-            if self.config['api_version'] < (0, 10, 1):
-                if self.config['max_poll_interval_ms'] != self.config['session_timeout_ms']:
-                    raise Errors.KafkaConfigurationError("Broker version %s does not support "
-                                                         "different values for max_poll_interval_ms "
-                                                         "and session_timeout_ms")
 
         if self.config['enable_auto_commit']:
             if not self._use_offset_apis:
@@ -264,7 +232,7 @@ class ConsumerCoordinator(BaseCoordinator):
     # warning. Sync listeners on the IO loop will block heartbeats while
     # they run; even async ones delay rebalance progress. 1s is a soft
     # ceiling: well below default heartbeat_interval_ms (3s) and
-    # session_timeout_ms (10s).
+    # session_timeout_ms (45s).
     _REBALANCE_LISTENER_WARN_SECS = 1.0
 
     async def _invoke_rebalance_listener_async(self, method_name, arg):

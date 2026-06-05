@@ -166,7 +166,7 @@ class KafkaConsumer:
             from the group and initiate a rebalance. Note that the value must
             be in the allowable range as configured in the broker configuration
             by group.min.session.timeout.ms and group.max.session.timeout.ms.
-            Default: 10000
+            Default: 45000 for brokers 3.0+, otherwise 30000.
         heartbeat_interval_ms (int): The expected time in milliseconds
             between heartbeats to the consumer coordinator when using
             Kafka's group management facilities. Heartbeats are used to ensure
@@ -317,7 +317,7 @@ class KafkaConsumer:
         'partition_assignment_strategy': (RangePartitionAssignor, RoundRobinPartitionAssignor),
         'max_poll_records': 500,
         'max_poll_interval_ms': 300000,
-        'session_timeout_ms': 10000,
+        'session_timeout_ms': 45000,
         'heartbeat_interval_ms': 3000,
         'receive_buffer_bytes': None,
         'send_buffer_bytes': None,
@@ -354,11 +354,7 @@ class KafkaConsumer:
         'socks5_proxy': None,  # deprecated
         'kafka_client': KafkaNetClient,
     }
-    # Pre-0.10.1 brokers don't separate session_timeout_ms from
-    # max_poll_interval_ms; both default to this value when neither is
-    # user-supplied. Kept under request_timeout_ms (30s) so the strict
-    # request > session check below doesn't fire on the default path.
-    DEFAULT_SESSION_TIMEOUT_MS_0_9 = 25000
+    DEFAULT_SESSION_TIMEOUT_MS_PRE_KIP_735 = 30000
 
     def __init__(self, *topics, **configs):
         # Only check for extra config keys in top-level class
@@ -416,21 +412,21 @@ class KafkaConsumer:
         # Coordinator configurations are different for older brokers
         # max_poll_interval_ms is not supported directly -- it must the be
         # the same as session_timeout_ms. If the user provides one of them,
-        # use it for both. Otherwise use the old default of 30secs
-        if self.config['api_version'] < (0, 10, 1):
-            if 'session_timeout_ms' not in configs:
-                if 'max_poll_interval_ms' in configs:
-                    self.config['session_timeout_ms'] = configs['max_poll_interval_ms']
-                else:
-                    self.config['session_timeout_ms'] = self.DEFAULT_SESSION_TIMEOUT_MS_0_9
-            if 'max_poll_interval_ms' not in configs:
-                self.config['max_poll_interval_ms'] = self.config['session_timeout_ms']
+        # use it for both.
+        user_supplied_session_timeout = 'session_timeout_ms' in configs
+        user_supplied_max_poll_interval = 'max_poll_interval_ms' in configs
 
-        if self.config['group_id'] is not None:
-            if self.config['request_timeout_ms'] <= self.config['session_timeout_ms']:
-                raise KafkaConfigurationError(
-                    "Request timeout (%s) must be larger than session timeout (%s)" %
-                    (self.config['request_timeout_ms'], self.config['session_timeout_ms']))
+        if not user_supplied_session_timeout:
+            if self.config['api_version'] < (0, 10, 1) and user_supplied_max_poll_interval:
+                self.config['session_timeout_ms'] = self.config['max_poll_interval_ms']
+
+            elif self.config['api_version'] < (3, 0):
+                # Prior to 3.0 the broker-side default max session timeout was 30000
+                self.config['session_timeout_ms'] = self.DEFAULT_SESSION_TIMEOUT_MS_PRE_KIP_735
+
+        if not user_supplied_max_poll_interval:
+            if self.config['api_version'] < (0, 10, 1):
+                self.config['max_poll_interval_ms'] = self.config['session_timeout_ms']
 
         if self.config['group_instance_id'] is not None:
             if self.config['group_id'] is None:
