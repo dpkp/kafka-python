@@ -1,7 +1,5 @@
 import sys
 
-SUBCOMMANDS = ('admin', 'consumer', 'producer')
-
 USAGE = """\
 usage: kafka-python {admin,consumer,producer} [options]
 
@@ -24,15 +22,15 @@ def run_cli(args=None):
         return 0 if args else 1
 
     sub, rest = args[0], args[1:]
-    if sub not in SUBCOMMANDS:
-        sys.stderr.write('kafka-python: unknown subcommand: %r\n' % sub)
-        sys.stderr.write(USAGE)
-        return 2
-
     if sub == 'admin':
         from kafka.cli.admin import run_cli as sub_run
     elif sub == 'consumer':
         from kafka.cli.consumer import run_cli as sub_run
     elif sub == 'producer':
         from kafka.cli.producer import run_cli as sub_run
+    else:
+        sys.stderr.write('kafka-python: unknown subcommand: %r\n' % sub)
+        sys.stderr.write(USAGE)
+        return 2
+
     return sub_run(rest, prog='kafka-python %s' % sub)
