@@ -2,7 +2,7 @@
 
 SHELL = bash
 
-export KAFKA_VERSION ?= 4.2.0
+export KAFKA_VERSION ?= 4.3.0
 DIST_BASE_URL ?= https://downloads.apache.org/kafka/
 ARCHIVE_BASE_URL = https://archive.apache.org/dist/kafka/
 

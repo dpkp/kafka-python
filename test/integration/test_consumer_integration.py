@@ -48,8 +48,7 @@ def test_paused(kafka_consumer_factory, topic):
 @pytest.mark.skipif(env_kafka_version() < (0, 10), reason="Requires KAFKA_VERSION >= 0.10")
 def test_kafka_version_infer(kafka_consumer_factory):
     with kafka_consumer_factory(api_version=None) as consumer:
-        actual = BrokerVersionData(env_kafka_version())
-        expected = min((4, 2), actual.broker_version)
+        expected = BrokerVersionData(env_kafka_version()).broker_version
         assert consumer.config['api_version'] == expected, \
             "Was expecting inferred broker version to be %s but was %s" % (expected, consumer.config['api_version'])
 
