@@ -6,9 +6,9 @@ from kafka.errors import KafkaError
 from ..common import add_common_cli_args, configure_logging, build_connect_kwargs
 
 
-def main_parser():
+def main_parser(prog=None):
     parser = argparse.ArgumentParser(
-        prog='python -m kafka.consumer',
+        prog=prog or 'python -m kafka.consumer',
         description='Kafka console consumer',
     )
     add_common_cli_args(parser)
@@ -30,8 +30,8 @@ def main_parser():
     return parser
 
 
-def run_cli(args=None):
-    parser = main_parser()
+def run_cli(args=None, prog=None):
+    parser = main_parser(prog=prog)
     config = parser.parse_args(args)
 
     if config.format not in ('str', 'raw', 'full'):

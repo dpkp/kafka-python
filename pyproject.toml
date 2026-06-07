@@ -36,6 +36,9 @@ Repository = "https://github.com/dpkp/kafka-python"
 Issues = "https://github.com/dpkp/kafka-python/issues"
 Changelog = "https://github.com/dpkp/kafka-python/blob/master/CHANGES.md"
 
+[project.scripts]
+kafka-python = "kafka.cli:run_cli"
+
 [project.optional-dependencies]
 crc32c = ["crc32c"]
 lz4 = ["lz4"]
