@@ -47,7 +47,8 @@ test-coverage: build-integration
 # Check the readme for syntax errors, which can lead to invalid formatting on
 # PyPi homepage (https://pypi.python.org/pypi/kafka-python)
 check-readme:
-	python setup.py check -rms
+	uv build
+	uvx twine check --strict dist/*
 
 clean:
 	rm -rf `find . -name __pycache__`
