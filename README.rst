@@ -14,7 +14,7 @@ Kafka Python client
 .. image:: https://img.shields.io/pypi/v/kafka-python.svg
     :target: https://pypi.org/project/kafka-python
 .. image:: https://img.shields.io/pypi/implementation/kafka-python
-    :target: https://github.com/dpkp/kafka-python/blob/master/setup.py
+    :target: https://github.com/dpkp/kafka-python/blob/master/pyproject.toml
 
 
 
