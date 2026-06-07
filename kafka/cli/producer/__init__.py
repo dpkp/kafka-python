@@ -6,9 +6,9 @@ from kafka import KafkaProducer
 from ..common import add_common_cli_args, configure_logging, build_connect_kwargs
 
 
-def main_parser():
+def main_parser(prog=None):
     parser = argparse.ArgumentParser(
-        prog='python -m kafka.producer',
+        prog=prog or 'python -m kafka.producer',
         description='Kafka console producer',
     )
     add_common_cli_args(parser)
@@ -22,8 +22,8 @@ def main_parser():
     return parser
 
 
-def run_cli(args=None):
-    parser = main_parser()
+def run_cli(args=None, prog=None):
+    parser = main_parser(prog=prog)
     config = parser.parse_args(args)
 
     configure_logging(config)
