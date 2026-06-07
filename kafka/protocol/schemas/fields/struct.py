@@ -106,7 +106,7 @@ class StructField(BaseField):
         return prefix + b''.join(encoded)
 
     def emit_encode_into(self, ctx, item_expr, indent, version=None, compact=False,
-                          tagged=False, tuple_access=False):
+                         tagged=False, tuple_access=False):
         # Top-level struct (item_expr == 'item') has its nullability handled
         # by the parent struct; only inline null-prefix when this is a nested
         # nullable struct field.
