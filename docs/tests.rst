@@ -1,23 +1,18 @@
 Tests
 =====
 
-.. image:: https://coveralls.io/repos/dpkp/kafka-python/badge.svg?branch=master&service=github
-    :target: https://coveralls.io/github/dpkp/kafka-python?branch=master
 .. image:: https://img.shields.io/github/actions/workflow/status/dpkp/kafka-python/python-package.yml
     :target: https://github.com/dpkp/kafka-python/actions/workflows/python-package.yml
 
 The test suite is run via pytest.
 
-Linting is run via pylint, but is currently skipped during CI/CD due to
-accumulated debt. We'd like to transition to ruff!
+Linting is run via pylint.
 
-For test coverage details, see https://coveralls.io/github/dpkp/kafka-python
-Coverage reporting is currently disabled as we have transitioned from travis
-to GH Actions and have not yet re-enabled coveralls integration.
+Test coverage details are currently published as an html build artifact.
 
-The test suite includes unit tests that mock network interfaces, as well as
-integration tests that setup and teardown kafka broker (and zookeeper)
-fixtures for client / consumer / producer testing.
+The test suite includes unit tests that mock network interfaces, mock broker tests
+that simulate request/receive network messaging, as well as integration tests that
+setup and teardown kafka broker (and zookeeper where required) fixtures.
 
 
 Unit tests
@@ -34,10 +29,10 @@ Then simply run pytest (or make test) from your preferred python + virtualenv.
 .. code:: bash
 
     # run protocol tests only (via pytest)
-    pytest test/test_protocol.py
+    pytest test/protocol/
 
-    # Run conn tests only (via make)
-    PYTESTS=test/test_conn.py make test
+    # Run connection tests only (via make)
+    PYTESTS=test/net/test_connection.py make test
 
 
 Integration tests
@@ -45,8 +40,14 @@ Integration tests
 
 .. code:: bash
 
-    KAFKA_VERSION=4.0.0 make test
+    # Download new broker files
+    KAFKA_VERSION=4.3.0 make servers/4.3.0/kafka-bin
+    # Run tests for previously-installed broker version
+    KAFKA_VERSION=4.3.0 pytest -v test/integration/
+    # Or install + run all tests
+    KAFKA_VERSION=4.3.0 make test
 
 
-Integration tests start Kafka and Zookeeper fixtures. Make will download
-kafka server binaries automatically if needed.
+Integration tests start Kafka (and Zookeeper where required) fixtures. These
+require a functioning java install. Make will download the kafka server binaries
+automatically if needed.
