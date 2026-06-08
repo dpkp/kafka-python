@@ -651,10 +651,9 @@ def test_send_offset_commit_request_failure(mocker, broker, seeded_coord, offset
     # effect (mark coordinator dead); future arg is None since the
     # coroutine itself surfaces the exception.
     assert spy.call_count == 1
-    node_id, request, call_future, call_error = spy.call_args[0]
+    node_id, request, call_error = spy.call_args[0]
     assert node_id == 0
     assert isinstance(request, OffsetCommitRequest)
-    assert call_future is None
     assert call_error is error
 
 
@@ -809,10 +808,9 @@ def test_send_offset_fetch_request_failure(mocker, broker, seeded_coord, partiti
     # the exception. _failed_request still fires for its side effect
     # (mark coordinator dead) with future=None.
     assert spy.call_count == 1
-    node_id, request, call_future, call_error = spy.call_args[0]
+    node_id, request, call_error = spy.call_args[0]
     assert node_id == 0
     assert isinstance(request, OffsetFetchRequest)
-    assert call_future is None
     assert call_error is error
 
 

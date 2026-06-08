@@ -558,7 +558,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
             return True
         return True
 
-    def _failed_request(self, node_id, request, future, error):
+    def _failed_request(self, node_id, request, error):
         # Marking coordinator dead
         # unless the error is caused by internal client pipelining or throttling
         if not isinstance(error, (Errors.NodeNotReadyError,
@@ -570,8 +570,6 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         else:
             log.debug('Error sending %s to node %s [%s]',
                       request.__class__.__name__, node_id, error)
-        if future is not None:
-            future.failure(error)
 
     def _process_join_group_response(self, response, send_time):
         """Classify a JoinGroupResponse: mutate state on success, raise on error.
@@ -841,7 +839,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         try:
             response = await self._manager.send(request, node_id=node_id)
         except Exception as exc:
-            self._failed_request(node_id, request, None, exc)
+            self._failed_request(node_id, request, exc)
             raise
         return self._handle_find_coordinator_response(response)
 
@@ -1128,7 +1126,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
             response = await self._manager.send(request, node_id=self.coordinator_id)
             return self._handle_heartbeat_response(response, send_time)
         except Errors.KafkaError as exc:
-            self._failed_request(self.coordinator_id, request, None, exc)
+            self._failed_request(self.coordinator_id, request, exc)
             raise
 
     def _handle_heartbeat_response(self, response, send_time):
