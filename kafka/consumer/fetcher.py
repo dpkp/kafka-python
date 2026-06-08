@@ -461,6 +461,7 @@ class Fetcher:
                 configured max_partition_fetch_bytes
             TopicAuthorizationError: if consumer is not authorized to fetch
                 messages from the topic
+            ValueError: if max_records is <= 0
 
         Returns: (records (dict), partial (bool))
             records: {TopicPartition: [messages]}
@@ -470,7 +471,8 @@ class Fetcher:
         """
         if max_records is None:
             max_records = self.config['max_poll_records']
-        assert max_records > 0
+        if max_records <= 0:
+            raise ValueError('max_records must be > 0')
 
         if self._next_in_line_exception_metadata is not None:
             exc_meta = self._next_in_line_exception_metadata
@@ -784,6 +786,7 @@ class Fetcher:
 
         Raises:
             TopicAuthorizationFailedError: if any topic returned an auth error
+            ValueError: if ListOffsetsResponse v0 and > 1 offset returned
         """
         fetched_offsets = dict()
         partitions_to_retry = set()
@@ -796,7 +799,8 @@ class Fetcher:
                 if error_type is Errors.NoError:
                     if response.API_VERSION == 0:
                         offsets = partition_info.old_style_offsets
-                        assert len(offsets) <= 1, 'Expected ListOffsetsResponse with one offset'
+                        if len(offsets) > 1:
+                            raise ValueError('Expected ListOffsetsResponse with one offset')
                         offset = offsets[0] if offsets else UNKNOWN_OFFSET
                     else:
                         offset = partition_info.offset

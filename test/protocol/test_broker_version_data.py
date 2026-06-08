@@ -113,7 +113,7 @@ class TestApiVersionResolution:
             bvd.api_version(CreateTopicsRequest)
 
     def test_min_max_inversion_asserts(self, bvd):
-        with pytest.raises(AssertionError):
+        with pytest.raises(ValueError):
             bvd.api_version(MetadataRequest, min_version=10, max_version=3)
 
     def test_request_instance_max_version(self, bvd):

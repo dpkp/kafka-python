@@ -608,11 +608,17 @@ class KafkaConsumer:
                 struct. This callback can be used to trigger custom actions when
                 a commit request completes.
 
+        Raises:
+            IncompatibleBrokerVersion: if broker version < 0.8.1
+            IllegalStateError: if group_id is None
+
         Returns:
             kafka.future.Future
         """
-        assert self.config['api_version'] >= (0, 8, 1), 'Requires >= Kafka 0.8.1'
-        assert self.config['group_id'] is not None, 'Requires group_id'
+        if self.config['api_version'] < (0, 8, 1):
+            raise Errors.IncompatibleBrokerVersion('Requires >= Kafka 0.8.1')
+        if self.config['group_id'] is None:
+            raise Errors.IllegalStateError('Requires group_id')
         if offsets is None:
             offsets = self._subscription.all_consumed_offsets()
         log.debug("Committing offsets: %s", offsets)
@@ -639,9 +645,15 @@ class KafkaConsumer:
             offsets (dict, optional): {TopicPartition: OffsetAndMetadata} dict
                 to commit with the configured group_id. Defaults to currently
                 consumed offsets for all subscribed partitions.
+
+        Raises:
+            IncompatibleBrokerVersion: if broker version < 0.8.1
+            IllegalStateError: if group_id is None
         """
-        assert self.config['api_version'] >= (0, 8, 1), 'Requires >= Kafka 0.8.1'
-        assert self.config['group_id'] is not None, 'Requires group_id'
+        if self.config['api_version'] < (0, 8, 1):
+            raise Errors.IncompatibleBrokerVersion('Requires >= Kafka 0.8.1')
+        if self.config['group_id'] is None:
+            raise Errors.IllegalStateError('Requires group_id')
         if offsets is None:
             offsets = self._subscription.all_consumed_offsets()
         self._coordinator.commit_offsets_sync(offsets, timeout_ms=timeout_ms)
@@ -680,11 +692,16 @@ class KafkaConsumer:
             The last committed offset (int or OffsetAndMetadata), or None if there was no prior commit.
 
         Raises:
-            KafkaTimeoutError if timeout_ms provided
-            BrokerResponseErrors if OffsetFetchRequest raises an error.
+            IncompatibleBrokerVersion: if broker version < 0.8.1
+            IllegalStateError: if group_id is None
+            TypeError: if partition is not TopicPartition
+            KafkaTimeoutError: if timeout_ms provided
+            BrokerResponseError: if OffsetFetchRequest raises an error.
         """
-        assert self.config['api_version'] >= (0, 8, 1), 'Requires >= Kafka 0.8.1'
-        assert self.config['group_id'] is not None, 'Requires group_id'
+        if self.config['api_version'] < (0, 8, 1):
+            raise Errors.IncompatibleBrokerVersion('Requires >= Kafka 0.8.1')
+        if self.config['group_id'] is None:
+            raise Errors.IllegalStateError('Requires group_id')
         if not isinstance(partition, TopicPartition):
             raise TypeError('partition must be a TopicPartition namedtuple')
         committed = self._coordinator.fetch_committed_offsets([partition], timeout_ms=timeout_ms)
@@ -755,6 +772,11 @@ class KafkaConsumer:
                 in a single call to :meth:`~kafka.KafkaConsumer.poll`.
                 Default: Inherit value from max_poll_records.
 
+        Raises:
+            ValueError: if timeout is < 0 or max_records <= 0.
+            TypeError: if max_records is not int.
+            IllegalStateError: if consumer already closed.
+
         Returns:
             dict[TopicPartition, list[ConsumerRecord]]: records since the last
                 fetch for the subscribed list of topics and partitions.
@@ -765,12 +787,16 @@ class KafkaConsumer:
         # updated until the iterator returns each record to the user. As such,
         # the argument is not documented and should not be relied on by library
         # users to not break in the future.
-        assert timeout_ms >= 0, 'Timeout must not be negative'
+        if timeout_ms < 0:
+            raise ValueError('Timeout must not be negative')
         if max_records is None:
             max_records = self.config['max_poll_records']
-        assert isinstance(max_records, int), 'max_records must be an integer'
-        assert max_records > 0, 'max_records must be positive'
-        assert not self._closed, 'KafkaConsumer is closed'
+        if not isinstance(max_records, int):
+            raise TypeError('max_records must be an integer')
+        if max_records <= 0:
+            raise ValueError('max_records must be positive')
+        if self._closed:
+            raise Errors.IllegalStateError('KafkaConsumer is closed')
 
         # Poll for new data until the timeout expires
         timer = Timer(timeout_ms)
@@ -822,12 +848,17 @@ class KafkaConsumer:
         Arguments:
             partition (TopicPartition): Partition to check
 
+        Raises:
+            TypeError: if partition is not a TopicPartition.
+            IllegalStateError: if partition is not assigned.
+
         Returns:
             int: Offset or None
         """
         if not isinstance(partition, TopicPartition):
             raise TypeError('partition must be a TopicPartition namedtuple')
-        assert self._subscription.is_assigned(partition), 'Partition is not assigned'
+        if not self._subscription.is_assigned(partition):
+            raise Errors.IllegalStateError('Partition is not assigned')
 
         timer = Timer(timeout_ms)
         # Phase 1: blocking refresh of committed offsets (network round-trip
@@ -875,12 +906,17 @@ class KafkaConsumer:
         Arguments:
             partition (TopicPartition): Partition to check
 
+        Raises:
+            TypeError: if partition is not a TopicPartition.
+            IllegalStateError: if partition is not assigned.
+
         Returns:
             int or None: Offset if available
         """
         if not isinstance(partition, TopicPartition):
             raise TypeError('partition must be a TopicPartition namedtuple')
-        assert self._subscription.is_assigned(partition), 'Partition is not assigned'
+        if not self._subscription.is_assigned(partition):
+            raise Errors.IllegalStateError('Partition is not assigned')
         return self._subscription.assignment[partition].highwater
 
     def pause(self, *partitions):
@@ -942,13 +978,15 @@ class KafkaConsumer:
             offset (int): Message offset in partition
 
         Raises:
-            AssertionError: If offset is not an int >= 0; or if partition is not
+            ValueError: If offset is not an int >= 0; or if partition is not
                 currently assigned.
         """
         if not isinstance(partition, TopicPartition):
             raise TypeError('partition must be a TopicPartition namedtuple')
-        assert isinstance(offset, int) and offset >= 0, 'Offset must be >= 0'
-        assert partition in self._subscription.assigned_partitions(), 'Unassigned partition'
+        if not isinstance(offset, int) or offset < 0:
+            raise ValueError('Offset must be int >= 0')
+        if partition not in self._subscription.assigned_partitions():
+            raise ValueError('Unassigned partition')
         log.debug("Seeking to offset %s for partition %s", offset, partition)
         self._subscription.assignment[partition].seek(offset)
         self._iterator = None
@@ -961,17 +999,19 @@ class KafkaConsumer:
                 default to all assigned partitions.
 
         Raises:
-            AssertionError: If any partition is not currently assigned, or if
+            ValueError: If any partition is not currently assigned, or if
                 no partitions are assigned.
         """
         if not all([isinstance(p, TopicPartition) for p in partitions]):
             raise TypeError('partitions must be TopicPartition namedtuples')
         if not partitions:
             partitions = self._subscription.assigned_partitions()
-            assert partitions, 'No partitions are currently assigned'
+            if not partitions:
+                raise ValueError('No partitions are currently assigned')
         else:
             for p in partitions:
-                assert p in self._subscription.assigned_partitions(), 'Unassigned partition'
+                if p not in self._subscription.assigned_partitions():
+                    raise ValueError('Unassigned partition: %s' % (p,))
 
         for tp in partitions:
             log.debug("Seeking to beginning of partition %s", tp)
@@ -986,17 +1026,19 @@ class KafkaConsumer:
                 default to all assigned partitions.
 
         Raises:
-            AssertionError: If any partition is not currently assigned, or if
+            ValueError: If any partition is not currently assigned, or if
                 no partitions are assigned.
         """
         if not all([isinstance(p, TopicPartition) for p in partitions]):
             raise TypeError('partitions must be TopicPartition namedtuples')
         if not partitions:
             partitions = self._subscription.assigned_partitions()
-            assert partitions, 'No partitions are currently assigned'
+            if not partitions:
+                raise ValueError('No partitions are currently assigned')
         else:
             for p in partitions:
-                assert p in self._subscription.assigned_partitions(), 'Unassigned partition'
+                if p not in self._subscription.assigned_partitions():
+                    raise ValueError('Unassigned partition: %s' % (p,))
 
         for tp in partitions:
             log.debug("Seeking to end of partition %s", tp)
@@ -1041,7 +1083,7 @@ class KafkaConsumer:
         Raises:
             IllegalStateError: If called after previously calling
                 :meth:`~kafka.KafkaConsumer.assign`.
-            AssertionError: If neither topics or pattern is provided.
+            ValueError: If neither topics or pattern is provided.
             TypeError: If listener is not a ConsumerRebalanceListener.
         """
         # SubscriptionState handles error checking

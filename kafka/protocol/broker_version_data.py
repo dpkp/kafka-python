@@ -72,9 +72,12 @@ class BrokerVersionData:
         Returns:
             int: The highest api version number compatible between client and broker.
 
-        Raises: IncompatibleBrokerVersion if no matching version is found
+        Raises:
+            IncompatibleBrokerVersion: if no matching version is found.
+            ValueError: if min_version > max_version.
         """
-        assert min_version <= max_version
+        if min_version > max_version:
+            raise ValueError('min_version must not be greater than max_version')
         # if _max_version is a data descriptor, operation is a protocol class so no request min/max
         if isinstance(operation, ApiKey) or inspect.isdatadescriptor(operation._max_version):
             request_max = float('inf')

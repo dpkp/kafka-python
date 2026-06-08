@@ -118,8 +118,15 @@ class SubscriptionState:
                 any listener set in a previous call to subscribe. It is
                 guaranteed, however, that the partitions revoked/assigned
                 through this interface are from topics subscribed in this call.
+
+        Raises:
+            ValueError: if neither topics nor pattern provided.
+            IllegalStateError: if both topics and pattern provided.
+            TypeError: if topics is not a list/sequence, or listener is not
+                a AsyncConsumerRebalanceListener or ConsumerRebalanceListener.
         """
-        assert topics or pattern, 'Must provide topics or pattern'
+        if not topics and not pattern:
+            raise ValueError('Must provide topics or pattern')
         if (topics and pattern):
             raise Errors.IllegalStateError(self._SUBSCRIPTION_EXCEPTION_MESSAGE)
 
