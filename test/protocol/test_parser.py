@@ -18,6 +18,7 @@ from kafka.protocol.consumer import (
     OffsetFetchRequest, OffsetFetchResponse
 )
 
+OffsetCommitResponseTopic = OffsetCommitResponse.OffsetCommitResponseTopic
 
 TEST_API_VERSIONS_1 = {
     'client_id': '_internal_client_kYVL',
@@ -199,7 +200,7 @@ TEST_JOIN_GROUP = {
             'response': (
                 b'\x00\x00\x00-\x00\x00\x00\x06\x00\x00\x00\x00\x00\x00\x00\x01\x00\x15test_group_fNFDXXKzKt\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00',
                 6,
-                OffsetCommitResponse[7](throttle_time_ms=0, topics=[('test_group_fNFDXXKzKt', [(0, 0)])]),
+                OffsetCommitResponse[7](throttle_time_ms=0, topics=[OffsetCommitResponseTopic(name='test_group_fNFDXXKzKt', partitions=[(0, 0)])]),
             ),
         },
 

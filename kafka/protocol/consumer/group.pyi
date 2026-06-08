@@ -386,11 +386,13 @@ class OffsetFetchRequest(ApiMessage):
     class OffsetFetchRequestGroup(DataContainer):
         class OffsetFetchRequestTopics(DataContainer):
             name: str
+            topic_id: uuid.UUID
             partition_indexes: list[int]
             def __init__(
                 self,
                 *args: Any,
                 name: str = ...,
+                topic_id: uuid.UUID = ...,
                 partition_indexes: list[int] = ...,
                 version: int | None = None,
                 **kwargs: Any,
@@ -509,11 +511,13 @@ class OffsetFetchResponse(ApiMessage):
                 def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
 
             name: str
+            topic_id: uuid.UUID
             partitions: list[OffsetFetchResponsePartitions]
             def __init__(
                 self,
                 *args: Any,
                 name: str = ...,
+                topic_id: uuid.UUID = ...,
                 partitions: list[OffsetFetchResponsePartitions] = ...,
                 version: int | None = None,
                 **kwargs: Any,
@@ -593,11 +597,13 @@ class OffsetCommitRequest(ApiMessage):
             def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
 
         name: str
+        topic_id: uuid.UUID
         partitions: list[OffsetCommitRequestPartition]
         def __init__(
             self,
             *args: Any,
             name: str = ...,
+            topic_id: uuid.UUID = ...,
             partitions: list[OffsetCommitRequestPartition] = ...,
             version: int | None = None,
             **kwargs: Any,
@@ -659,11 +665,13 @@ class OffsetCommitResponse(ApiMessage):
             def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
 
         name: str
+        topic_id: uuid.UUID
         partitions: list[OffsetCommitResponsePartition]
         def __init__(
             self,
             *args: Any,
             name: str = ...,
+            topic_id: uuid.UUID = ...,
             partitions: list[OffsetCommitResponsePartition] = ...,
             version: int | None = None,
             **kwargs: Any,

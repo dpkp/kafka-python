@@ -378,6 +378,7 @@ class GroupAdminMixin:
             retention_time_ms=-1,
             topics=[_Topic(name=name, partitions=parts)
                     for name, parts in topic2partitions.items()],
+            max_version=8,
         )
 
     @staticmethod

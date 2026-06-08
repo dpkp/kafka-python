@@ -33,6 +33,7 @@ class FetchRequest(ApiMessage):
             log_start_offset: int
             partition_max_bytes: int
             replica_directory_id: uuid.UUID
+            high_watermark: int
             def __init__(
                 self,
                 *args: Any,
@@ -43,6 +44,7 @@ class FetchRequest(ApiMessage):
                 log_start_offset: int = ...,
                 partition_max_bytes: int = ...,
                 replica_directory_id: uuid.UUID = ...,
+                high_watermark: int = ...,
                 version: int | None = None,
                 **kwargs: Any,
             ) -> None: ...

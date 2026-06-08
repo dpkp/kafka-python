@@ -1,3 +1,5 @@
+import uuid
+
 import pytest
 
 from kafka.protocol.metadata import FindCoordinatorRequest, FindCoordinatorResponse
@@ -218,7 +220,8 @@ def test_offset_fetch_request_roundtrip(version):
                 member_epoch=12 if version >= 9 else -1,
                 topics=[
                     GroupTopic(
-                        name="topic-1",
+                        name="topic-1" if version < 10 else '',
+                        topic_id=uuid.uuid4() if version >= 10 else None,
                         partition_indexes=[0, 1]
                     )
                 ]
@@ -260,7 +263,8 @@ def test_offset_fetch_response_roundtrip(version):
                 group_id="test-group",
                 topics=[
                     GroupTopic(
-                        name="topic-1",
+                        name="topic-1" if version < 10 else '',
+                        topic_id=uuid.uuid4() if version >= 10 else None,
                         partitions=[
                             GroupPartition(
                                 partition_index=1,
@@ -293,7 +297,8 @@ def test_offset_commit_request_roundtrip(version):
         retention_time_ms=5000 if 2 <= version <= 4 else -1,
         topics=[
             Topic(
-                name="topic-1",
+                name="topic-1" if version < 10 else '',
+                topic_id=uuid.uuid4() if version >= 10 else None,
                 partitions=[
                     Partition(
                         partition_index=0,
@@ -319,7 +324,8 @@ def test_offset_commit_response_roundtrip(version):
         throttle_time_ms=100 if version >= 3 else 0,
         topics=[
             Topic(
-                name="topic-1",
+                name="topic-1" if version < 10 else '',
+                topic_id=uuid.uuid4() if version >= 10 else None,
                 partitions=[
                     Partition(
                         partition_index=10,

@@ -180,6 +180,7 @@ class DescribeLogDirsResponse(ApiMessage):
         topics: list[DescribeLogDirsTopic]
         total_bytes: int
         usable_bytes: int
+        is_cordoned: bool
         def __init__(
             self,
             *args: Any,
@@ -188,6 +189,7 @@ class DescribeLogDirsResponse(ApiMessage):
             topics: list[DescribeLogDirsTopic] = ...,
             total_bytes: int = ...,
             usable_bytes: int = ...,
+            is_cordoned: bool = ...,
             version: int | None = None,
             **kwargs: Any,
         ) -> None: ...

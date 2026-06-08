@@ -12,6 +12,8 @@ class InitProducerIdRequest(ApiMessage):
     transaction_timeout_ms: int
     producer_id: int
     producer_epoch: int
+    enable2_pc: bool
+    keep_prepared_txn: bool
     def __init__(
         self,
         *args: Any,
@@ -19,6 +21,8 @@ class InitProducerIdRequest(ApiMessage):
         transaction_timeout_ms: int = ...,
         producer_id: int = ...,
         producer_epoch: int = ...,
+        enable2_pc: bool = ...,
+        keep_prepared_txn: bool = ...,
         version: int | None = None,
         **kwargs: Any,
     ) -> None: ...
@@ -44,6 +48,8 @@ class InitProducerIdResponse(ApiMessage):
     error_code: int
     producer_id: int
     producer_epoch: int
+    ongoing_txn_producer_id: int
+    ongoing_txn_producer_epoch: int
     def __init__(
         self,
         *args: Any,
@@ -51,6 +57,8 @@ class InitProducerIdResponse(ApiMessage):
         error_code: int = ...,
         producer_id: int = ...,
         producer_epoch: int = ...,
+        ongoing_txn_producer_id: int = ...,
+        ongoing_txn_producer_epoch: int = ...,
         version: int | None = None,
         **kwargs: Any,
     ) -> None: ...
