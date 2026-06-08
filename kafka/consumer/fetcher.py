@@ -173,8 +173,12 @@ class Fetcher:
                 Only applies when no records are immediately available.
 
         Returns:
-            dict[TopicPartition, list[ConsumerRecord]]: records grouped by
-            partition; may be empty if no records arrived in the budget.
+            tuple[dict[TopicPartition, list[ConsumerRecord]], bool]:
+                ``(records, idle)``. ``idle`` is True when there were no
+                buffered records, no in-flight fetches, and no pending
+                offset-reset task -- i.e. nothing this fetcher could wait
+                on. Callers in that state should sleep before retrying
+                instead of busy-looping.
         """
         # Drain whatever's already buffered from prior fetch responses.
         records, partial = self.fetched_records(
@@ -184,7 +188,7 @@ class Fetcher:
             self.send_fetches()
 
         if records:
-            return records
+            return records, False
 
         # No records yet. Block until either an in-flight fetch
         # completes (records may have arrived) or a pending offset-reset
@@ -196,7 +200,7 @@ class Fetcher:
         if self._reset_task is not None and not self._reset_task.is_done:
             waited_on.append(self._reset_task)
         if not waited_on:
-            return records  # nothing pending; nothing to wait for
+            return records, True  # nothing pending; caller should sleep
 
         wakeup = Future()
         def _wake(_):
@@ -212,7 +216,7 @@ class Fetcher:
 
         records, _ = self.fetched_records(
             max_records, update_offsets=update_offsets)
-        return records
+        return records, False
 
     def send_fetches(self):
         """Send FetchRequests for all assigned partitions that do not already have

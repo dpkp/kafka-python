@@ -2,6 +2,7 @@ import pytest
 
 from kafka import ConsumerGroupMetadata, KafkaConsumer, TopicPartition
 from kafka.errors import KafkaConfigurationError, IllegalStateError
+from kafka.util import Timer
 
 
 def test_session_timeout_different_from_max_poll_timeout_raises():
@@ -92,3 +93,69 @@ def test_group_metadata_with_group_id_delegates_to_coordinator():
     assert gm.generation_id == -1
     assert gm.member_id == ''
     consumer.close()
+
+
+def _stub_poll_path(consumer, mocker, fetch_return):
+    """Patch out the bits of _poll_once we don't care about so the test can
+    focus on the fetch -> sleep handoff."""
+    mocker.patch.object(consumer._coordinator, 'poll', return_value=True)
+    mocker.patch.object(consumer, '_refresh_committed_offsets')
+    mocker.patch.object(consumer._fetcher, 'reset_offsets_if_needed')
+    mocker.patch.object(consumer._fetcher, 'maybe_validate_positions')
+    mocker.patch.object(consumer._fetcher, 'validate_offsets_if_needed')
+    mocker.patch.object(consumer._fetcher, 'fetch_records',
+                        return_value=fetch_return)
+
+
+def test_poll_once_sleeps_when_fetcher_idle(mocker):
+    """If the fetcher reports it has no work pending, _poll_once sleeps up to
+    poll_timeout_ms before returning - otherwise consumer.poll() busy-loops
+    on no-fetchable-partition consumers."""
+    consumer = KafkaConsumer(api_version=(0, 10, 0))
+    try:
+        _stub_poll_path(consumer, mocker, fetch_return=({}, True))
+        sleep = mocker.patch('kafka.consumer.group.time.sleep')
+
+        records = consumer._poll_once(Timer(1000), max_records=100)
+
+        assert records == {}
+        sleep.assert_called_once()
+        slept_secs = sleep.call_args[0][0]
+        # poll_timeout_ms is uncapped for no-group consumers, so we sleep
+        # roughly the full Timer budget (1.0s).
+        assert 0 < slept_secs <= 1.0
+    finally:
+        consumer.close()
+
+
+def test_poll_once_does_not_sleep_when_records_returned(mocker):
+    """fetch_records returned records - no sleep, caller can return them."""
+    consumer = KafkaConsumer(api_version=(0, 10, 0))
+    try:
+        tp_records = {TopicPartition('foo', 0): [object()]}
+        _stub_poll_path(consumer, mocker, fetch_return=(tp_records, False))
+        sleep = mocker.patch('kafka.consumer.group.time.sleep')
+
+        records = consumer._poll_once(Timer(1000), max_records=100)
+
+        assert records is tp_records
+        sleep.assert_not_called()
+    finally:
+        consumer.close()
+
+
+def test_poll_once_does_not_sleep_when_fetcher_waited_but_empty(mocker):
+    """fetch_records returned ({}, False) - it waited on in-flight work and
+    got nothing. Don't sleep; the next loop iteration will check the
+    completed fetches without delay."""
+    consumer = KafkaConsumer(api_version=(0, 10, 0))
+    try:
+        _stub_poll_path(consumer, mocker, fetch_return=({}, False))
+        sleep = mocker.patch('kafka.consumer.group.time.sleep')
+
+        records = consumer._poll_once(Timer(1000), max_records=100)
+
+        assert records == {}
+        sleep.assert_not_called()
+    finally:
+        consumer.close()

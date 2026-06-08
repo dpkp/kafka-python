@@ -521,6 +521,59 @@ def test_fetched_records(fetcher, topic, mocker):
     assert partial is False
 
 
+def test_fetch_records_idle_when_nothing_pending(fetcher, mocker):
+    """No buffered records, no in-flight fetches, no reset task -> idle=True
+    so the caller (KafkaConsumer._poll_once) can sleep instead of
+    busy-looping."""
+    # Suppress fetch dispatch: simulate "nothing fetchable" (paused, no
+    # assignment, etc.) without going through the manager.
+    mocker.patch.object(fetcher, 'send_fetches', return_value=None)
+    assert not fetcher._fetch_futures
+    assert fetcher._reset_task is None
+
+    records, idle = fetcher.fetch_records(timeout_ms=0)
+    assert records == {}
+    assert idle is True
+
+
+def test_fetch_records_not_idle_when_records_buffered(fetcher, topic):
+    """Buffered records short-circuit before the no-work check; idle=False."""
+    fetcher.config['check_crcs'] = False
+    tp = TopicPartition(topic, 0)
+    fetcher._completed_fetches.append(
+        _build_completed_fetch(tp, [(None, b'foo', None)]))
+
+    records, idle = fetcher.fetch_records(timeout_ms=0)
+    assert tp in records
+    assert idle is False
+
+
+def test_fetch_records_not_idle_when_inflight_fetch_pending(fetcher, mocker):
+    """An in-flight fetch future means there's work to wait on; idle=False
+    even if the wait times out with no records."""
+    pending = Future()
+    fetcher._fetch_futures.append(pending)
+    mocker.patch.object(fetcher, 'send_fetches', return_value=None)
+    # Don't actually block on the wakeup - just return as if the wait
+    # timed out.
+    mocker.patch.object(fetcher._net, 'run', return_value=None)
+
+    records, idle = fetcher.fetch_records(timeout_ms=0)
+    assert records == {}
+    assert idle is False
+
+
+def test_fetch_records_not_idle_when_reset_task_pending(fetcher, mocker):
+    """An in-flight offset-reset task counts as pending work; idle=False."""
+    fetcher._reset_task = Future()
+    mocker.patch.object(fetcher, 'send_fetches', return_value=None)
+    mocker.patch.object(fetcher._net, 'run', return_value=None)
+
+    records, idle = fetcher.fetch_records(timeout_ms=0)
+    assert records == {}
+    assert idle is False
+
+
 @pytest.mark.parametrize(("fetch_offsets", "fetch_response", "num_partitions"), [
     (
         {TopicPartition('foo', 0): 0},
