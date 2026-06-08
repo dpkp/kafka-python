@@ -26,11 +26,13 @@ class ProduceRequest(ApiMessage):
             def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
 
         name: str
+        topic_id: uuid.UUID
         partition_data: list[PartitionProduceData]
         def __init__(
             self,
             *args: Any,
             name: str = ...,
+            topic_id: uuid.UUID = ...,
             partition_data: list[PartitionProduceData] = ...,
             version: int | None = None,
             **kwargs: Any,
@@ -131,11 +133,13 @@ class ProduceResponse(ApiMessage):
             def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
 
         name: str
+        topic_id: uuid.UUID
         partition_responses: list[PartitionProduceResponse]
         def __init__(
             self,
             *args: Any,
             name: str = ...,
+            topic_id: uuid.UUID = ...,
             partition_responses: list[PartitionProduceResponse] = ...,
             version: int | None = None,
             **kwargs: Any,

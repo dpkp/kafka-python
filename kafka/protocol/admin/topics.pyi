@@ -394,11 +394,13 @@ class AlterPartitionReassignmentsRequest(ApiMessage):
         def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
 
     timeout_ms: int
+    allow_replication_factor_change: bool
     topics: list[ReassignableTopic]
     def __init__(
         self,
         *args: Any,
         timeout_ms: int = ...,
+        allow_replication_factor_change: bool = ...,
         topics: list[ReassignableTopic] = ...,
         version: int | None = None,
         **kwargs: Any,
@@ -454,6 +456,7 @@ class AlterPartitionReassignmentsResponse(ApiMessage):
         def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
 
     throttle_time_ms: int
+    allow_replication_factor_change: bool
     error_code: int
     error_message: str | None
     responses: list[ReassignableTopicResponse]
@@ -461,6 +464,7 @@ class AlterPartitionReassignmentsResponse(ApiMessage):
         self,
         *args: Any,
         throttle_time_ms: int = ...,
+        allow_replication_factor_change: bool = ...,
         error_code: int = ...,
         error_message: str | None = ...,
         responses: list[ReassignableTopicResponse] = ...,
