@@ -1,3 +1,5 @@
+import uuid
+
 import pytest
 
 from kafka.protocol.producer import ProduceRequest, ProduceResponse
@@ -13,7 +15,8 @@ def test_produce_request_roundtrip(version):
         timeout_ms=500,
         topic_data=[
             Topic(
-                name="topic-1",
+                name="topic-1" if version < 13 else '',
+                topic_id=uuid.uuid4() if version >= 13 else None,
                 partition_data=[
                     Partition(
                         index=1,
@@ -37,7 +40,8 @@ def test_produce_response_roundtrip(version):
     response = ProduceResponse(
         responses=[
             Topic(
-                name="topic-1",
+                name="topic-1" if version < 13 else '',
+                topic_id=uuid.uuid4() if version >= 13 else None,
                 partition_responses=[
                     Partition(
                         index=1,

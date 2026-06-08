@@ -937,6 +937,7 @@ class ConsumerCoordinator(BaseCoordinator):
         _Topic = OffsetCommitRequest.OffsetCommitRequestTopic
         _Partition = _Topic.OffsetCommitRequestPartition
         request = OffsetCommitRequest(
+            max_version=8,
             group_id=self.group_id,
             generation_id_or_member_epoch=generation.generation_id,
             member_id=generation.member_id,
