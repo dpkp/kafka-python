@@ -816,6 +816,7 @@ class KafkaConsumer:
             # paused, or no resolvable positions). Sleep up to poll_timeout_ms
             # to avoid busy-looping; poll_timeout_ms is already capped by the
             # coordinator's next-action deadline.
+            poll_timeout_ms = min(poll_timeout_ms, self.config['retry_backoff_ms'])
             time.sleep(poll_timeout_ms / 1000)
         return records
 
