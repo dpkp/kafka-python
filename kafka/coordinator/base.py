@@ -66,8 +66,8 @@ class Generation:
 Generation.NO_GENERATION = Generation(DEFAULT_GENERATION_ID, UNKNOWN_MEMBER_ID, None)
 
 
-class UnjoinedGroupException(Errors.KafkaError):
-    retriable = True
+class UnjoinedGroupException(Errors.RetriableError):
+    pass
 
 
 class BaseCoordinator(metaclass=abc.ABCMeta):
@@ -369,21 +369,18 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
                 await self._manager.wait_for(future, timer.timeout_ms)
             except Errors.KafkaTimeoutError:
                 return False
-            except Errors.KafkaError as exc:
-                if not future.retriable():
-                    raise
-                if exc.invalid_metadata:
-                    log.debug('Requesting metadata for group coordinator request: %s', exc)
-                    metadata_update = self._cluster.request_update()
-                    try:
-                        await self._manager.wait_for(metadata_update, timer.timeout_ms)
-                    except Errors.KafkaTimeoutError:
-                        return False
-                else:
-                    delay_ms = self.config['retry_backoff_ms']
-                    if timer.timeout_ms is not None:
-                        delay = min(delay_ms, timer.timeout_ms)
-                    await self._manager._net.sleep(delay_ms / 1000)
+            except Errors.InvalidMetadataError as exc:
+                log.debug('Requesting metadata for group coordinator request: %s', exc)
+                metadata_update = self._cluster.request_update()
+                try:
+                    await self._manager.wait_for(metadata_update, timer.timeout_ms)
+                except Errors.KafkaTimeoutError:
+                    return False
+            except Errors.RetriableError:
+                delay_ms = self.config['retry_backoff_ms']
+                if timer.timeout_ms is not None:
+                    delay = min(delay_ms, timer.timeout_ms)
+                await self._manager._net.sleep(delay_ms / 1000)
             if timer.expired:
                 return False
         return True
@@ -531,10 +528,8 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
                 # loop back and retry immediately.
                 self._join_task = None
                 continue
-            except Errors.KafkaError as exc:
+            except Errors.RetriableError:
                 self._join_task = None
-                if not getattr(exc, 'retriable', False):
-                    raise
                 if timer.expired:
                     return False
                 backoff_ms = self.config['retry_backoff_ms']
@@ -543,6 +538,11 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
                 if backoff_ms > 0:
                     await self._manager._net.sleep(backoff_ms / 1000)
                 continue
+            except Errors.KafkaError:
+                # Non-retriable error
+                self._join_task = None
+                raise
+
             self._join_task = None
 
             with self._lock:

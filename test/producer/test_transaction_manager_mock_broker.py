@@ -162,7 +162,7 @@ class TestInitProducerIdHandlerMockBroker:
     def test_retriable_error_reenqueues(self, broker, client, error):
         tm = _make_manager(client)
         # Manager is currently READY; InitProducerIdHandler treats retriable
-        # errors uniformly via the getattr(error_type, 'retriable', False)
+        # errors uniformly via the issubclass(error_type, Errors.RetriableError)
         # dispatch path.
         tm._current_state = TransactionState.INITIALIZING
         enqueued = self._enqueue_init(tm)

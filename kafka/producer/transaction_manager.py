@@ -411,7 +411,7 @@ class TransactionManager:
         # non-retriable AND we're in a transaction. The Sender's existing
         # can_retry/can_split logic handles the actual retry decision; this
         # classifier is only consulted for the FAIL branch.
-        if getattr(error_type, 'retriable', False):
+        if issubclass(error_type, Errors.RetriableError):
             return self.ERROR_CLASS_RETRIABLE
 
         # Non-retriable, not in the bump or fatal sets: transactional
@@ -948,7 +948,7 @@ class InitProducerIdHandler(TxnRequestHandler):
             else:
                 self.transaction_manager._transition_to(TransactionState.READY)
             self._result.done()
-        elif getattr(error_type, 'retriable', False):
+        elif issubclass(error_type, Errors.RetriableError):
             if error_type in (Errors.NotCoordinatorError, Errors.CoordinatorNotAvailableError):
                 self.transaction_manager._lookup_coordinator('transaction', self.transactional_id)
             self.reenqueue()
@@ -1005,7 +1005,7 @@ class AddPartitionsToTxnHandler(TxnRequestHandler):
         for tp, error_type in results.items():
             if error_type is Errors.NoError:
                 continue
-            elif getattr(error_type, 'retriable', False):
+            elif issubclass(error_type, Errors.RetriableError):
                 if error_type in (Errors.CoordinatorNotAvailableError, Errors.NotCoordinatorError):
                     self.transaction_manager._lookup_coordinator('transaction', self.transactional_id)
                 elif error_type is Errors.ConcurrentTransactionsError:
@@ -1110,7 +1110,7 @@ class FindCoordinatorHandler(TxnRequestHandler):
             elif self._coord_type == 'transaction':
                 self.transaction_manager._transaction_coordinator = coordinator_id
             self._result.done()
-        elif getattr(error_type, 'retriable', False):
+        elif issubclass(error_type, Errors.RetriableError):
             self.reenqueue()
         elif error_type is Errors.TransactionalIdAuthorizationFailedError:
             self.fatal_error(error_type())
@@ -1142,7 +1142,7 @@ class EndTxnHandler(TxnRequestHandler):
         if error_type is Errors.NoError:
             self.transaction_manager._complete_transaction()
             self._result.done()
-        elif getattr(error_type, 'retriable', False):
+        elif issubclass(error_type, Errors.RetriableError):
             if error_type in (Errors.CoordinatorNotAvailableError, Errors.NotCoordinatorError):
                 self.transaction_manager._lookup_coordinator('transaction', self.transactional_id)
             self.reenqueue()
@@ -1192,7 +1192,7 @@ class AddOffsetsToTxnHandler(TxnRequestHandler):
                                              self.transaction_manager._pending_txn_offset_commits, self._result)
             self.transaction_manager._enqueue_request(handler)
             self.transaction_manager._transaction_started = True
-        elif getattr(error_type, 'retriable', False):
+        elif issubclass(error_type, Errors.RetriableError):
             if error_type in (Errors.CoordinatorNotAvailableError, Errors.NotCoordinatorError):
                 self.transaction_manager._lookup_coordinator('transaction', self.transactional_id)
             self.reenqueue()
@@ -1279,7 +1279,7 @@ class TxnOffsetCommitHandler(TxnRequestHandler):
                 log.debug("Successfully added offsets for %s from consumer group %s to transaction.",
                           tp, self.consumer_group_id)
                 del self.transaction_manager._pending_txn_offset_commits[tp]
-            elif getattr(error_type, 'retriable', False):
+            elif issubclass(error_type, Errors.RetriableError):
                 retriable_failure = True
                 if error_type in (Errors.CoordinatorNotAvailableError, Errors.NotCoordinatorError, Errors.RequestTimedOutError):
                     lookup_coordinator = True
