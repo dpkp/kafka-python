@@ -125,8 +125,12 @@ class KafkaAdminClient(
             this CRL. Default: None.
         api_version (tuple): Specify which Kafka API version to use. If set to
             None, the client will infer the broker version from the results of
-            ApiVersionsRequest API or, for brokers earlier than 0.10, probing
-            various known APIs.  Different versions enable different functionality.
+            ApiVersionsRequest API. For brokers earlier than 0.10, which do not
+            support the ApiVersionsRequest API, api_version is required.
+            Note: Dynamic version checking is performed eagerly during __init__
+            and can raise KafkaTimeoutError if no connection can be made before
+            timeout (see bootstrap_timeout_ms below).
+            Different versions enable different functionality.
 
             Examples:
                 (4, 2) most recent broker release, enable all supported features
