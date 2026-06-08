@@ -5,8 +5,6 @@ Kafka Python client
     :target: https://kafka-python.readthedocs.io/en/master/compatibility.html
 .. image:: https://img.shields.io/pypi/pyversions/kafka-python.svg
     :target: https://pypi.python.org/pypi/kafka-python
-.. image:: https://coveralls.io/repos/dpkp/kafka-python/badge.svg?branch=master&service=github
-    :target: https://coveralls.io/github/dpkp/kafka-python?branch=master
 .. image:: https://img.shields.io/badge/license-Apache%202-blue.svg
     :target: https://github.com/dpkp/kafka-python/blob/master/LICENSE
 .. image:: https://img.shields.io/pypi/dw/kafka-python.svg
@@ -18,30 +16,48 @@ Kafka Python client
 
 
 
-Pure-Python client for Apache Kafka, a distributed stream processing system,
-designed to function much like the official java client, with a sprinkling of
-pythonic interfaces (e.g., consumer iterators).
+kafka-python is a pure-python client library for Apache Kafka, the distributed
+stream processing engine. It has no external dependencies and no Cython/C/rust
+core, making installation across a wide variety of environments simple and easy
+to manage.
 
-kafka-python has no dependencies and no C/rust core, making installation across
-a wide variety of environments simple and easy to manage. Users desiring more
-performance should install `crc32c` as an optional dependency; if available this
-will offload CRC calculations to an optimized library and typically results in
-substantially higher throughput.
+kafka-python can also be used as a simple alternative to the apache kafka admin
+scripts, which require an installed/compatible jvm. A simple CLI interface for
+admin commands is provided as `kafka-python admin` / `python -m kafka.admin`.
+
+Users looking to add more raw throughput can pip install `crc32c` as
+an optional dependency, offloading one of the most CPU intensive subsystems
+to an optimized C library.
 
 
 .. code-block:: bash
 
-    $ pip install kafka-python
-    $ kafka-python consumer -b localhost:9092 -g foo-group -t bar-topic
+    pip install kafka-python
+    # callable as module or as cli-script
+    kafka-python admin -b localhost:9092 cluster describe
+    python -m kafka.admin -b localhost:9092 topics create -t foo-topic
+    echo "foo message" | python -m kafka.producer -b localhost:9092 -t foo-topic
+    python -m kafka.consumer -b localhost:9092 -C auto_offset_reset=earliest -g foo-group -t foo-topic
 
+
+What's New in 3.0
+*****************
+
+- Protocol Stack dynamically generated from Apache Kafka json message schemas.
+- Encode/decode performance optimizations with compiled/cached python bytecode.
+- Expanded KIP feature support, including Cooperative Rebalance (KIP-429),
+  Rack-aware Fetch (KIP-392), Log-Truncation detection (KIP-320), Transactional
+  Producer improvements (KIP-360, KIP-447, KIP-654), Sticky Partitioner (KIP-480),
+  and splittting oversized producer batches (KIP-126).
+- Full refactor and expansion of KafkaAdminClient.
+- Networking changes to leverage kafka.net event-loop and async/await syntax.
+- Python 3.8+ required
 
 KafkaConsumer
 *************
 
 KafkaConsumer is a high-level message consumer, intended to operate as similarly
-as possible to the official java client. Full support for coordinated
-consumer groups requires use of kafka brokers that support the Group APIs: kafka v0.9+.
-
+as possible to the official java client.
 See https://kafka-python.readthedocs.io/en/master/apidoc/KafkaConsumer.html
 for API and configuration details.
 
@@ -188,25 +204,15 @@ Access via ``python -m kafka.consumer``, ``python -m kafka.producer``, and ``pyt
 See https://kafka-python.readthedocs.io/en/master/usage.html for more details.
 
 
-Thread safety
-*************
-
-The KafkaProducer can be used across threads without issue, unlike the
-KafkaConsumer which cannot.
-
-While it is possible to use the KafkaConsumer in a thread-local manner,
-multiprocessing is recommended.
-
-
 Compression
 ***********
 
 kafka-python supports the following compression formats:
 
-- gzip
-- LZ4
-- Snappy
-- Zstandard (zstd)
+- gzip (via stdlib)
+- LZ4 (via `python-lz4`, `lz4tools`, or `py-lz4framed`)
+- Snappy (via `python-snappy`)
+- Zstandard (via `python-zstandard`)
 
 gzip is supported natively, the others require installing additional libraries.
 See https://kafka-python.readthedocs.io/en/master/install.html for more information.
@@ -227,10 +233,9 @@ Protocol
 
 A secondary goal of kafka-python is to provide an easy-to-use protocol layer
 for interacting with kafka brokers via the python repl. This is useful for
-testing, probing, and general experimentation. The protocol support is
-leveraged to enable a KafkaClient.check_version() method that
-probes a kafka broker and attempts to identify which version it is running
-(0.8.0 to 2.6+).
+testing, probing, and general experimentation. In version 3.0 the protocol
+layer was re-written to generate encoder/decoder classes using json message
+definitions imported directly from the Apache Kafka project source.
 
 
 Debugging
