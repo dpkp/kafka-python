@@ -959,7 +959,7 @@ class ConsumerCoordinator(BaseCoordinator):
         try:
             response = await self._manager.send(request, node_id=node_id)
         except Exception as exc:
-            self._failed_request(node_id, request, None, exc)
+            self._failed_request(node_id, request, exc)
             raise
         self._handle_offset_commit_response(offsets, send_time, response)
 
@@ -1097,7 +1097,7 @@ class ConsumerCoordinator(BaseCoordinator):
         try:
             response = await self._manager.send(request, node_id=node_id)
         except Exception as exc:
-            self._failed_request(node_id, request, None, exc)
+            self._failed_request(node_id, request, exc)
             raise
         return self._handle_offset_fetch_response(response)
 
