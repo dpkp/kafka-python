@@ -18,18 +18,21 @@ Kafka Python client
 
 
 
-Python client for the Apache Kafka distributed stream processing system.
-kafka-python is designed to function much like the official java client, with a
-sprinkling of pythonic interfaces (e.g., consumer iterators).
+Pure-Python client for Apache Kafka, a distributed stream processing system,
+designed to function much like the official java client, with a sprinkling of
+pythonic interfaces (e.g., consumer iterators).
 
-Please note that the master branch may contain unreleased features. For release
-documentation, please see readthedocs and/or python's inline help.
+kafka-python has no dependencies and no C/rust core, making installation across
+a wide variety of environments simple and easy to manage. Users desiring more
+performance should install `crc32c` as an optional dependency; if available this
+will offload CRC calculations to an optimized library and typically results in
+substantially higher throughput.
 
-New in 2.3 release: python -m kafka.* interfaces for quick scripts and testing.
 
 .. code-block:: bash
 
     $ pip install kafka-python
+    $ kafka-python consumer -b localhost:9092 -g foo-group -t bar-topic
 
 
 KafkaConsumer
