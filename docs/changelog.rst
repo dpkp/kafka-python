@@ -4,60 +4,399 @@ Changelog
 3.0.0 (Unreleased)
 ##################
 
+This is a major release with significant changes to kafka-python internals to simplify networking and feature development. It introduces a new networking layer (`kafka.net`) and a dynamic protocol system that uses JSON schema files imported from Apache Kafka. It substantially refactors and expands the Admin client, including breaking changes to some API signatures, and it lands a long list of KIP features/changes across the producer, consumer, admin, and networking/metadata clients. Protocol support across kafka-python is now at or beyond the apache kafka 3.0 baseline.
+
 Breaking Changes
------------------
-* Drop python2 support (#2699, #2774, #2837)
+----------------
+
+Python Compatibility
+^^^^^^^^^^^^^^^^^^^^
+* Drop python2 support (#2699, #2774, #2837, #2846)
+
+Default Configuration Changes
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+* KIP-679: Update Producer defaults -- enable_idempotence=True, acks='all' (#3013)
+* KIP-735: Increase default consumer session_timeout_ms from 10s to 45s (#3030)
+* Rename api_version_auto_timeout_ms -> bootstrap_timeout_ms; default 30s (#3028)
+
+Admin API Changes
+^^^^^^^^^^^^^^^^^
+* Admin: change response shapes to simple dicts (#2883)
+* Admin: groups apis renames; add offsets, members apis (#2892)
+* Admin: Deprecate NewTopics/NewPartitions in favor of simple dicts (#2869)
+
+Consumer API Changes
+^^^^^^^^^^^^^^^^^^^^
 * Consumer: use assignor instances, not classes (#2775)
+
+Error Hierarchy
+^^^^^^^^^^^^^^^
+* KafkaError subclass Exception not RuntimeError (#2932)
+* Make IncompatibleBrokerVersion a subclass of UnsupportedVersionError (#2924)
+* Eliminate NoBrokersAvailableError (#2942)
+* KafkaProtocolError is not retriable (#2941)
+
+Old Networking Stack Removal
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+* Remove kafka.client_async / kafka.conn legacy modules (#2918)
+* Drop version probes for pre-0.10/ApiVersionsRequest brokers
+
+Networking (kafka.net)
+----------------------
+
+Complete refactor of the networking layer using a bespoke event-loop supporting async/await (but no asyncio yet). All three clients (Admin, Consumer, Producer) use a dedicated IO thread that drives a selector-based event loop. AdminClient/KafkaConsumer leverage a built-in io thread supplied by kafka.net, KafkaProducer continues to use its existing background Sender thread for now.
+
+Async IO Substrate
+^^^^^^^^^^^^^^^^^^
+* kafka.net: Refactored async networking modules (generator-based coroutines) (#2812)
+* kafka.net: Network IO thread (#2965, #2980, #2961, #2968, #2963)
+* KafkaNetClient: drop-in replacement for KafkaClient using kafka.net (#2816)
+* KafkaNetSocket: interface class for socket and proxy connections (#2992)
+* kafka.net.manager: Add call_soon(coro) and run(coro) for sync/async bridge (#2862)
+* kafka.net.manager: Bootstrap is sync/blocking (#2919)
+* connection: short-circuit send/recv when closed (#2967)
+
+Transports and Proxies
+^^^^^^^^^^^^^^^^^^^^^^
+* Default SSLContext -> PROTOCOL_TLS_CLIENT; minimum version TLS 1.2 (#2807)
+* Enable TCP KeepAlive as default socket option (#2904)
+* kafka.net: HTTP CONNECT proxy support (RFC 7231 s4.3.6) (#2990)
+
+SASL Authentication
+^^^^^^^^^^^^^^^^^^^
+* kafka.net: Validate SASL/SCRAM iterations (#3026)
+* SASL: Prefer node hostname to IP address when building mechanisms (#3003)
+
+Timeouts and Connection Management
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Per-request and per-stage timeouts replace the old single client-wide timeout.
+
+* KIP-601: support socket_connection_setup_timeout_ms w/ exponential backoff (#3027)
+* kafka.net: Bootstrap if needed for metadata refresh (#2825)
+* kafka.net: Raise UnknownBrokerIdError when connection fails because node_id is not in metadata (#2876)
+
+Futures and Wakeups
+^^^^^^^^^^^^^^^^^^^
+The ``Future`` primitive gains ``__await__`` and a faster slotted implementation; cross-thread wakeups are factored out into a reusable helper.
+
+* Future.__await__ support (#2811)
+* Future: __slots__ and callback/errback inlining optimization (#2848)
+* Future: clear callbacks/errbacks when done to avoid reference cycles (#2891)
+* WakeupNotifier primitive for cross-thread/task wakeups (#2925, #2933)
+
+Concurrency and Error Handling
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Defensive checks throughout the kafka.net event loop and transport stack: improved socket I/O error handling, RuntimeErrors on misuse of the IO thread, and lock-based detection of concurrent access.
+
+* kafka.net.selector: Break scheduled heapq ties when tasks share scheduled_at (#3007)
+* kafka.net.selector: Monitor slow tasks with slow_task_threshold_secs (#2946)
+* kafka.net.selector: Use threading.Lock() to detect concurrent access to poll() (#2945)
+* kafka.net.selector: Track pending tasks to prevent gc before completion (#2950)
+* kafka.net.selector: Support reschedule(when, task); idempotent unschedule (#2939)
+* kafka.net: Raise RuntimeError on concurrent access to net.poll or wakeup() (#2938)
+* kafka.net: Raise RuntimeError on run/call_at/call_soon_threadsafe after closed (#2971)
+* kafka.net: Catch unhandled exceptions in IO thread (#2970)
+* kafka.net: Improve error handling on sock read/write (#2995)
+* kafka.net.transport: Close connection on socket write error (#2973)
+* kafka.net: Check locks in _poll_once; add net.drain() (#2949)
 
 Protocol
 --------
+
+A new JSON-schema-based dynamic protocol generator now replaces the legacy hand-written protocol classes (moved to `kafka.protocol.old`).
+
+Dynamic Protocol Classes
+^^^^^^^^^^^^^^^^^^^^^^^^
+Protocol classes are now generated from the upstream Apache Kafka JSON schemas.
+
 * Dynamic protocol classes using upstream json schemas (#2727, #2745, #2779, #2782, #2787, #2810)
 * Add .pyi type annotation stubs for generated protocol classes (#2784)
-* Protocol encode/decode optimization with inline compile/exec (#2785)
-* Protocol benchmarks and profiling (make bench-protocol) (#2783)
-* Add UUID protocol type (#2703)
-* Fix TaggedFields encoding/decoding (#2725)
-* Fix VarInt/VarLong encoding (#2706)
 * Migrate all internal usage to new protocol classes (#2764, #2765, #2766, #2767, #2768, #2772)
+* Refactor treatment of versioned ApiMessage classes (#2739)
+* Lookup request header -> response class via ResponseClassRegistry (#2730)
+* Manual json schema edits to restore fields dropped in Apache 4.0 (#2738)
+
+New Types and Messages
+^^^^^^^^^^^^^^^^^^^^^^
+* Add UUID protocol type (#2703)
+* Add UnsignedInt16 type
+* KIP-893: support nullable structs (#2889)
 * Replace kafka.structs BrokerMetadata/PartitionMetadata with MetadataResponse structs (#2794)
 * Add ConsumerProtocol data schemas (#2754)
 * Add StickyAssignorUserData json schema (#2755)
 
-Networking
-----------
-* kafka.net: Refactored async networking modules (generator-based coroutines) (#2812)
-* kafka.net: SSL transport support (#2813)
-* kafka.net: SASL authentication support (#2814)
-* kafka.net: SOCKS5 proxy support (#2815)
-* kafka.net: Metrics tracking (#2834)
-* KafkaNetClient: drop-in replacement for KafkaClient using kafka.net (#2816)
-* Future.__await__ support (#2811)
-* Pass task by value when adding call_soon callback to future (#2826)
-* Default SSLContext -> PROTOCOL_TLS_CLIENT; minimum version TLS 1.2 (#2807)
+Performance
+^^^^^^^^^^^
+* Protocol encode/decode optimization with inline compile/exec (#2785)
+* Protocol benchmarks and profiling (make bench-protocol) (#2783)
+
+Protocol Fixes
+^^^^^^^^^^^^^^
+* Fix TaggedFields encoding/decoding (#2725, #2745, #2779)
+* Fix VarInt/VarLong encoding (#2706)
+* Fix CompactBytes encoding of struct data (#2782)
+* Fix compiled encode_into for None arrays (#2790)
+* Validate network frame size (#3019)
+* Validate DataContainer version (#2759)
+
+Helpers and Debugging
+^^^^^^^^^^^^^^^^^^^^^
+* DataContainer.to_dict() helper (#2758, #2872, #2879)
+* Store in-flight request headers only for protocol parser (#2723)
+* Debug log send/recv bytes from protocol parser (#2707)
+* Adjust protocol debug logging; add KAFKA_PYTHON_PROTOCOL_DEBUG_LOG (#2719)
 
 Broker Version Check
 --------------------
+
+Broker version inference is consolidated into a single ``BrokerVersionData`` helper that tracks the broker's reported API versions and infers a broker version string. ``ApiVersionsRequest`` is always sent on connect.
+
+BrokerVersionData
+^^^^^^^^^^^^^^^^^
 * BrokerVersionData: consolidated version checks (#2795)
-* BrokerVersionData: infer up to 4.2 (#2835, #2836)
+* BrokerVersionData: infer up to 4.3 (#2835, #2836, #3032)
+* BrokerVersionData: support request min/max version (#2868)
+* BrokerVersionData: Fix IncompatibleBrokerVersion errors; add __str__ (#2804)
+
+ApiVersionsRequest
+^^^^^^^^^^^^^^^^^^
 * Always send ApiVersionsRequest on connect (#2802)
 * Improve ApiVersionsRequest fallbacks (#2803, #2817, #2821)
 
 Client Bootstrap
 ----------------
+
 * Fix bootstrap connection error handling (#2831)
 * ClusterMetadata: bootstrap_brokers(), set_topics/add_topics/metadata_request (#2805, #2792, #2796, #2797)
 * Move bootstrap_brokers fallback from brokers() to least_loaded_node() (#2809)
 * KafkaClient.least_loaded_node: pass bootstrap_fallback=True if needed (#2830)
+* Consumer: add explicit bootstrap() method (#2975)
+* Admin: explicit bootstrap on __init__ (#2864)
+* Manage metadata refresh logic in ClusterMetadata via attached manager (#2920)
+* kafka.cluster: End refresh loop on close(); refresh loop catches KafkaError (#2935, #2936)
+* Respect metadata backoff in KafkaNetClient (#2854)
 
 Consumer
 --------
-* Fix KeyError in KafkaConsumer.committed() (#2710)
-* Fix `Fetcher._fetch_offsets_by_times` retry handling (#2833)
+
+KafkaConsumer drops the dedicated HeartbeatThread in favor of scheduled async tasks on the kafka.net IO thread. Internals have been substantially refactored to migrate from future callbacks to async/await syntax. Feature support added for incremental cooperative rebalancing (KIP-429), rack-aware fetch (KIP-392), and log truncation detection (KIP-320/KIP-595).
+
+Threading and IO
+^^^^^^^^^^^^^^^^
+All consumer network I/O now flows through the shared IO thread; ``poll()`` no longer drives the event loop directly.
+
+* Consumer: use background thread for all network io; drop HeartbeatThread (#2965)
+* Consumer: send all requests from net io thread (#2980)
+* Consumer: simplify poll() with fetcher.fetch_records (#2960)
+* Consumer: drop poll loop optimizations for pending offset resets and rejoins (#2959)
+* Consumer: _update_fetch_positions -> _refresh_committed_offsets; dont poll in position() (#2958)
+* Consumer: convert fetcher reset_offsets/send_list_offsets_requests to async def
+* Consumer: use new proto attrs in Fetcher (ListOffsets/Fetch) (#2923)
+
+Group Membership and Rebalance
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+* KIP-429: Incremental Cooperative Rebalance (#2999)
+* KIP-429: Add on_partitions_lost rebalance listener hook (#3016)
+* KIP-559: Bump JoinGroup v7 / SyncGroup v5; verify protocol_type/name (#2998)
+* Rebalance Listener: raise errors, block fetches on revoked, pre-revoke unsubscribed (#3018)
+* Consumer: call RebalanceListener on close (#3020)
+* Preserve member id on IllegalGeneration error (#3017)
+
+Fetch
+^^^^^
+* KIP-320: Detect and handle Log Truncation (#2978)
+* KIP-392: Rack-aware fetch from closest replica (#2986, #2996)
+* KIP-595: Fetch v12 support; check for log truncation and leader updates in response (#3021)
+* KAFKA-7548: Retain fetched data for paused partitions (#2981)
+* KAFKA-9212: Leader Epoch unreliable before Metadata v9 (#2997)
+
+Offsets and Commits
+^^^^^^^^^^^^^^^^^^^
+* KIP-447: OffsetFetch v7 set require_stable flag if read_committed (#3023)
+* Consumer: handle retriable errors in offsets_for_times (#3022)
+* Consumer: Improve retriable offset fetch error handling (#2977)
+* Consumer: Retain subscription TopicPartitionState when possible (#3001)
+* Consumer: drop max_version clamp on ListOffsetsRequest (#3012)
+
+Configuration
+^^^^^^^^^^^^^
+* KIP-602: Support client_dns_lookup in Consumer/Producer/Admin config (#3004)
+* Consumer: default request_timeout_ms 30s; use request-specific timeout for JoinGroup (#3011)
+
+Consumer Fixes
+^^^^^^^^^^^^^^
 * Retry metadata request if tracked topics have retriable errors (#2832)
+* Fix KeyError in KafkaConsumer.committed() (#2710)
+* Fix ``Fetcher._fetch_offsets_by_times`` retry handling (#2833)
 
 Producer
 --------
+
+KafkaProducer gains a sticky partitioner (KIP-480), enabled-by-default idempotence (KIP-679), tightened transaction handling, and a faster send/encode path.
+
+Transactions and Idempotence
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+* KIP-360 (pt1): Add transaction manager state and helper methods (#2852)
+* KIP-360 (pt2): Bump producer epoch with InitProducerIdRequest v3 on 2.5+ brokers (#2853)
+* KIP-447: Include group metadata in TxnOffsetCommitRequest (#2984, #2988)
+* KIP-654: Txn Producer aborts with non-fatal TransactionAbortedError (#3010)
+* KAFKA-5793: Tighten up semantics of OutOfOrderSequenceNumber (pt1) (#2843)
+* Enable producer idempotence with max_in_flight_requests_per_connection > 1 (#2841)
+* Producer: Enforce guaranteed message order when idempotence_enabled (#2937)
+* Producer: treat InvalidProducerEpochError as ProducerFencedError (#2885)
+* Producer: Improve transaction manager retriable error handling (#2884)
+* Producer: Use new-style request construction in Txn Manager (#2983)
+
+Partitioning
+^^^^^^^^^^^^
+* KIP-480: StickyPartitioner for KafkaProducer (#2982, #2989)
+
+Batching and Send Path
+^^^^^^^^^^^^^^^^^^^^^^
+Split-and-resend oversized batches instead of failing; avoid redundant validation and buffer copies on hot send-path.
+
+* KIP-126: Allow KafkaProducer to split and resend oversized batches (#2839)
+* Refactor producer.send / _wait_on_metadata for fast path (#2850)
+* Only ensure_valid_topic_name new topics on send (#2849)
+* Avoid unnecessary bytes/bytearray copies on send (#2845)
+* MemoryRecordsBuilder.build() returns bytearray buffer not bytes copy (#2842)
+* Drop PartitionResponse namedtuple; consolidate response and error handling (#2851)
+
+Producer Fixes
+^^^^^^^^^^^^^^
 * Fixup Sender error class logging (#2828)
+
+Admin Client
+------------
+
+KafkaAdminClient has been split into focused mixin classes (cluster, topics, configs, groups, ACLs, log dirs, ...) and its request-sending path has been converted to async coroutines running on the shared IO thread. Adds first-class support for several KIPs along with a number of new APIs.
+
+Refactor and Async Migration
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+The admin client interface remains sync but wraps a fully-async internal api (does not support asyncio yet). Adds cached coordinator lookups and a mixin structure to separate logical resource groups.
+
+* Admin: split into functional mixin classes (#2873, #2877, #2882)
+* Admin: convert request paths to async; cache coordinator_ids (#2851, #2862, #2863, #2866, #2867, #2870, #2871)
+* Admin: refactor `_send_request_to_controller` error handling (#2751)
+
+KIP Support
+^^^^^^^^^^^
+* KIP-699: FindCoordinatorRequest v4 -- multi-group support (#3025)
+* KIP-709: OffsetFetch v8 -- use batch interface when available (#3024)
+
+New Cluster and Quorum APIs
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+* Admin: describe_metadata_quorum (#2914)
+* Admin: cluster features describe/update (#2908)
+* Admin: cluster get_broker_version_data / api_versions (#2903)
+
+Configs
+^^^^^^^
+* Admin: list_config_resources (requires 4.1+) (#2900)
+* Admin: support incremental alter configs (#2901)
+* Admin: Improve alter_configs w/ filters and missing keys (#2899)
+
+Topics and Partitions
+^^^^^^^^^^^^^^^^^^^^^
+* KIP-516: Support topic id (uuid) for describe topics (#3031)
+* Admin: re-use config processing for CreateTopicsResponse (#3036)
+* Admin: wait_for_topics() and create_topics() wait_for_metadata option (#2856)
+* Admin: list_partition_offsets (#2894)
+* Admin: Expand partitions api support (#2890)
+* Admin: Cleanup alter_partition_reassignments (#3002)
+
+Groups
+^^^^^^
+* Admin: include latest offsets and lag in list_group_offsets; add reset_group_offsets (#2897)
+* Admin: support group state/type filters for list_groups (#2910)
+* Admin: add extended group reset options (#2911)
+* Admin: Dont return MemberToRemove as key in remove_group_members dict result (#2893)
+
+Log Dirs
+^^^^^^^^
+* Admin: alter_log_dirs (#2912)
+* Admin: Fix describe_log_dirs, accept optional topics/brokers (#2881)
+
+Reliability
+^^^^^^^^^^^
+* Admin: retry delete_records / list_partition_offsets on NotLeaderForPartitionError (#2976)
+
+CLI
+---
+
+The CLI adds shared parser config, SASL/SSL connection support across all subcommands, and several new admin subcommands (acls, configs alter, users).
+
+Common Infrastructure
+^^^^^^^^^^^^^^^^^^^^^
+* Add kafka-python cli script to wrap admin/consumer/producer (#3034)
+* kafka.cli: common parser args; support sasl/ssl connections (#2887)
+* kafka.cli: common configuration for logging and connect kwargs (#2906)
+* Add --enable-logger/--disable-logger to cli options (#2798)
+* Set default cli log level => CRITICAL (#2760)
+
+Admin CLI
+^^^^^^^^^
+* admin cli: acls, users, configs alter (#2888)
+* admin cli: refactor admin group/command parsers; consumer/producer option groups (#2909)
+* admin cli: --id support for describe-topics
+* admin cli: close() after running command
+* admin cli: dont print stacktrace for BrokerResponseError or ValueError (#2895)
+* admin cli: catch AttributeError and print_help() (#2880)
+* admin cli: fix describe_configs (#2875)
+
+Compatibility / Misc
+--------------------
+
+Small quality-of-life additions to the public API surface.
+
+* Support context manager interface for consumer/producer/admin (#2969)
+* Make IncompatibleBrokerVersion a subclass of UnsupportedVersionError (#2924)
+* Add OffsetSpec / IsolationLevel to kafka imports (#2898)
+
+Fixes
+-----
+
+Codec and Python-3-compatibility fixes that aren't specific to a single client.
+
+* Fix zstd multi-frame decompression failure (#2717)
+* Use time.monotonic() instead of time.time() for elapsed time calculations (#2714)
+* Fix deprecated log.warn() -> log.warning()
+* REF: Switch to deque.copy() for Python 3 compatibility (#2712)
+
+Tests
+-----
+
+A new in-memory ``MockBroker`` / ``MockTransport`` enables deterministic protocol-level tests, and the integration test fixtures have been substantially consolidated.
+
+MockBroker and Fixtures
+^^^^^^^^^^^^^^^^^^^^^^^
+* MockBroker / MockTransport for deterministic protocol tests (#2861, #2902)
+* Organize test files into consumer/ producer/ admin/ directories (#2844)
+* Consolidate consumer integration tests (#2857)
+* Consolidate more pytest fixtures (admin/client) (#2921)
+* Integration fixtures use contextmanager (#2966)
+* Refactor coordinator test fixtures; prefer MockBroker to patched_coord (#2953)
+* Support SSL transports in KafkaFixture (#2806)
+* Simplify interacting with KafkaFixture (client factories, create_topics) (#2808)
+* Use producer/consumer/admin factories in producer_integration tests (#2829)
+* Set api_version for integration tests; fix test_group missing consumers (#2824)
+* Close local fixtures in tests (#2962)
+* Catch exceptions in fixture.open() -> close() (#2907)
+* Create topic on 0.8.2 broker to fix bootstrap (#2896)
+
+Reliability
+^^^^^^^^^^^
+* Reduce timing flakiness in test_group (#3006)
+* Test timeouts: use pytest-timeout method=thread and add faulthandler
+
+Project Infra
+-------------
+* Enable pylint workflow; disable/fix all outstanding errors (#2701)
+* Add coverage step to CI (#2786)
+* CI test matrix updated to python 3.14 / kafka 4.3 (#2836, #3032)
+* Add lint-unicode make target; include in make lint test (#2993)
+* pyproject updates: no more universal wheels; requres py3.8+; fix license files; drop setup.py (#3033)
+* Bump actions/cache from 4 to 5; actions/upload-artifact from 4 to 7 (#2702, #2789)
 
 
 2.3.1 (Apr 9, 2026)
