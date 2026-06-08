@@ -198,7 +198,8 @@ class SubscriptionState:
         """Reset the group's subscription to only contain topics subscribed by this consumer."""
         if not self.partitions_auto_assigned():
             raise Errors.IllegalStateError(self._SUBSCRIPTION_EXCEPTION_MESSAGE)
-        assert self.subscription is not None, 'Subscription required'
+        if self.subscription is None:
+            raise Errors.IllegalStateError('Subscription required')
         self._group_subscription.intersection_update(self.subscription)
 
     @synchronized
@@ -578,8 +579,10 @@ class TopicPartitionState:
         self._pending_revocation = False
 
     def _set_position(self, offset):
-        assert self.has_valid_position, 'Valid position required'
-        assert isinstance(offset, OffsetAndMetadata)
+        if not self.has_valid_position:
+            raise Errors.IllegalStateError('Valid position required')
+        if not isinstance(offset, OffsetAndMetadata):
+            raise TypeError('offset must be OffsetAndMetadata')
         self._position = offset
 
     def _get_position(self):
@@ -588,7 +591,8 @@ class TopicPartitionState:
     position = property(_get_position, _set_position, None, "last position")
 
     def reset(self, strategy):
-        assert strategy is not None
+        if strategy is None:
+            raise ValueError('strategy cannot be None')
         self.reset_strategy = strategy
         self._position = None
         self.next_allowed_retry_time = None

@@ -258,7 +258,8 @@ else:
 
 def lz4_encode_old_kafka(payload):
     """Encode payload for 0.8/0.9 brokers -- requires an incorrect header checksum."""
-    assert xxhash is not None
+    if xxhash is None:
+        raise RuntimeError('pip install xxhash for lz4 encoding with 0.8/0.9 brokers')
     data = lz4_encode(payload)
     header_size = 7
     flg = data[4]
@@ -288,7 +289,8 @@ def lz4_encode_old_kafka(payload):
 
 
 def lz4_decode_old_kafka(payload):
-    assert xxhash is not None
+    if xxhash is None:
+        raise RuntimeError('pip install xxhash for lz4 encoding with 0.8/0.9 brokers')
     # Kafka's LZ4 code has a bug in its header checksum implementation
     header_size = 7
     if isinstance(payload[4], int):

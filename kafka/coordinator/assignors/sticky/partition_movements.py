@@ -49,7 +49,8 @@ class PartitionMovements:
         if partition in self.partition_movements:
             # this partition has previously moved
             existing_pair = self._remove_movement_record_of_partition(partition)
-            assert existing_pair.dst_member_id == old_consumer
+            if existing_pair.dst_member_id != old_consumer:
+                raise ValueError()
             if existing_pair.src_member_id != new_consumer:
                 # the partition is not moving back to its previous consumer
                 self._add_partition_movement_record(
@@ -63,7 +64,8 @@ class PartitionMovements:
             return partition
         if partition in self.partition_movements:
             # this partition has previously moved
-            assert old_consumer == self.partition_movements[partition].dst_member_id
+            if old_consumer != self.partition_movements[partition].dst_member_id:
+                raise ValueError()
             old_consumer = self.partition_movements[partition].src_member_id
         reverse_pair = ConsumerPair(src_member_id=new_consumer, dst_member_id=old_consumer)
         if reverse_pair not in self.partition_movements_by_topic[partition.topic]:

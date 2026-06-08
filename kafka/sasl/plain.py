@@ -1,5 +1,6 @@
 import logging
 
+from kafka.errors import KafkaConfigurationError
 from kafka.sasl.abc import SaslMechanism
 
 
@@ -11,8 +12,10 @@ class SaslMechanismPlain(SaslMechanism):
     def __init__(self, **config):
         if config.get('security_protocol', '') == 'SASL_PLAINTEXT':
             log.warning('Sending username and password in the clear')
-        assert 'sasl_plain_username' in config, 'sasl_plain_username required for PLAIN sasl'
-        assert 'sasl_plain_password' in config, 'sasl_plain_password required for PLAIN sasl'
+        if 'sasl_plain_username' not in config:
+            raise KafkaConfigurationError('sasl_plain_username required for PLAIN sasl')
+        if 'sasl_plain_password' not in config:
+            raise KafkaConfigurationError('sasl_plain_password required for PLAIN sasl')
 
         self.username = config['sasl_plain_username']
         self.password = config['sasl_plain_password']

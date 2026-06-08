@@ -58,8 +58,8 @@ class Future:
 
     def failure(self, e):
         exception = e if type(e) is not type else e()
-        assert isinstance(exception, BaseException), (
-            'future failed without an exception')
+        if not isinstance(exception, BaseException):
+            raise TypeError('future failed without an exception')
         lock = self._lock
         lock.acquire()
         self.exception = exception

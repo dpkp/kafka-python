@@ -21,7 +21,8 @@ class SaslMechanismGSSAPI(SaslMechanism):
     SASL_QOP_AUTH_CONF = 4
 
     def __init__(self, **config):
-        assert gssapi is not None, 'GSSAPI lib not available'
+        if gssapi is None:
+            raise RuntimeError('GSSAPI lib not found!')
         if 'sasl_kerberos_name' not in config and 'sasl_kerberos_service_name' not in config:
             raise ValueError('sasl_kerberos_service_name or sasl_kerberos_name required for GSSAPI sasl configuration')
         self._is_done = False
