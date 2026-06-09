@@ -131,7 +131,7 @@ def test_complete_exceptionally_with_null_record_errors(batch):
     record_count = 5
     top_level_exception = RuntimeError()
 
-    with pytest.raises(AssertionError):
+    with pytest.raises(TypeError):
         _test_complete_exceptionally(batch, record_count, top_level_exception, None)
 
 

@@ -9,6 +9,7 @@ try:
 except ImportError:
     sspi = None
 
+from kafka.errors import KafkaConfigurationError
 from kafka.sasl.abc import SaslMechanism
 
 
@@ -24,9 +25,10 @@ class SaslMechanismSSPI(SaslMechanism):
     SASL_QOP_AUTH_CONF = 4
 
     def __init__(self, **config):
-        assert sspi is not None, 'No GSSAPI lib available (gssapi or sspi)'
+        if sspi is None:
+            raise RuntimeError('No GSSAPI lib available (sspi)')
         if 'sasl_kerberos_name' not in config and 'sasl_kerberos_service_name' not in config:
-            raise ValueError('sasl_kerberos_service_name or sasl_kerberos_name required for GSSAPI sasl configuration')
+            raise KafkaConfigurationError('sasl_kerberos_service_name or sasl_kerberos_name required for GSSAPI sasl configuration')
         self._is_done = False
         self._is_authenticated = False
         if config.get('sasl_kerberos_name', None) is not None:

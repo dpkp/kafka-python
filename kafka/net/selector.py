@@ -334,7 +334,8 @@ class NetworkSelector:
 
     def call_soon_with_future(self, coro, *args):
         if hasattr(coro, '__await__'):
-            assert not args, 'initiated coroutine does not accept args'
+            if args:
+                raise ValueError('initiated coroutine does not accept args')
         future = Future()
         async def wrapper():
             try:

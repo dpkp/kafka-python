@@ -42,10 +42,12 @@ class ListPartitionOffsets:
     @classmethod
     def _parse_partition_specs(cls, client, args):
         if args.partitions:
-            assert not args.topic and not args.spec, "Either --partition or (--topic and --spec) is supported, but not both."
+            if args.topic or args.spec:
+                raise ValueError("Either --partition or (--topic and --spec) is supported, but not both.")
             partitions = args.partitions
         else:
-            assert args.topic and args.spec, "Both --topic and --spec must be provided."
+            if not args.topic or not args.spec:
+                raise ValueError("Both --topic and --spec must be provided.")
             partitions = [f'{args.topic}:*:{args.spec}']
         tp_offsets = {}
         for entry in partitions:

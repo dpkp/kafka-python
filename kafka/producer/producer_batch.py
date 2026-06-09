@@ -105,11 +105,19 @@ class ProducerBatch:
             top_level_exception (Exception): top-level partition error.
             record_exceptions_fn (callable int -> Exception): Record exception function mapping
                 batch_index to the respective record exception.
-        Returns: True if the batch was completed as a result of this call, and False
-            if it had been completed previously.
+
+        Raises:
+            TypeError: if top_level_exception is not Exception,
+                or record_exceptions_fn is not callable.
+
+        Returns:
+            True if the batch was completed as a result of this call,
+            or False if it had been completed previously.
         """
-        assert isinstance(top_level_exception, Exception)
-        assert callable(record_exceptions_fn)
+        if not isinstance(top_level_exception, Exception):
+            raise TypeError('top_level_exception must be type Exception')
+        if not callable(record_exceptions_fn):
+            raise TypeError('record_exceptions_fn must be callable')
         return self.done(top_level_exception=top_level_exception, record_exceptions_fn=record_exceptions_fn)
 
     def done(self, base_offset=None, timestamp_ms=None, top_level_exception=None, record_exceptions_fn=None):

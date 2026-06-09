@@ -160,5 +160,6 @@ class KafkaNetClient:
         self._net.wakeup()
 
     def api_version(self, operation, max_version=None):
-        assert self._manager.broker_version_data is not None
+        if self._manager.broker_version_data is None:
+            raise Errors.IllegalStateError('broker_version_data is not available: have we bootstrapped yet?')
         return self._manager.broker_version_data.api_version(operation, max_version=max_version)

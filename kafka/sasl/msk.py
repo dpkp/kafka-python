@@ -22,9 +22,12 @@ log = logging.getLogger(__name__)
 
 class SaslMechanismAwsMskIam(SaslMechanism):
     def __init__(self, **config):
-        assert BotoSession is not None, 'AWS_MSK_IAM requires the "botocore" package'
-        assert config.get('security_protocol', '') == 'SASL_SSL', 'AWS_MSK_IAM requires SASL_SSL'
-        assert 'host' in config, 'AWS_MSK_IAM requires host configuration'
+        if BotoSession is None:
+            raise RuntimeError('AWS_MSK_IAM requires the "botocore" package')
+        if config.get('security_protocol', '') != 'SASL_SSL':
+            raise KafkaConfigurationError('AWS_MSK_IAM requires SASL_SSL')
+        if 'host' not in config:
+            raise KafkaConfigurationError('AWS_MSK_IAM requires host configuration')
         self.host = config['host']
         self._auth = None
         self._is_done = False

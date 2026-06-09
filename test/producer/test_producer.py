@@ -66,7 +66,7 @@ def test_partition_explicit_partition_rejects_unknown_partition():
     producer._metadata.topics.return_value = {'t'}
     producer._metadata.partitions_for_topic.return_value = {0, 1, 2}
     producer.config = {'partitioner': MagicMock()}
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError):
         producer._partition('t', 99, None, None, b'k', b'v')
 
 

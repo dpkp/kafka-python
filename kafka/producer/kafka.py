@@ -480,7 +480,8 @@ class KafkaProducer:
                 warnings.warn('Deprecated Producer config: %s' % (key,), DeprecationWarning)
 
         # Only check for extra config keys in top-level class
-        assert not configs, 'Unrecognized configs: %s' % (configs,)
+        if configs:
+            raise ValueError('Unrecognized configs: %s' % (configs,))
 
         if self.config['client_id'] is None:
             self.config['client_id'] = 'kafka-python-producer-%s' % \
@@ -526,10 +527,12 @@ class KafkaProducer:
         self.config['api_version'] = manager.broker_version
 
         if self.config['compression_type'] == 'lz4':
-            assert self.config['api_version'] >= (0, 8, 2), 'LZ4 Requires >= Kafka 0.8.2 Brokers'
+            if self.config['api_version'] < (0, 8, 2):
+                raise ValueError('LZ4 Requires >= Kafka 0.8.2 Brokers')
 
         if self.config['compression_type'] == 'zstd':
-            assert self.config['api_version'] >= (2, 1), 'Zstd Requires >= Kafka 2.1 Brokers'
+            if self.config['api_version'] < (2, 1):
+                raise ValueError('Zstd Requires >= Kafka 2.1 Brokers')
 
         # Check compression_type for library support
         ct = self.config['compression_type']
@@ -537,7 +540,8 @@ class KafkaProducer:
             raise ValueError("Not supported codec: {}".format(ct))
         else:
             checker, compression_attrs = self._COMPRESSORS[ct]
-            assert checker(), "Libraries for {} compression codec not found".format(ct)
+            if not checker():
+                raise RuntimeError("Libraries for {} compression codec not found".format(ct))
             self.config['compression_attrs'] = compression_attrs
 
         self._metadata = manager.cluster
@@ -630,7 +634,7 @@ class KafkaProducer:
         return self._sender.bootstrap_connected()
 
     def _cleanup_factory(self):
-        """Build a cleanup clojure that doesn't increase our ref count"""
+        """Build a cleanup closure that doesn't increase our ref count"""
         _self = weakref.proxy(self)
         def wrapper():
             try:
@@ -676,7 +680,8 @@ class KafkaProducer:
             return
         if timeout is None:
             timeout = threading.TIMEOUT_MAX
-        assert 0 <= timeout <= threading.TIMEOUT_MAX
+        if not (0 <= timeout <= threading.TIMEOUT_MAX):
+            raise ValueError('Invalid timeout: %s' % timeout)
 
         log.info("%s: Closing the Kafka producer with %s secs timeout.", str(self), timeout)
         self.flush(timeout)
@@ -879,23 +884,31 @@ class KafkaProducer:
 
         Raises:
             KafkaTimeoutError: if unable to fetch topic metadata, or unable
-                to obtain memory buffer prior to configured max_block_ms
-            TypeError: if topic is not a string
-            ValueError: if topic is invalid: must be chars (a-zA-Z0-9._-), and less than 250 length
-            AssertionError: if KafkaProducer is closed, or key and value are both None
+                to obtain memory buffer prior to configured max_block_ms.
+            TypeError: if topic is not a string; if serialized key/value
+                are not type bytes/bytearray/memoryview or None; or headers
+                is not a list of (str, bytes) items.
+            ValueError: if both key and value are None; partitioner fails to
+                assign a partition, or topic is invalid (must be chars
+                [a-zA-Z0-9._-], and less than 250 length).
+            IllegalStateError: if KafkaProducer is already closed.
         """
-        assert not self._closed, 'KafkaProducer already closed!'
-        assert value is not None or self.config['api_version'] >= (0, 8, 1), (
-            'Null messages require kafka >= 0.8.1')
-        assert not (value is None and key is None), 'Need at least one: key or value'
+        if self._closed:
+            raise Errors.IllegalStateError('KafkaProducer already closed!')
+        if value is None and self.config['api_version'] < (0, 8, 1):
+            raise ValueError('Null messages require kafka >= 0.8.1')
+        if value is None and key is None:
+            raise ValueError('Need at least one: key or value')
         key_bytes = self._serialize(
             self.config['key_serializer'],
             topic, key)
         value_bytes = self._serialize(
             self.config['value_serializer'],
             topic, value)
-        assert type(key_bytes) in (bytes, bytearray, memoryview, type(None))
-        assert type(value_bytes) in (bytes, bytearray, memoryview, type(None))
+        if type(key_bytes) not in (bytes, bytearray, memoryview, type(None)):
+            raise TypeError("Unsupported type for serialized key: %s" % type(key_bytes))
+        if type(value_bytes) not in (bytes, bytearray, memoryview, type(None)):
+            raise TypeError("Unsupported type for serialized value: %s" % type(value_bytes))
 
         if self._metadata.partitions_for_topic(topic) is None:
             try:
@@ -913,12 +926,15 @@ class KafkaProducer:
         # Track if the user passed an explicit partition b/c sticky logic does not apply
         explicit_partition = partition is not None
         partition = self._partition(topic, partition, key, value, key_bytes, value_bytes)
-        assert partition is not None, f'Partitioner did not assign a partition for topic {topic}!'
+        if partition is None:
+            raise ValueError(f'Partitioner did not assign a partition for topic {topic}!')
 
         if headers is None:
             headers = []
-        assert isinstance(headers, list)
-        assert all(isinstance(item, tuple) and len(item) == 2 and isinstance(item[0], str) and isinstance(item[1], bytes) for item in headers)
+        if not isinstance(headers, list):
+            raise TypeError('headers must be list-type')
+        if not all(isinstance(item, tuple) and len(item) == 2 and isinstance(item[0], str) and isinstance(item[1], bytes) for item in headers):
+            raise TypeError('All headers items must be (str, bytes) tuples')
 
         message_size = self._estimate_size_in_bytes(key_bytes, value_bytes, headers)
         self._ensure_valid_record_size(message_size)
@@ -1052,10 +1068,11 @@ class KafkaProducer:
         if topic not in self._metadata.topics():
             return None
         if partition is not None:
-            assert partition >= 0
+            if partition < 0:
+                raise ValueError('partition must be >= 0')
             all_partitions = self._metadata.partitions_for_topic(topic)
-            assert all_partitions is not None and partition in all_partitions, (
-                'Unrecognized partition %s for topic %s' % (partition, topic))
+            if all_partitions is None or partition not in all_partitions:
+                raise ValueError('Unrecognized partition %s for topic %s' % (partition, topic))
             return partition
 
         return self.config['partitioner'].partition(

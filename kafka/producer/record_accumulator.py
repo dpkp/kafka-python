@@ -133,8 +133,10 @@ class RecordAccumulator:
         Returns:
             tuple: (future, batch_is_full, new_batch_created, abort_for_new_batch)
         """
-        assert isinstance(tp, TopicPartition), 'not TopicPartition'
-        assert not self._closed, 'RecordAccumulator is closed'
+        if not isinstance(tp, TopicPartition):
+            raise TypeError('not TopicPartition')
+        if self._closed:
+            raise Errors.IllegalStateError('RecordAccumulator is closed')
         now = time.monotonic() if now is None else now
         # We keep track of the number of appending thread to make sure we do
         # not miss batches in abortIncompleteBatches().
@@ -158,7 +160,8 @@ class RecordAccumulator:
             with self._tp_lock(tp):
                 # Need to check if producer is closed again after grabbing the
                 # dequeue lock.
-                assert not self._closed, 'RecordAccumulator is closed'
+                if self._closed:
+                    raise Errors.IllegalStateError('RecordAccumulator is closed')
 
                 if dq:
                     last = dq[-1]

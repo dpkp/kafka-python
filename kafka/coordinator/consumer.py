@@ -266,7 +266,8 @@ class ConsumerCoordinator(BaseCoordinator):
             self._assignment_snapshot = None
 
         assignor = self._lookup_assignor(protocol)
-        assert assignor, 'Coordinator selected invalid assignment protocol: %s' % (protocol,)
+        if not assignor:
+            raise ValueError('Coordinator selected invalid assignment protocol: %s' % (protocol,))
 
         assignment = ConsumerProtocolAssignment.decode(member_assignment_bytes)
         new_assigned = set(assignment.partitions())
@@ -447,7 +448,8 @@ class ConsumerCoordinator(BaseCoordinator):
 
     def _perform_assignment(self, leader_id, protocol_name, members):
         assignor = self._lookup_assignor(protocol_name)
-        assert assignor, 'Invalid assignment protocol: %s' % (protocol_name,)
+        if not assignor:
+            raise ValueError('Invalid assignment protocol: %s' % (protocol_name,))
         all_subscribed_topics = set()
         for member in members:
             member.metadata = ConsumerProtocolSubscription.decode(member.metadata)
@@ -794,9 +796,9 @@ class ConsumerCoordinator(BaseCoordinator):
     def _do_commit_offsets_async(self, offsets, callback=None):
         if not self._use_offset_apis:
             raise Errors.UnsupportedVersionError('OffsetCommitRequest requires 0.8.1+ broker')
-        assert all(map(lambda k: isinstance(k, TopicPartition), offsets))
-        assert all(map(lambda v: isinstance(v, OffsetAndMetadata),
-                       offsets.values()))
+        if not all(map(lambda k: isinstance(k, TopicPartition), offsets)) or \
+           not all(map(lambda v: isinstance(v, OffsetAndMetadata), offsets.values())):
+            raise TypeError('offsets must be dict[TopicPartition, OffsetAndMetadata]')
         if callback is None:
             callback = self.config['default_offset_commit_callback']
         future = self._manager.call_soon(self._send_offset_commit_request, offsets)
@@ -820,9 +822,9 @@ class ConsumerCoordinator(BaseCoordinator):
         """
         if not self._use_offset_apis:
             raise Errors.UnsupportedVersionError('OffsetCommitRequest requires 0.8.1+ broker')
-        assert all(map(lambda k: isinstance(k, TopicPartition), offsets))
-        assert all(map(lambda v: isinstance(v, OffsetAndMetadata),
-                       offsets.values()))
+        if not all(map(lambda k: isinstance(k, TopicPartition), offsets)) or \
+           not all(map(lambda v: isinstance(v, OffsetAndMetadata), offsets.values())):
+            raise TypeError('offsets must be dict[TopicPartition, OffsetAndMetadata]')
         self._invoke_completed_offset_commit_callbacks()
         return self._net.run(self._commit_offsets_sync_async, offsets, timeout_ms)
 
@@ -895,9 +897,9 @@ class ConsumerCoordinator(BaseCoordinator):
         """
         if not self._use_offset_apis:
             raise Errors.UnsupportedVersionError('OffsetCommitRequest requires 0.8.1+ broker')
-        assert all(map(lambda k: isinstance(k, TopicPartition), offsets))
-        assert all(map(lambda v: isinstance(v, OffsetAndMetadata),
-                       offsets.values()))
+        if not all(map(lambda k: isinstance(k, TopicPartition), offsets)) or \
+           not all(map(lambda v: isinstance(v, OffsetAndMetadata), offsets.values())):
+            raise TypeError('offsets must be dict[TopicPartition, OffsetAndMetadata]')
         if not offsets:
             log.debug('No offsets to commit')
             return None
@@ -1042,10 +1044,10 @@ class ConsumerCoordinator(BaseCoordinator):
         """Fetch the committed offsets for a set of partitions.
 
         Arguments:
-            partitions (list of TopicPartition): the partitions to fetch.
+            partitions (list[TopicPartition]): the partitions to fetch.
 
         Returns:
-            dict {TopicPartition: OffsetAndMetadata} on success.
+            dict[TopicPartition, OffsetAndMetadata] on success.
 
         Raises:
             UnsupportedVersionError if broker is too old.
@@ -1055,7 +1057,8 @@ class ConsumerCoordinator(BaseCoordinator):
         """
         if not self._use_offset_apis:
             raise Errors.UnsupportedVersionError('OffsetFetchRequest requires 0.8.1+ broker')
-        assert all(map(lambda k: isinstance(k, TopicPartition), partitions))
+        if not all(map(lambda k: isinstance(k, TopicPartition), partitions)):
+            raise TypeError("partitions must be list[TopicPartition]")
         if not partitions and partitions is not None:
             return {}
 
