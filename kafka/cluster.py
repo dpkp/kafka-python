@@ -653,13 +653,16 @@ class ClusterMetadata:
         except KeyError:
             pass
 
-    def add_coordinator(self, response, key_type, key):
+    def add_coordinator(self, response, key_type, key, synthesize_node_id=True):
         """Update with metadata for a group or txn coordinator
 
         Arguments:
             response (FindCoordinatorResponse): broker response
             key_type (CoordinatorType): GROUP / TRANSACTION / SHARE
             key (str): consumer_group or transactional_id
+            synthesize_node_id (bool): If True synthesizes a unique
+                node_id to generate a dedicated network connection for
+                coordinator requests. Default: True.
 
         Returns:
             string: coordinator node_id if metadata is updated, None on error
@@ -673,7 +676,10 @@ class ClusterMetadata:
 
         # Use a coordinator-specific node id so that requests
         # get a dedicated connection
-        node_id = 'coordinator-{}'.format(response.node_id)
+        if synthesize_node_id:
+            node_id = 'coordinator-{}'.format(response.node_id)
+        else:
+            node_id = response.node_id
         coordinator = MetadataResponse.MetadataResponseBroker(
             node_id,
             response.host,
