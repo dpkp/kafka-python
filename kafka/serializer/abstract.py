@@ -1,28 +1,18 @@
 import abc
 
 
-class Serializer:
-    __meta__ = abc.ABCMeta
-
-    def __init__(self, **config):
-        pass
-
+class Serializer(metaclass=abc.ABCMeta):
     @abc.abstractmethod
-    def serialize(self, topic, value):
+    def serialize(self, topic, data):
         pass
 
     def close(self):
         pass
 
 
-class Deserializer:
-    __meta__ = abc.ABCMeta
-
-    def __init__(self, **config):
-        pass
-
+class Deserializer(metaclass=abc.ABCMeta):
     @abc.abstractmethod
-    def deserialize(self, topic, bytes_):
+    def deserialize(self, topic, data):
         pass
 
     def close(self):

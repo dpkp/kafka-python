@@ -4,6 +4,7 @@ import itertools
 import logging
 import sys
 import time
+import warnings
 
 import kafka.errors as Errors
 from kafka.future import Future
@@ -14,7 +15,7 @@ from kafka.protocol.consumer import (
     OffsetSpec, UNKNOWN_OFFSET, IsolationLevel,
 )
 from kafka.record import MemoryRecords
-from kafka.serializer import Deserializer
+from kafka.serializer import Deserializer, DeserializeWrapper
 from kafka.structs import TopicPartition, OffsetAndMetadata, OffsetAndTimestamp
 from kafka.util import Timer
 
@@ -72,10 +73,12 @@ class Fetcher:
         """Initialize a Kafka Message Fetcher.
 
         Keyword Arguments:
-            key_deserializer (callable): Any callable that takes a
+            key_deserializer (kafka.serializer.Deserializer): Takes a
                 raw message key and returns a deserialized key.
-            value_deserializer (callable, optional): Any callable that takes a
+                Default: None.
+            value_deserializer (kafka.serializer.Deserializer): Takes a
                 raw message value and returns a deserialized value.
+                Default: None.
             enable_incremental_fetch_sessions: (bool): Use incremental fetch sessions
                 when available / supported by kafka broker. See KIP-227. Default: True.
             fetch_min_bytes (int): Minimum amount of data the server should
@@ -114,6 +117,11 @@ class Fetcher:
         for key in self.config:
             if key in configs:
                 self.config[key] = configs[key]
+
+        for key in ('key_deserializer', 'value_deserializer'):
+            if self.config[key] is not None and not isinstance(self.config[key], Deserializer):
+                warnings.warn('%s does not implement kafka.serializer.Deserializer', category=DeprecationWarning)
+                self.config[key] = DeserializeWrapper(self.config[key])
 
         try:
             self._isolation_level = IsolationLevel.build_from(self.config['isolation_level'])
@@ -1616,8 +1624,8 @@ class Fetcher:
                                         self.topic_partition, record.offset))
                         key_size = len(record.key) if record.key is not None else -1
                         value_size = len(record.value) if record.value is not None else -1
-                        key = self._deserialize(key_deserializer, tp.topic, record.key)
-                        value = self._deserialize(value_deserializer, tp.topic, record.value)
+                        key = key_deserializer.deserialize(tp.topic, record.key) if key_deserializer is not None else record.key
+                        value = value_deserializer.deserialize(tp.topic, record.value) if value_deserializer is not None else record.value
                         headers = record.headers
                         header_size = sum(
                             len(h_key.encode("utf-8")) + (len(h_val) if h_val is not None else 0) for h_key, h_val in
@@ -1647,13 +1655,6 @@ class Fetcher:
             except StopIteration:
                 log.exception('StopIteration raised unpacking messageset')
                 raise RuntimeError('StopIteration raised unpacking messageset')
-
-        def _deserialize(self, f, topic, bytes_):
-            if not f:
-                return bytes_
-            if isinstance(f, Deserializer):
-                return f.deserialize(topic, bytes_)
-            return f(bytes_)
 
         def _consume_aborted_transactions_up_to(self, offset):
             if not self.aborted_transactions:
