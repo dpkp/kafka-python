@@ -32,7 +32,6 @@ log = logging.getLogger(__name__)
 class GroupAdminMixin:
     """Mixin providing consumer group management methods for KafkaAdminClient."""
     _manager: KafkaConnectionManager
-    _coordinator_cache: dict
     config: dict
 
     # -- Describe groups ----------------------------------------------
