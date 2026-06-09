@@ -1,18 +1,19 @@
-import abc
+from abc import ABC, abstractmethod
+from typing import List, Tuple, Any
 
 
-class Serializer(metaclass=abc.ABCMeta):
-    @abc.abstractmethod
-    def serialize(self, topic, data):
+class Serializer(ABC):
+    @abstractmethod
+    def serialize(self, topic: str, headers: List[Tuple[str, bytes]], data: Any):
         pass
 
     def close(self):
         pass
 
 
-class Deserializer(metaclass=abc.ABCMeta):
-    @abc.abstractmethod
-    def deserialize(self, topic, data):
+class Deserializer(ABC):
+    @abstractmethod
+    def deserialize(self, topic: str, headers: List[Tuple[str, bytes]], data: bytes):
         pass
 
     def close(self):

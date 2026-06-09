@@ -21,6 +21,7 @@ from kafka.util import Timer
 
 log = logging.getLogger(__name__)
 
+_LOGGED_DESERIALIZE_WARNING = False
 
 ConsumerRecord = collections.namedtuple("ConsumerRecord",
     ["topic", "partition", "leader_epoch", "offset", "timestamp", "timestamp_type",
@@ -120,7 +121,7 @@ class Fetcher:
 
         for key in ('key_deserializer', 'value_deserializer'):
             if self.config[key] is not None and not isinstance(self.config[key], Deserializer):
-                warnings.warn('%s does not implement kafka.serializer.Deserializer', category=DeprecationWarning)
+                warnings.warn('%s does not implement kafka.serializer.Deserializer' % (key,), category=DeprecationWarning, stacklevel=3)
                 self.config[key] = DeserializeWrapper(self.config[key])
 
         try:
@@ -1624,8 +1625,8 @@ class Fetcher:
                                         self.topic_partition, record.offset))
                         key_size = len(record.key) if record.key is not None else -1
                         value_size = len(record.value) if record.value is not None else -1
-                        key = key_deserializer.deserialize(tp.topic, record.key) if key_deserializer is not None else record.key
-                        value = value_deserializer.deserialize(tp.topic, record.value) if value_deserializer is not None else record.value
+                        key = self._deserialize(key_deserializer, tp.topic, record.headers, record.key)
+                        value = self._deserialize(value_deserializer, tp.topic, record.headers, record.value)
                         headers = record.headers
                         header_size = sum(
                             len(h_key.encode("utf-8")) + (len(h_val) if h_val is not None else 0) for h_key, h_val in
@@ -1635,7 +1636,7 @@ class Fetcher:
                         self.next_fetch_offset = record.offset + 1
                         yield ConsumerRecord(
                             tp.topic, tp.partition, self.leader_epoch, record.offset, record.timestamp,
-                            record.timestamp_type, key, value, headers, record.checksum,
+                            record.timestamp_type, key, value, record.headers, record.checksum,
                             key_size, value_size, header_size)
 
                     batch = records.next_batch()
@@ -1655,6 +1656,18 @@ class Fetcher:
             except StopIteration:
                 log.exception('StopIteration raised unpacking messageset')
                 raise RuntimeError('StopIteration raised unpacking messageset')
+
+        def _deserialize(self, deserializer, topic, headers, data):
+            if deserializer is None:
+                return data
+            try:
+                return deserializer.deserialize(topic, headers, data)
+            except TypeError:
+                global _LOGGED_DESERIALIZE_WARNING
+                if not _LOGGED_DESERIALIZE_WARNING:
+                    warnings.warn('deserializer does not implement deserialize(topic, headers, data)', category=DeprecationWarning)
+                    LOGGED_DESERIALIZE_WARNING = True
+                return deserializer.deserialize(topic, data)
 
         def _consume_aborted_transactions_up_to(self, offset):
             if not self.aborted_transactions:
