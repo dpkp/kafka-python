@@ -111,24 +111,21 @@ KafkaConsumer
     
     # Manually commit offsets (disable auto-commit)
     consumer = KafkaConsumer('my-topic',
-                         group_id='my-group',
-                         enable_auto_commit=False,
-                         bootstrap_servers=['localhost:9092'],
-                         )
+                             group_id='my-group',
+                             enable_auto_commit=False,
+                             bootstrap_servers=['localhost:9092'])
     for message in consumer:
         # process message
         process_message(message)
         # TopicPartition for this record
         tp = TopicPartition(message.topic, message.partition)
-        # Commit the next offset to consume (message.offset + 1)
+        # Note: When committing offsets manually, commit the next offset the consumer
+        # should read. For example, after successfully processing a message at
+        # offset 42, commit offset 43.
         consumer.commit({
             tp: OffsetAndMetadata(message.offset + 1, '', -1)
         })
     
-    # When committing offsets manually, commit the next offset the consumer
-    # should read. For example, after successfully processing a message at
-    # offset 42, commit offset 43.
-
     # consume earliest available messages, don't commit offsets
     KafkaConsumer(auto_offset_reset='earliest', enable_auto_commit=False)
 
