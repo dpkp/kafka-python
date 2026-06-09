@@ -18,7 +18,7 @@ improvements while predominantly CPU-bound on per-record overhead.
 import random
 import threading
 
-from kafka.partitioner.default import DefaultPartitioner
+from .default import DefaultPartitioner
 
 
 class StickyPartitioner(DefaultPartitioner):
@@ -33,12 +33,15 @@ class StickyPartitioner(DefaultPartitioner):
         self._sticky = {}  # topic -> partition_id
         self._lock = threading.Lock()
 
-    def partition(self, topic, key, cluster):
+    def partition(self, topic, key, serialized_key, value, serialized_value, cluster):
         """Choose a partition for the next record.
 
         Arguments:
             topic (str): topic to partition on.
-            key (bytes or None): partitioning key.
+            key (any): Unserialized key.
+            serialized_key (bytes or None): partitioning key.
+            value (any): Unserialized value.
+            serialized_value (bytes or None): serialized value.
             cluster (ClusterMetadata): metadata for cluster; provides
                 all and available partitions for topic.
 
@@ -50,8 +53,8 @@ class StickyPartitioner(DefaultPartitioner):
         """
         if topic not in cluster.topics():
             raise ValueError("Topic %s not found in ClusterMetadata" % (topic,))
-        if key is not None:
-            return super().partition(topic, key, cluster)
+        if serialized_key is not None:
+            return super().partition(topic, key, serialized_key, value, serialized_value, cluster)
         # Null key: reuse the sticky partition if still valid.
         with self._lock:
             partition = self._sticky.get(topic)

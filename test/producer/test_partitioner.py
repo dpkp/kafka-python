@@ -24,26 +24,26 @@ def test_default_partitioner():
     all_partitions = list(range(100))
     cluster = _cluster('t', all_partitions)
     # partitioner should return the same partition for the same key
-    p1 = partitioner.partition('t', b'foo', cluster)
-    p2 = partitioner.partition('t', b'foo', cluster)
+    p1 = partitioner.partition('t', 'foo', b'foo', 'msg', b'msg', cluster)
+    p2 = partitioner.partition('t', 'foo', b'foo', 'msg', b'msg', cluster)
     assert p1 == p2
     assert p1 in all_partitions
 
     # when key is None, choose one of available partitions
     cluster_single = _cluster('t', all_partitions, available=[123])
     cluster_single.partitions_for_topic.return_value = set(all_partitions) | {123}
-    assert partitioner.partition('t', None, cluster_single) == 123
+    assert partitioner.partition('t', None, None, 'msg', b'msg', cluster_single) == 123
 
     # with fallback to all_partitions when available is empty
     cluster_no_avail = _cluster('t', all_partitions, available=[])
-    assert partitioner.partition('t', None, cluster_no_avail) in all_partitions
+    assert partitioner.partition('t', None, None, 'msg', b'msg', cluster_no_avail) in all_partitions
 
 
 def test_default_partitioner_unknown_topic():
     partitioner = DefaultPartitioner()
     cluster = _cluster('t', list(range(10)))
     with pytest.raises(ValueError, match='not found'):
-        partitioner.partition('other', b'k', cluster)
+        partitioner.partition('other', 'k', b'k', 'msg', b'msg', cluster)
 
 
 @pytest.mark.parametrize("bytes_payload,partition_number", [
@@ -55,7 +55,7 @@ def test_murmur2_java_compatibility(bytes_payload, partition_number):
     all_partitions = list(range(1000))
     cluster = _cluster('t', all_partitions)
     # compare with output from Kafka's org.apache.kafka.clients.producer.Partitioner
-    assert partitioner.partition('t', bytes_payload, cluster) == partition_number
+    assert partitioner.partition('t', 'foo', bytes_payload, 'msg', b'msg', cluster) == partition_number
 
 
 def test_murmur2_not_ascii():
@@ -73,16 +73,16 @@ class TestStickyPartitioner:
         default = DefaultPartitioner()
         all_partitions = list(range(100))
         cluster = _cluster('t', all_partitions)
-        assert (sticky.partition('t', b'foo', cluster)
-                == default.partition('t', b'foo', cluster))
-        assert (sticky.partition('t', b'bar', cluster)
-                == default.partition('t', b'bar', cluster))
+        assert (sticky.partition('t', 'foo', b'foo', 'msg', b'msg', cluster)
+                == default.partition('t', 'foo', b'foo', 'msg', b'msg', cluster))
+        assert (sticky.partition('t', 'bar', b'bar', 'msg', b'msg', cluster)
+                == default.partition('t', 'bar', b'bar', 'msg', b'msg', cluster))
 
     def test_unknown_topic_raises(self):
         sticky = StickyPartitioner()
         cluster = _cluster('t', [0, 1])
         with pytest.raises(ValueError, match='not found'):
-            sticky.partition('other', None, cluster)
+            sticky.partition('other', None, None, 'msg', b'msg', cluster)
 
     def test_null_key_sticks_until_on_new_batch(self):
         """A stream of null-key records pins to the chosen partition;
@@ -92,16 +92,16 @@ class TestStickyPartitioner:
         sticky = StickyPartitioner()
         all_partitions = list(range(10))
         cluster = _cluster('t', all_partitions)
-        p1 = sticky.partition('t', None, cluster)
+        p1 = sticky.partition('t', None, None, 'msg', b'msg', cluster)
         for _ in range(50):
-            assert sticky.partition('t', None, cluster) == p1
+            assert sticky.partition('t', None, None, 'msg', b'msg', cluster) == p1
 
         # on_new_batch rotates immediately.
         sticky.on_new_batch('t', cluster, p1)
-        p2 = sticky.partition('t', None, cluster)
+        p2 = sticky.partition('t', None, None, 'msg', b'msg', cluster)
         assert p2 != p1, 'on_new_batch should rotate'
         for _ in range(50):
-            assert sticky.partition('t', None, cluster) == p2
+            assert sticky.partition('t', None, None, 'msg', b'msg', cluster) == p2
 
     def test_on_new_batch_rotation_avoids_prev_partition(self):
         """Regression test for the prior bug where on_new_batch passed
@@ -112,7 +112,7 @@ class TestStickyPartitioner:
         sticky = StickyPartitioner()
         all_partitions = list(range(10))
         cluster = _cluster('t', all_partitions)
-        p1 = sticky.partition('t', None, cluster)
+        p1 = sticky.partition('t', None, None, 'msg', b'msg', cluster)
         # Many rotations should never pick p1 again when many partitions
         # are available and p1 is the avoid target.
         for _ in range(200):
@@ -134,12 +134,12 @@ class TestStickyPartitioner:
             lambda t: set(all_partitions))
         cluster.available_partitions_for_topic.side_effect = (
             lambda t: set(all_partitions))
-        p_a = sticky.partition('a', None, cluster)
-        p_b = sticky.partition('b', None, cluster)
+        p_a = sticky.partition('a', None, None, 'msg', b'msg', cluster)
+        p_b = sticky.partition('b', None, None, 'msg', b'msg', cluster)
         # Rotate 'a' once.
         sticky.on_new_batch('a', cluster, p_a)
         # 'b' is untouched.
-        assert sticky.partition('b', None, cluster) == p_b
+        assert sticky.partition('b', None, None, 'msg', b'msg', cluster) == p_b
 
     def test_unavailable_sticky_partition_repicks(self):
         """If the stuck partition's leader becomes unavailable, the next
@@ -147,11 +147,11 @@ class TestStickyPartitioner:
         sticky = StickyPartitioner()
         all_partitions = list(range(10))
         cluster = _cluster('t', all_partitions, available=all_partitions)
-        p1 = sticky.partition('t', None, cluster)
+        p1 = sticky.partition('t', None, None, 'msg', b'msg', cluster)
         # Now only partitions != p1 are available.
         cluster.available_partitions_for_topic.return_value = (
             set(all_partitions) - {p1})
-        p2 = sticky.partition('t', None, cluster)
+        p2 = sticky.partition('t', None, None, 'msg', b'msg', cluster)
         assert p2 != p1
         assert p2 in (set(all_partitions) - {p1})
 
@@ -160,9 +160,9 @@ class TestStickyPartitioner:
         partition - there's nothing else to rotate to."""
         sticky = StickyPartitioner()
         cluster = _cluster('t', [0])
-        assert sticky.partition('t', None, cluster) == 0
+        assert sticky.partition('t', None, None, 'msg', b'msg', cluster) == 0
         sticky.on_new_batch('t', cluster, 0)
-        assert sticky.partition('t', None, cluster) == 0
+        assert sticky.partition('t', None, None, 'msg', b'msg', cluster) == 0
 
     def test_on_new_batch_ignores_stale_prev_partition(self):
         """If a key-routed send or another caller already rotated the
@@ -171,7 +171,7 @@ class TestStickyPartitioner:
         sticky = StickyPartitioner()
         all_partitions = list(range(10))
         cluster = _cluster('t', all_partitions)
-        p1 = sticky.partition('t', None, cluster)
+        p1 = sticky.partition('t', None, None, 'msg', b'msg', cluster)
         # Simulate someone else rotating away.
         sticky._sticky['t'] = (p1 + 1) % len(all_partitions)
         current = sticky._sticky['t']
@@ -227,7 +227,7 @@ class TestStickyPartitioner:
         def hammer():
             try:
                 while not stop.is_set():
-                    p = sticky.partition(topic, None, cluster)
+                    p = sticky.partition(topic, None, None, 'msg', b'msg', cluster)
                     sticky.on_new_batch(topic, cluster, p)
             except Exception as exc:
                 errors.append(exc)

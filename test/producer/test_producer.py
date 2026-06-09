@@ -43,7 +43,7 @@ def test_partition_calls_partitioner_partition_with_cluster():
 
     result = producer._partition('t', None, None, None, b'key-bytes', b'val')
     assert result == 1
-    partitioner.partition.assert_called_once_with('t', b'key-bytes', producer._metadata)
+    partitioner.partition.assert_called_once_with('t', None, b'key-bytes', None, b'val', producer._metadata)
 
 
 def test_partition_explicit_partition_skips_partitioner():
