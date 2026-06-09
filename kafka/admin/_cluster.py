@@ -13,6 +13,7 @@ from kafka.protocol.api_key import ApiKey
 from kafka.protocol.metadata import ApiVersionsRequest, MetadataRequest
 from kafka.protocol.admin import (
     AlterReplicaLogDirsRequest,
+    DescribeClusterRequest,
     DescribeLogDirsRequest,
     DescribeQuorumRequest,
     UpdateFeaturesRequest,
@@ -56,6 +57,33 @@ class ClusterAdminMixin:
             self._process_acl_operations(topic)
         return metadata
 
+    async def _describe_cluster(self):
+        try:
+            self._manager.broker_version_data.api_version(DescribeClusterRequest)
+            request = DescribeClusterRequest(
+                include_cluster_authorized_operations=True,
+                include_fenced_brokers=True,
+            )
+            response = await self._manager.send(request)
+            error_type = Errors.for_code(response.error_code)
+            if error_type is not Errors.NoError:
+                raise error_type(response.error_message or '')
+            metadata = response.to_dict()
+            metadata.pop('error_code')
+            metadata.pop('error_message')
+            metadata.pop('throttle_time_ms', None)
+            self._process_acl_operations(metadata)
+            return metadata
+
+        except Errors.IncompatibleBrokerVersion:
+            # On older brokers fallback to MetadataRequest w/o topics
+            metadata = await self._get_cluster_metadata([])
+            metadata.pop('topics')
+            metadata.pop('throttle_time_ms', None)
+            for broker in metadata['brokers']:
+                broker['broker_id'] = broker.pop('node_id')
+            return metadata
+
     def describe_cluster(self):
         """Fetch cluster-wide metadata such as the list of brokers, the controller ID,
         and the cluster ID.
@@ -63,10 +91,7 @@ class ClusterAdminMixin:
         Returns:
             A dict with cluster-wide metadata, excluding topic details.
         """
-        metadata = self._manager.run(self._get_cluster_metadata, [])
-        metadata.pop('topics')
-        metadata.pop('throttle_time_ms', None)
-        return metadata
+        return self._manager.run(self._describe_cluster)
 
     async def _async_describe_log_dirs(self, topic_partitions=(), brokers=None):
         request = DescribeLogDirsRequest(topics=topic_partitions)

@@ -5,6 +5,7 @@ class DescribeClusterRequest(ApiMessage): pass
 class DescribeClusterResponse(ApiMessage):
     @classmethod
     def json_patch(cls, json):
+        json['fields'][7]['name'] = 'authorized_operations'
         json['fields'][7]['type'] = 'bitfield'
         return json
 
