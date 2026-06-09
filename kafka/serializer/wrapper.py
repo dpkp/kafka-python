@@ -1,4 +1,4 @@
-from .abstract import Deserializer
+from .abstract import Deserializer, Serializer
 
 
 class DeserializeWrapper(Deserializer):
@@ -6,6 +6,16 @@ class DeserializeWrapper(Deserializer):
         self.fn = fn
 
     def deserialize(self, topic, headers, data):
+        if self.fn is None:
+            return data
+        return self.fn(data)
+
+
+class SerializeWrapper(Serializer):
+    def __init__(self, fn):
+        self.fn = fn
+
+    def serialize(self, topic, headers, data):
         if self.fn is None:
             return data
         return self.fn(data)
