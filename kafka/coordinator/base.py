@@ -852,13 +852,8 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         error_type = Errors.for_code(result.error_code)
         if error_type is Errors.NoError:
             with self._lock:
-                coordinator_id = self._cluster.add_coordinator(result, CoordinatorType.GROUP, self.group_id)
-                if coordinator_id is None:
-                    # This could happen if coordinator metadata is different
-                    # than broker metadata
-                    raise Errors.IllegalStateError()
-
-                self.coordinator_id = coordinator_id
+                self.coordinator_id = self._cluster.add_coordinator(
+                    result, CoordinatorType.GROUP, self.group_id)
                 log.info("Discovered coordinator %s for group %s",
                          self.coordinator_id, self.group_id)
                 self._client.maybe_connect(self.coordinator_id)

@@ -665,14 +665,18 @@ class ClusterMetadata:
                 coordinator requests. Default: True.
 
         Returns:
-            string: coordinator node_id if metadata is updated, None on error
+            string: coordinator node_id.
+
+        Raises:
+            BrokerResponseError: if ``response.error_code`` is non-zero.
         """
         key_type = CoordinatorType.build_from(key_type)
         log.debug("Updating coordinator for %s/%s: %s", key_type.name, key, response)
         error_type = Errors.for_code(response.error_code)
         if error_type is not Errors.NoError:
-            log.error("FindCoordinatorResponse error: %s", error_type)
-            return
+            raise error_type(
+                "FindCoordinatorResponse error for %s/%s: %s"
+                % (key_type.name, key, getattr(response, 'error_message', '')))
 
         # Use a coordinator-specific node id so that requests
         # get a dedicated connection
