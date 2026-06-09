@@ -16,6 +16,9 @@ class EndTxnResponse(ApiMessage): pass
 class TxnOffsetCommitRequest(ApiMessage): pass
 class TxnOffsetCommitResponse(ApiMessage): pass
 
+class WriteTxnMarkersRequest(ApiMessage): pass
+class WriteTxnMarkersResponse(ApiMessage): pass
+
 
 __all__ = [
     'InitProducerIdRequest', 'InitProducerIdResponse',
@@ -23,4 +26,5 @@ __all__ = [
     'AddOffsetsToTxnRequest', 'AddOffsetsToTxnResponse',
     'EndTxnRequest', 'EndTxnResponse',
     'TxnOffsetCommitRequest', 'TxnOffsetCommitResponse',
+    'WriteTxnMarkersRequest', 'WriteTxnMarkersResponse',
 ]

@@ -5,7 +5,7 @@ from typing import Any, Self
 from kafka.protocol.api_message import ApiMessage
 from kafka.protocol.data_container import DataContainer
 
-__all__ = ['InitProducerIdRequest', 'InitProducerIdResponse', 'AddPartitionsToTxnRequest', 'AddPartitionsToTxnResponse', 'AddOffsetsToTxnRequest', 'AddOffsetsToTxnResponse', 'EndTxnRequest', 'EndTxnResponse', 'TxnOffsetCommitRequest', 'TxnOffsetCommitResponse']
+__all__ = ['InitProducerIdRequest', 'InitProducerIdResponse', 'AddPartitionsToTxnRequest', 'AddPartitionsToTxnResponse', 'AddOffsetsToTxnRequest', 'AddOffsetsToTxnResponse', 'EndTxnRequest', 'EndTxnResponse', 'TxnOffsetCommitRequest', 'TxnOffsetCommitResponse', 'WriteTxnMarkersRequest', 'WriteTxnMarkersResponse']
 
 class InitProducerIdRequest(ApiMessage):
     transactional_id: str | None
@@ -507,6 +507,141 @@ class TxnOffsetCommitResponse(ApiMessage):
         *args: Any,
         throttle_time_ms: int = ...,
         topics: list[TxnOffsetCommitResponseTopic] = ...,
+        version: int | None = None,
+        **kwargs: Any,
+    ) -> None: ...
+    @property
+    def version(self) -> int | None: ...
+    def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+    name: str
+    type: str
+    API_KEY: int
+    API_VERSION: int
+    valid_versions: tuple[int, int]
+    min_version: int
+    max_version: int
+    @property
+    def header(self) -> Any: ...
+    @classmethod
+    def is_request(cls) -> bool: ...
+    def expect_response(self) -> bool: ...
+    def with_header(self, correlation_id: int = 0, client_id: str = "kafka-python") -> None: ...
+
+class WriteTxnMarkersRequest(ApiMessage):
+    class WritableTxnMarker(DataContainer):
+        class WritableTxnMarkerTopic(DataContainer):
+            name: str
+            partition_indexes: list[int]
+            def __init__(
+                self,
+                *args: Any,
+                name: str = ...,
+                partition_indexes: list[int] = ...,
+                version: int | None = None,
+                **kwargs: Any,
+            ) -> None: ...
+            @property
+            def version(self) -> int | None: ...
+            def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+        producer_id: int
+        producer_epoch: int
+        transaction_result: bool
+        topics: list[WritableTxnMarkerTopic]
+        coordinator_epoch: int
+        transaction_version: int
+        def __init__(
+            self,
+            *args: Any,
+            producer_id: int = ...,
+            producer_epoch: int = ...,
+            transaction_result: bool = ...,
+            topics: list[WritableTxnMarkerTopic] = ...,
+            coordinator_epoch: int = ...,
+            transaction_version: int = ...,
+            version: int | None = None,
+            **kwargs: Any,
+        ) -> None: ...
+        @property
+        def version(self) -> int | None: ...
+        def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+    markers: list[WritableTxnMarker]
+    def __init__(
+        self,
+        *args: Any,
+        markers: list[WritableTxnMarker] = ...,
+        version: int | None = None,
+        **kwargs: Any,
+    ) -> None: ...
+    @property
+    def version(self) -> int | None: ...
+    def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+    name: str
+    type: str
+    API_KEY: int
+    API_VERSION: int
+    valid_versions: tuple[int, int]
+    min_version: int
+    max_version: int
+    @property
+    def header(self) -> Any: ...
+    @classmethod
+    def is_request(cls) -> bool: ...
+    def expect_response(self) -> bool: ...
+    def with_header(self, correlation_id: int = 0, client_id: str = "kafka-python") -> None: ...
+
+class WriteTxnMarkersResponse(ApiMessage):
+    class WritableTxnMarkerResult(DataContainer):
+        class WritableTxnMarkerTopicResult(DataContainer):
+            class WritableTxnMarkerPartitionResult(DataContainer):
+                partition_index: int
+                error_code: int
+                def __init__(
+                    self,
+                    *args: Any,
+                    partition_index: int = ...,
+                    error_code: int = ...,
+                    version: int | None = None,
+                    **kwargs: Any,
+                ) -> None: ...
+                @property
+                def version(self) -> int | None: ...
+                def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+            name: str
+            partitions: list[WritableTxnMarkerPartitionResult]
+            def __init__(
+                self,
+                *args: Any,
+                name: str = ...,
+                partitions: list[WritableTxnMarkerPartitionResult] = ...,
+                version: int | None = None,
+                **kwargs: Any,
+            ) -> None: ...
+            @property
+            def version(self) -> int | None: ...
+            def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+        producer_id: int
+        topics: list[WritableTxnMarkerTopicResult]
+        def __init__(
+            self,
+            *args: Any,
+            producer_id: int = ...,
+            topics: list[WritableTxnMarkerTopicResult] = ...,
+            version: int | None = None,
+            **kwargs: Any,
+        ) -> None: ...
+        @property
+        def version(self) -> int | None: ...
+        def to_dict(self, meta: bool = False, json: bool = True) -> dict: ...
+
+    markers: list[WritableTxnMarkerResult]
+    def __init__(
+        self,
+        *args: Any,
+        markers: list[WritableTxnMarkerResult] = ...,
         version: int | None = None,
         **kwargs: Any,
     ) -> None: ...
