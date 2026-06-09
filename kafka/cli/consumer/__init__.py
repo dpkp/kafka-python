@@ -17,7 +17,7 @@ def main_parser(prog=None):
         '-t', '--topic', type=str, action='append', dest='topics', required=True,
         help='subscribe to topic')
     options.add_argument(
-        '-g', '--group', type=str, required=True,
+        '-g', '--group', type=str,
         help='consumer group')
     options.add_argument(
         '-i', '--group-instance-id', type=str,
