@@ -387,7 +387,7 @@ class TransactionsAdminMixin:
     # -- find_hanging convenience ------------------------------------------
 
     async def _async_find_hanging_transactions(self, broker_ids=None,
-                                               max_transaction_timeout_ms=900_000):
+                                               max_transaction_timeout_ms=900000):
         # Padding matches the Java tool: a transaction is only flagged
         # "hanging" if it has been alive longer than the broker-side
         # max-transaction-timeout plus the 5-minute slack the tool uses.
@@ -424,7 +424,7 @@ class TransactionsAdminMixin:
         return hanging
 
     def find_hanging_transactions(self, broker_ids=None,
-                                  max_transaction_timeout_ms=900_000):
+                                  max_transaction_timeout_ms=900000):
         """Detect transactions whose age exceeds the broker timeout + 5min.
 
         Convenience wrapper that runs :meth:`list_transactions` against
@@ -436,7 +436,7 @@ class TransactionsAdminMixin:
         Keyword Arguments:
             broker_ids ([int], optional): Brokers to query. Default: all.
             max_transaction_timeout_ms (int): Suspected-hang threshold.
-                Default: 900000 (15 minutes — Kafka's default
+                Default: 900000 (15 minutes -- Kafka's default
                 ``transaction.max.timeout.ms``).
 
         Returns:
