@@ -457,7 +457,7 @@ class KafkaProducer:
         'kafka_client': KafkaNetClient,
     }
 
-    DEPRECATED_CONFIGS = ('buffer_memory',)
+    DEPRECATED_CONFIGS = ()
 
     _COMPRESSORS = {
         'gzip': (has_gzip, LegacyRecordBatchBuilder.CODEC_GZIP),
