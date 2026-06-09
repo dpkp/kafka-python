@@ -256,7 +256,7 @@ class KafkaAdminClient(
         self._manager.bootstrap(self.config['bootstrap_timeout_ms'])
         self._closed = False
         self._controller_id = None
-        self._coordinator_cache = {}  # {group_id: node_id}
+        self._coordinator_cache = {}  # {(key_type, key): node_id}
         log.debug("KafkaAdminClient started.")
 
     def __enter__(self):
@@ -302,28 +302,31 @@ class KafkaAdminClient(
         else:
             raise Errors.NodeNotReadyError('controller')
 
-    async def _find_coordinator_ids(self, group_ids):
-        """Find broker node_ids of the coordinators for a set of consumer groups.
+    async def _find_coordinator_ids(self, keys, key_type=0):
+        """Find broker node_ids of the coordinators for a set of keys.
 
-        Returns a dict mapping group_id -> node_id. Results are cached;
-        only groups not already in the cache hit the network. On brokers
+        ``key_type`` follows the FindCoordinator KeyType enum: 0 (group),
+        1 (transaction), 2 (share). Results are cached per (key_type, key);
+        only keys not already in the cache hit the network. On brokers
         supporting FindCoordinator v4+ (KIP-699, Apache Kafka 3.0+), all
-        unknown groups are resolved in a single batched request; older brokers
-        fall back to one request per group.
+        unknown keys are resolved in a single batched request; older brokers
+        fall back to one request per key.
+
+        Returns a dict mapping key -> node_id.
         """
         result = {}
         unknown = []
-        for group_id in group_ids:
-            cached = self._coordinator_cache.get(group_id)
+        for key in keys:
+            cached = self._coordinator_cache.get((key_type, key))
             if cached is not None:
-                result[group_id] = cached
+                result[key] = cached
             else:
-                unknown.append(group_id)
+                unknown.append(key)
         if not unknown:
             return result
 
         if self._manager.broker_version_data.api_version(FindCoordinatorRequest) >= 4:
-            request = FindCoordinatorRequest(key_type=0,  # group
+            request = FindCoordinatorRequest(key_type=key_type,
                                              coordinator_keys=unknown,
                                              min_version=4)
             response = await self._manager.send(request)
@@ -331,15 +334,15 @@ class KafkaAdminClient(
                 error_type = Errors.for_code(coordinator.error_code)
                 if error_type is not Errors.NoError:
                     raise error_type(
-                        "FindCoordinatorRequest failed for group '{}': {}"
+                        "FindCoordinatorRequest failed for key '{}': {}"
                         .format(coordinator.key, coordinator.error_message))
-                self._coordinator_cache[coordinator.key] = coordinator.node_id
+                self._coordinator_cache[(key_type, coordinator.key)] = coordinator.node_id
                 result[coordinator.key] = coordinator.node_id
         else:
-            # Broker does not support batch api; fan-out request per-group
-            for group_id in unknown:
-                request = FindCoordinatorRequest(key=group_id,
-                                                 key_type=0,  # group
+            # Broker does not support batch api; fan-out request per-key
+            for key in unknown:
+                request = FindCoordinatorRequest(key=key,
+                                                 key_type=key_type,
                                                  max_version=3)
                 response = await self._manager.send(request)
                 error_type = Errors.for_code(response.error_code)
@@ -347,14 +350,14 @@ class KafkaAdminClient(
                     raise error_type(
                         "FindCoordinatorRequest failed with response '{}'."
                         .format(response))
-                self._coordinator_cache[group_id] = response.node_id
-                result[group_id] = response.node_id
+                self._coordinator_cache[(key_type, key)] = response.node_id
+                result[key] = response.node_id
         return result
 
-    async def _find_coordinator_id(self, group_id):
-        """Single-group wrapper for _find_coordinator_ids()"""
-        ids = await self._find_coordinator_ids([group_id])
-        return ids[group_id]
+    async def _find_coordinator_id(self, key, key_type=0):
+        """Single-key wrapper for _find_coordinator_ids()"""
+        ids = await self._find_coordinator_ids([key], key_type=key_type)
+        return ids[key]
 
     async def _send_request_to_controller(self, request, get_errors_fn=lambda r: (), raise_errors=True, ignore_errors=()):
         """Send a Kafka protocol message to the cluster controller.

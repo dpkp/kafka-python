@@ -777,8 +777,8 @@ class TestListGroupOffsetsMockBroker:
     def test_batches_groups_sharing_coordinator(self, broker, admin):
         # Pre-seed the coordinator cache so we don't need FindCoordinator
         # support in the mock broker.
-        admin._coordinator_cache['g1'] = 0
-        admin._coordinator_cache['g2'] = 0
+        admin._coordinator_cache[(0, 'g1')] = 0
+        admin._coordinator_cache[(0, 'g2')] = 0
 
         captured = {}
         _Group = OffsetFetchResponse.OffsetFetchResponseGroup
@@ -820,7 +820,7 @@ class TestListGroupOffsetsMockBroker:
         }
 
     def test_group_level_error_raises(self, broker, admin):
-        admin._coordinator_cache['g1'] = 0
+        admin._coordinator_cache[(0, 'g1')] = 0
         _Group = OffsetFetchResponse.OffsetFetchResponseGroup
         broker.respond(OffsetFetchRequest, OffsetFetchResponse(
             throttle_time_ms=0, error_code=0, topics=[],
@@ -834,8 +834,8 @@ class TestListGroupOffsetsMockBroker:
     @pytest.mark.parametrize("broker", [(2, 8, 0)], indirect=True)
     def test_fallback_on_pre_v8_broker_issues_one_rpc_per_group(self, broker, admin):
         # Kafka 2.8 caps OffsetFetch at v7 (KIP-447 only) -> no batch, fan out.
-        admin._coordinator_cache['g1'] = 0
-        admin._coordinator_cache['g2'] = 0
+        admin._coordinator_cache[(0, 'g1')] = 0
+        admin._coordinator_cache[(0, 'g2')] = 0
         captured = {'count': 0, 'group_ids': []}
 
         def handler(api_key, api_version, correlation_id, request_bytes):
@@ -912,7 +912,7 @@ class TestFindCoordinatorBatched:
         assert captured['api_version'] >= 4
         assert captured['key_type'] == 0
         assert sorted(captured['coordinator_keys']) == ['g1', 'g2', 'g3']
-        assert admin._coordinator_cache == {'g1': 0, 'g2': 0, 'g3': 0}
+        assert admin._coordinator_cache == {(0, 'g1'): 0, (0, 'g2'): 0, (0, 'g3'): 0}
 
     def test_v4_batched_per_key_error_raises(self, broker, admin):
         def find_handler(api_key, api_version, correlation_id, request_bytes):
@@ -969,7 +969,7 @@ class TestFindCoordinatorBatched:
         assert captured['used_coordinator_keys'] == [[], [], []]  # v3 has no batch field
 
     def test_cache_reuse_skips_already_resolved_groups(self, broker, admin):
-        admin._coordinator_cache['g1'] = 0
+        admin._coordinator_cache[(0, 'g1')] = 0
         captured = {}
 
         def find_handler(api_key, api_version, correlation_id, request_bytes):
@@ -993,7 +993,38 @@ class TestFindCoordinatorBatched:
 
         # Only g2 should have hit the network; g1 came from the cache.
         assert captured['coordinator_keys'] == ['g2']
-        assert admin._coordinator_cache == {'g1': 0, 'g2': 0}
+        assert admin._coordinator_cache == {(0, 'g1'): 0, (0, 'g2'): 0}
+
+    def test_find_coordinator_id_respects_key_type(self, broker, admin):
+        # Group and transaction coordinators with the same id must not
+        # collide in _coordinator_cache.
+        captured = []
+
+        def find_handler(api_key, api_version, correlation_id, request_bytes):
+            req = FindCoordinatorRequest.decode(
+                request_bytes, version=api_version, header=True)
+            captured.append((req.key_type, list(req.coordinator_keys)))
+            Coordinator = FindCoordinatorResponse.Coordinator
+            # group coordinator -> node 1; transaction coordinator -> node 2
+            node_id = 1 if req.key_type == 0 else 2
+            return FindCoordinatorResponse(
+                throttle_time_ms=0,
+                error_code=0, error_message=None,
+                node_id=node_id, host='localhost', port=9092,
+                coordinators=[Coordinator(
+                    key=k, node_id=node_id, host='localhost', port=9092,
+                    error_code=0, error_message=None) for k in req.coordinator_keys])
+
+        broker.respond_fn(FindCoordinatorRequest, find_handler)
+        broker.respond_fn(FindCoordinatorRequest, find_handler)
+
+        group_node = admin._manager.run(admin._find_coordinator_id, 'x', 0)
+        txn_node = admin._manager.run(admin._find_coordinator_id, 'x', 1)
+
+        assert group_node == 1
+        assert txn_node == 2
+        assert admin._coordinator_cache == {(0, 'x'): 1, (1, 'x'): 2}
+        assert captured == [(0, ['x']), (1, ['x'])]
 
     def test_delete_groups_uses_batched_lookup(self, broker, admin):
         captured = {}
@@ -1055,9 +1086,9 @@ class TestFindCoordinatorBatched:
     def test_describe_groups_batches_request_per_coordinator(self, broker, admin):
         # All three groups share coordinator 0, so describe_groups should send
         # exactly one DescribeGroups containing all three group_ids.
-        admin._coordinator_cache['g1'] = 0
-        admin._coordinator_cache['g2'] = 0
-        admin._coordinator_cache['g3'] = 0
+        admin._coordinator_cache[(0, 'g1')] = 0
+        admin._coordinator_cache[(0, 'g2')] = 0
+        admin._coordinator_cache[(0, 'g3')] = 0
         captured = {'count': 0, 'groups_per_request': []}
 
         def describe_handler(api_key, api_version, correlation_id, request_bytes):
