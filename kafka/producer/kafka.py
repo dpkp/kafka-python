@@ -1076,8 +1076,8 @@ class KafkaProducer:
         partitioner = self.config['partitioner']
         if not isinstance(partitioner, Partitioner):
             warnings.warn('partitioner does not implement kafka.partitioner.Partitioner', category=DeprecationWarning)
-            return self.partitioner.partition(topic, serialized_key, self._metadata)
-        return self.partitioner.partition(
+            return partitioner.partition(topic, serialized_key, self._metadata)
+        return partitioner.partition(
             topic, key, serialized_key, value, serialized_value, self._metadata)
 
     def metrics(self, raw=False):
