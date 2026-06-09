@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from kafka import KafkaProducer
-from kafka.partitioner import DefaultPartitioner, StickyPartitioner
+from kafka.partitioner import Partitioner, StickyPartitioner
 from kafka.producer.transaction_manager import TransactionManager, ProducerIdAndEpoch
 
 
@@ -37,7 +37,7 @@ def test_partition_calls_partitioner_partition_with_cluster():
     producer._metadata.partitions_for_topic.return_value = {0, 1, 2}
     producer._metadata.available_partitions_for_topic.return_value = {0, 1, 2}
 
-    partitioner = MagicMock()
+    partitioner = MagicMock(spec=Partitioner)
     partitioner.partition.return_value = 1
     producer.config = {'partitioner': partitioner}
 
@@ -97,7 +97,7 @@ def test_send_null_key_triggers_on_new_batch_via_abort_retry():
     no in-progress batch must invoke ``partitioner.on_new_batch`` (rotate
     the sticky) and re-pick the partition before the actual append,
     matching KafkaProducer.doSend's abort-for-new-batch retry path."""
-    partitioner = MagicMock(spec=['partition', 'on_new_batch'])
+    partitioner = MagicMock(spec=StickyPartitioner)
     partitioner.partition.side_effect = [3, 7]  # initial pick, post-rotate
     producer = _producer_for_send_test(partitioner)
     abort = (None, False, False, True)
@@ -123,7 +123,7 @@ def test_send_null_key_triggers_on_new_batch_via_abort_retry():
 def test_send_keyed_skips_on_new_batch():
     """Keyed records bypass the sticky abort-retry path - on_new_batch
     must not fire."""
-    partitioner = MagicMock(spec=['partition', 'on_new_batch'])
+    partitioner = MagicMock(spec=StickyPartitioner)
     partitioner.partition.return_value = 0
     producer = _producer_for_send_test(partitioner)
     producer._accumulator.append.return_value = _success_result()
@@ -142,7 +142,7 @@ def test_send_keyed_skips_on_new_batch():
 def test_send_with_explicit_partition_skips_on_new_batch():
     """Explicit partition overrides the partitioner entirely - no
     rotation hook should fire."""
-    partitioner = MagicMock(spec=['partition', 'on_new_batch'])
+    partitioner = MagicMock(spec=StickyPartitioner)
     producer = _producer_for_send_test(partitioner)
     producer._accumulator.append.return_value = _success_result()
 
