@@ -18,6 +18,12 @@ Default Configuration Changes
 * KIP-679: Update Producer defaults -- enable_idempotence=True, acks='all' (#3013)
 * KIP-735: Increase default consumer session_timeout_ms from 10s to 45s (#3030)
 * Rename api_version_auto_timeout_ms -> bootstrap_timeout_ms; default 30s (#3028)
+* Producer: Remove deprecation warning for buffer_memory config (now raises) (#3047)
+
+Abstract Interface Changes
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+* Serializer: Pass headers to serialize/deserialize (#3046)
+* Partitioner: pass both key/value, serialized and unserialized, to partition() (#3045)
 
 Admin API Changes
 ^^^^^^^^^^^^^^^^^
@@ -346,6 +352,10 @@ Admin CLI
 * admin cli: catch AttributeError and print_help() (#2880)
 * admin cli: fix describe_configs (#2875)
 
+Consumer CLI
+^^^^^^^^^^^^
+* consumer cli does not require group_id (#3044)
+
 Compatibility / Misc
 --------------------
 
@@ -355,6 +365,7 @@ Small quality-of-life additions to the public API surface.
 * Make IncompatibleBrokerVersion a subclass of UnsupportedVersionError (#2924)
 * Add OffsetSpec / IsolationLevel to kafka imports (#2898)
 * Errors: subclasses for RetriableError and InvalidMetadataError (#3041)
+* Helper classes: DefaultSerializer and JsonSerializer (#3046)
 
 Fixes
 -----
