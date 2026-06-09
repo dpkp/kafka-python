@@ -2,6 +2,8 @@ import functools
 import logging
 import threading
 
+from kafka.errors import RetriableError
+
 log = logging.getLogger(__name__)
 
 
@@ -24,10 +26,7 @@ class Future:
         return self.is_done and self.exception is not None
 
     def retriable(self):
-        try:
-            return self.exception.retriable
-        except AttributeError:
-            return False
+        return self.is_done and isinstance(self.exception, RetriableError)
 
     def success(self, value):
         # Hot path: called once per produced record via the sender thread's

@@ -583,7 +583,7 @@ class ClusterMetadata:
 
             # Only log errors for topics we are specifically tracking
             elif topic in self._topics:
-                if error_type.retriable:
+                if issubclass(error_type, Errors.RetriableError):
                     _retry_topics.add(topic)
                 if error_type is Errors.LeaderNotAvailableError:
                     log.warning("Topic %s is not available during auto-create"

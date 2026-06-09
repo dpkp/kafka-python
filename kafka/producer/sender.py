@@ -581,7 +581,7 @@ class Sender(threading.Thread):
             log.warning("%s: Received unknown topic or partition error in produce request on partition %s."
                         " The topic/partition may not exist or the user may not have Describe access to it",
                         str(self), batch.topic_partition)
-        if getattr(error_cls, 'invalid_metadata', False):
+        if issubclass(error_cls, Errors.InvalidMetadataError):
             self._metadata.request_update()
         if self.config['guarantee_message_order']:
             self._accumulator.muted.remove(batch.topic_partition)
@@ -604,7 +604,7 @@ class Sender(threading.Thread):
             return False
         if batch.final_state is not None:
             return False
-        if not getattr(error_cls, 'retriable', False):
+        if not issubclass(error_cls, Errors.RetriableError):
             return False
         if self._transaction_manager and not self._transaction_manager.producer_id_and_epoch.match(batch):
             log.warning("%s: Attempted to retry sending a batch but the producer id/epoch changed from %s/%s to %s/%s."

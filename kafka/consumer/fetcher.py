@@ -350,40 +350,35 @@ class Fetcher:
 
             future = self._manager.call_soon(self._send_list_offsets_requests, timestamps)
             try:
+                refresh_future = None
+                backoff = False
                 offsets, retry = await self._manager.wait_for(future, timer.timeout_ms)
-            except Errors.KafkaTimeoutError:
-                break
-            except Errors.KafkaError as exc:
-                if not exc.retriable:
-                    raise
-                if exc.invalid_metadata or self._manager.cluster.need_update:
+            except Errors.InvalidMetadataError:
+                refresh_future = self._manager.cluster.request_update()
+            except Errors.RetriableError:
+                if self._manager.cluster.need_update:
                     refresh_future = self._manager.cluster.request_update()
-                    try:
-                        await self._manager.wait_for(refresh_future, timer.timeout_ms)
-                    except Errors.KafkaTimeoutError:
-                        break
-                    except Errors.KafkaError as refresh_exc:
-                        if not refresh_exc.retriable:
-                            raise
-                        delay = self.config['retry_backoff_ms'] / 1000
-                        if timer.timeout_ms is not None:
-                            delay = min(delay, timer.timeout_ms / 1000)
-                        await self._manager._net.sleep(delay)
                 else:
-                    delay = self.config['retry_backoff_ms'] / 1000
-                    if timer.timeout_ms is not None:
-                        delay = min(delay, timer.timeout_ms / 1000)
-                    await self._manager._net.sleep(delay)
+                    backoff = True
             else:
                 fetched_offsets.update(offsets)
                 if not retry:
                     return fetched_offsets
                 timestamps = {tp: timestamps[tp] for tp in retry}
 
-            timer.maybe_raise()
+            if refresh_future:
+                try:
+                    await self._manager.wait_for(refresh_future, timer.timeout_ms)
+                except Errors.RetriableError:
+                    backoff = True
 
-        raise Errors.KafkaTimeoutError(
-            "Failed to get offsets by timestamps in %s ms" % (timeout_ms,))
+            if backoff:
+                delay = self.config['retry_backoff_ms'] / 1000
+                if timer.timeout_ms is not None:
+                    delay = min(delay, timer.timeout_ms / 1000)
+                await self._manager._net.sleep(delay)
+
+            timer.maybe_raise()
 
     def beginning_offsets(self, partitions, timeout_ms=None):
         """Fetch earliest (oldest) offset for each partition.
@@ -680,7 +675,7 @@ class Fetcher:
         except Exception as error:
             self._subscriptions.reset_failed(partitions, time.monotonic() + self.config['retry_backoff_ms'] / 1000)
             self._manager.cluster.request_update()
-            if not getattr(error, 'retriable', False):
+            if not isinstance(error, Errors.RetriableError):
                 if not self._cached_list_offsets_exception:
                     self._cached_list_offsets_exception = error
                 else:
@@ -960,7 +955,7 @@ class Fetcher:
                 set(partitions_to_positions),
                 time.monotonic() + self.config['retry_backoff_ms'] / 1000)
             self._manager.cluster.request_update()
-            if not getattr(error, 'retriable', False):
+            if not isinstance(error, Errors.RetriableError):
                 log.error("Non-retriable error from OffsetForLeaderEpoch on node %s: %s",
                           node_id, error)
             return
@@ -1457,9 +1452,9 @@ class Fetcher:
             elif error_type is Errors.TopicAuthorizationFailedError:
                 log.warning("Not authorized to read from topic %s.", tp.topic)
                 raise Errors.TopicAuthorizationFailedError(set([tp.topic]))
-            elif getattr(error_type, 'retriable', False):
+            elif issubclass(error_type, Errors.RetriableError):
                 log.debug("Retriable error fetching partition %s: %s", tp, error_type())
-                if getattr(error_type, 'invalid_metadata', False):
+                if issubclass(error_type, Errors.InvalidMetadataError):
                     self._manager.cluster.request_update()
             else:
                 raise error_type('Unexpected error while fetching data')

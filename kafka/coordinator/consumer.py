@@ -1173,7 +1173,7 @@ class ConsumerCoordinator(BaseCoordinator):
                       offsets, self.group_id)
 
     def _commit_offsets_async_on_complete(self, offsets, res_or_exc):
-        if isinstance(res_or_exc, Exception) and getattr(res_or_exc, 'retriable', False):
+        if isinstance(res_or_exc, Errors.RetriableError):
             self.next_auto_commit_deadline = min(time.monotonic() + self.config['retry_backoff_ms'] / 1000, self.next_auto_commit_deadline)
         self.config['default_offset_commit_callback'](offsets, res_or_exc)
 
