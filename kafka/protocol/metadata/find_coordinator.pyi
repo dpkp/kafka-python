@@ -2,10 +2,16 @@
 import uuid
 from typing import Any, Self
 
+from enum import IntEnum
 from kafka.protocol.api_message import ApiMessage
 from kafka.protocol.data_container import DataContainer
 
-__all__ = ['FindCoordinatorRequest', 'FindCoordinatorResponse']
+__all__ = ['CoordinatorType', 'FindCoordinatorRequest', 'FindCoordinatorResponse']
+
+class CoordinatorType(EnumHelper, IntEnum):
+    GROUP: int
+    TRANSACTION: int
+    SHARE: int
 
 class FindCoordinatorRequest(ApiMessage):
     key: str
