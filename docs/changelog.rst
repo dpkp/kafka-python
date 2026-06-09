@@ -22,7 +22,7 @@ Default Configuration Changes
 
 Abstract Interface Changes
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
-* Serializer: Pass headers to serialize/deserialize (#3046)
+* Serializer/Deserializer: Pass headers to serialize/deserialize (#3046)
 * Partitioner: pass both key/value, serialized and unserialized, to partition() (#3045)
 
 Admin API Changes
@@ -152,6 +152,7 @@ Helpers and Debugging
 * Store in-flight request headers only for protocol parser (#2723)
 * Debug log send/recv bytes from protocol parser (#2707)
 * Adjust protocol debug logging; add KAFKA_PYTHON_PROTOCOL_DEBUG_LOG (#2719)
+* CoordinatorType enum (GROUP/TRANSACTION/SHARE) (#3049)
 
 Broker Version Check
 --------------------
@@ -284,7 +285,7 @@ Refactor and Async Migration
 The admin client interface remains sync but wraps a fully-async internal api (does not support asyncio yet). Adds cached coordinator lookups and a mixin structure to separate logical resource groups.
 
 * Admin: split into functional mixin classes (#2873, #2877, #2882)
-* Admin: convert request paths to async; cache coordinator_ids (#2851, #2862, #2863, #2866, #2867, #2870, #2871)
+* Admin: convert request paths to async; cache coordinator_ids (#2851, #2862, #2863, #2866, #2867, #2870, #2871, #3050)
 * Admin: refactor `_send_request_to_controller` error handling (#2751)
 
 KIP Support
@@ -319,6 +320,10 @@ Groups
 * Admin: support group state/type filters for list_groups (#2910)
 * Admin: add extended group reset options (#2911)
 * Admin: Dont return MemberToRemove as key in remove_group_members dict result (#2893)
+
+Transactions
+^^^^^^^^^^^^
+* Admin: implement KIP-664 hanging-transaction tooling (#3051)
 
 Log Dirs
 ^^^^^^^^
