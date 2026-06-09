@@ -6,7 +6,7 @@ import logging
 import threading
 
 import kafka.errors as Errors
-from kafka.protocol.metadata import FindCoordinatorRequest
+from kafka.protocol.metadata import FindCoordinatorRequest, CoordinatorType
 from kafka.protocol.producer import (
     AddOffsetsToTxnRequest, AddPartitionsToTxnRequest,
     EndTxnRequest, InitProducerIdRequest, TxnOffsetCommitRequest,
@@ -657,9 +657,9 @@ class TransactionManager:
                 request.fatal_error(exc)
 
     def coordinator(self, coord_type):
-        if coord_type == 'group':
+        if coord_type == CoordinatorType.GROUP:
             return self._consumer_group_coordinator
-        elif coord_type == 'transaction':
+        elif coord_type == CoordinatorType.TRANSACTION:
             return self._transaction_coordinator
         else:
             raise Errors.IllegalStateError("Received an invalid coordinator type: %s" % (coord_type,))
@@ -756,9 +756,9 @@ class TransactionManager:
 
     def _lookup_coordinator(self, coord_type, coord_key):
         with self._lock:
-            if coord_type == 'group':
+            if coord_type == CoordinatorType.GROUP:
                 self._consumer_group_coordinator = None
-            elif coord_type == 'transaction':
+            elif coord_type == CoordinatorType.TRANSACTION:
                 self._transaction_coordinator = None
             else:
                 raise Errors.IllegalStateError("Invalid coordinator type: %s" % (coord_type,))
@@ -877,7 +877,7 @@ class TxnRequestHandler(metaclass=abc.ABCMeta):
 
     @property
     def coordinator_type(self):
-        return 'transaction'
+        return CoordinatorType.TRANSACTION
 
     @property
     def coordinator_key(self):
@@ -936,7 +936,7 @@ class InitProducerIdHandler(TxnRequestHandler):
         # coordinator -- InitProducerIdRequest can be sent to any broker.
         if self.transaction_manager.transactional_id is None:
             return None
-        return 'transaction'
+        return CoordinatorType.TRANSACTION
 
     def handle_response(self, response):
         error_type = Errors.for_code(response.error_code)
@@ -950,7 +950,7 @@ class InitProducerIdHandler(TxnRequestHandler):
             self._result.done()
         elif issubclass(error_type, Errors.RetriableError):
             if error_type in (Errors.NotCoordinatorError, Errors.CoordinatorNotAvailableError):
-                self.transaction_manager._lookup_coordinator('transaction', self.transactional_id)
+                self.transaction_manager._lookup_coordinator(CoordinatorType.TRANSACTION, self.transactional_id)
             self.reenqueue()
         elif error_type is Errors.InvalidProducerEpochError and self._is_epoch_bump:
             # KIP-360: our (producer_id, epoch) are stale--the broker no
@@ -1007,7 +1007,7 @@ class AddPartitionsToTxnHandler(TxnRequestHandler):
                 continue
             elif issubclass(error_type, Errors.RetriableError):
                 if error_type in (Errors.CoordinatorNotAvailableError, Errors.NotCoordinatorError):
-                    self.transaction_manager._lookup_coordinator('transaction', self.transactional_id)
+                    self.transaction_manager._lookup_coordinator(CoordinatorType.TRANSACTION, self.transactional_id)
                 elif error_type is Errors.ConcurrentTransactionsError:
                     self.maybe_override_retry_backoff_ms()
                 self.reenqueue()
@@ -1067,21 +1067,15 @@ class FindCoordinatorHandler(TxnRequestHandler):
     def __init__(self, transaction_manager, coord_type, coord_key):
         super().__init__(transaction_manager)
 
-        self._coord_type = coord_type
+        self._coord_type = CoordinatorType.build_from(coord_type)
         self._coord_key = coord_key
-        if coord_type == 'group':
-            coord_type_int8 = 0
-        elif coord_type == 'transaction':
-            coord_type_int8 = 1
-        else:
-            raise ValueError("Unrecognized coordinator type: %s" % (coord_type,))
         # Setting key, key_type, and coordinator_keys all at once lets the
         # connection layer negotiate any version: v0-v3 emit `key`/`key_type`,
         # v4+ (KIP-699) emit `key_type`/`coordinator_keys`.
         self.request = FindCoordinatorRequest(
-            key=coord_key,
-            key_type=coord_type_int8,
-            coordinator_keys=[coord_key],
+            key=self._coord_key,
+            key_type=self._coord_type.value,
+            coordinator_keys=[self._coord_key],
         )
 
     @property
@@ -1105,9 +1099,9 @@ class FindCoordinatorHandler(TxnRequestHandler):
         if error_type is Errors.NoError:
             coordinator_id = self.transaction_manager._metadata.add_coordinator(
                 result, self._coord_type, self._coord_key)
-            if self._coord_type == 'group':
+            if self._coord_type == CoordinatorType.GROUP:
                 self.transaction_manager._consumer_group_coordinator = coordinator_id
-            elif self._coord_type == 'transaction':
+            elif self._coord_type == CoordinatorType.TRANSACTION:
                 self.transaction_manager._transaction_coordinator = coordinator_id
             self._result.done()
         elif issubclass(error_type, Errors.RetriableError):
@@ -1144,7 +1138,7 @@ class EndTxnHandler(TxnRequestHandler):
             self._result.done()
         elif issubclass(error_type, Errors.RetriableError):
             if error_type in (Errors.CoordinatorNotAvailableError, Errors.NotCoordinatorError):
-                self.transaction_manager._lookup_coordinator('transaction', self.transactional_id)
+                self.transaction_manager._lookup_coordinator(CoordinatorType.TRANSACTION, self.transactional_id)
             self.reenqueue()
         elif error_type in (Errors.InvalidProducerEpochError, Errors.ProducerFencedError):
             # Java client normalizes INVALID_PRODUCER_EPOCH to PRODUCER_FENCED
@@ -1194,7 +1188,7 @@ class AddOffsetsToTxnHandler(TxnRequestHandler):
             self.transaction_manager._transaction_started = True
         elif issubclass(error_type, Errors.RetriableError):
             if error_type in (Errors.CoordinatorNotAvailableError, Errors.NotCoordinatorError):
-                self.transaction_manager._lookup_coordinator('transaction', self.transactional_id)
+                self.transaction_manager._lookup_coordinator(CoordinatorType.TRANSACTION, self.transactional_id)
             self.reenqueue()
         elif error_type in (Errors.CoordinatorLoadInProgressError, Errors.ConcurrentTransactionsError):
             self.reenqueue()
@@ -1260,7 +1254,7 @@ class TxnOffsetCommitHandler(TxnRequestHandler):
 
     @property
     def coordinator_type(self):
-        return 'group'
+        return CoordinatorType.GROUP
 
     @property
     def coordinator_key(self):
@@ -1318,7 +1312,7 @@ class TxnOffsetCommitHandler(TxnRequestHandler):
                 return
 
         if lookup_coordinator:
-            self.transaction_manager._lookup_coordinator('group', self.consumer_group_id)
+            self.transaction_manager._lookup_coordinator(CoordinatorType.GROUP, self.consumer_group_id)
 
         if not retriable_failure:
             # all attempted partitions were either successful, or there was a fatal failure.
