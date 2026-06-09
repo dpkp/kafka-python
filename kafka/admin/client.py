@@ -10,7 +10,7 @@ import kafka.errors as Errors
 from kafka.errors import KafkaConfigurationError, UnrecognizedBrokerVersion
 from kafka.metrics import MetricConfig, Metrics
 from kafka.net.compat import KafkaNetClient
-from kafka.protocol.metadata import MetadataRequest, FindCoordinatorRequest
+from kafka.protocol.metadata import MetadataRequest, FindCoordinatorRequest, CoordinatorType
 from kafka.version import __version__
 
 from kafka.admin._acls import ACLAdminMixin
@@ -256,7 +256,7 @@ class KafkaAdminClient(
         self._manager.bootstrap(self.config['bootstrap_timeout_ms'])
         self._closed = False
         self._controller_id = None
-        self._coordinator_cache = {}  # {(key_type, key): node_id}
+        self._coordinator_cache = {}  # {(CoordinatorType, key): node_id}
         log.debug("KafkaAdminClient started.")
 
     def __enter__(self):
@@ -302,11 +302,11 @@ class KafkaAdminClient(
         else:
             raise Errors.NodeNotReadyError('controller')
 
-    async def _find_coordinator_ids(self, keys, key_type=0):
+    async def _find_coordinator_ids(self, keys, key_type=CoordinatorType.GROUP):
         """Find broker node_ids of the coordinators for a set of keys.
 
-        ``key_type`` follows the FindCoordinator KeyType enum: 0 (group),
-        1 (transaction), 2 (share). Results are cached per (key_type, key);
+        ``key_type`` is CoordinatorType enum (group/0, transaction/1, share/2).
+        Results are cached per (key_type, key);
         only keys not already in the cache hit the network. On brokers
         supporting FindCoordinator v4+ (KIP-699, Apache Kafka 3.0+), all
         unknown keys are resolved in a single batched request; older brokers
@@ -316,6 +316,7 @@ class KafkaAdminClient(
         """
         result = {}
         unknown = []
+        key_type = CoordinatorType.build_from(key_type)
         for key in keys:
             cached = self._coordinator_cache.get((key_type, key))
             if cached is not None:
@@ -326,7 +327,7 @@ class KafkaAdminClient(
             return result
 
         if self._manager.broker_version_data.api_version(FindCoordinatorRequest) >= 4:
-            request = FindCoordinatorRequest(key_type=key_type,
+            request = FindCoordinatorRequest(key_type=key_type.value,
                                              coordinator_keys=unknown,
                                              min_version=4)
             response = await self._manager.send(request)
@@ -342,7 +343,7 @@ class KafkaAdminClient(
             # Broker does not support batch api; fan-out request per-key
             for key in unknown:
                 request = FindCoordinatorRequest(key=key,
-                                                 key_type=key_type,
+                                                 key_type=key_type.value,
                                                  max_version=3)
                 response = await self._manager.send(request)
                 error_type = Errors.for_code(response.error_code)
@@ -354,7 +355,7 @@ class KafkaAdminClient(
                 result[key] = response.node_id
         return result
 
-    async def _find_coordinator_id(self, key, key_type=0):
+    async def _find_coordinator_id(self, key, key_type=CoordinatorType.GROUP):
         """Single-key wrapper for _find_coordinator_ids()"""
         ids = await self._find_coordinator_ids([key], key_type=key_type)
         return ids[key]
