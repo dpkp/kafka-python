@@ -27,7 +27,7 @@ from kafka.producer.transaction_manager import (
     TransactionState,
     TxnOffsetCommitHandler,
 )
-from kafka.protocol.metadata import FindCoordinatorResponse, MetadataResponse
+from kafka.protocol.metadata import FindCoordinatorResponse, MetadataResponse, CoordinatorType
 from kafka.protocol.producer import (
     AddOffsetsToTxnResponse,
     AddPartitionsToTxnResponse,
