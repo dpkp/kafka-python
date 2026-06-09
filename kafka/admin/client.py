@@ -19,6 +19,7 @@ from kafka.admin._configs import ConfigAdminMixin
 from kafka.admin._groups import GroupAdminMixin
 from kafka.admin._partitions import PartitionAdminMixin
 from kafka.admin._topics import TopicAdminMixin
+from kafka.admin._transactions import TransactionsAdminMixin
 from kafka.admin._users import UserAdminMixin
 
 log = logging.getLogger(__name__)
@@ -31,6 +32,7 @@ class KafkaAdminClient(
     GroupAdminMixin,
     PartitionAdminMixin,
     TopicAdminMixin,
+    TransactionsAdminMixin,
     UserAdminMixin,
 ):
     """A class for administering the Kafka cluster.

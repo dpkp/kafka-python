@@ -44,6 +44,7 @@ MESSAGE_MODULES = [
     'kafka.protocol.admin.configs',
     'kafka.protocol.admin.groups',
     'kafka.protocol.admin.topics',
+    'kafka.protocol.admin.transactions',
     'kafka.protocol.admin.users',
     'kafka.protocol.consumer.fetch',
     'kafka.protocol.consumer.group',

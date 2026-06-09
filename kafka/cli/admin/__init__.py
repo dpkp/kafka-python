@@ -10,6 +10,7 @@ from .configs import ConfigsCommandGroup
 from .groups import GroupsCommandGroup
 from .partitions import PartitionsCommandGroup
 from .topics import TopicsCommandGroup
+from .transactions import TransactionsCommandGroup
 from .users import UsersCommandGroup
 from ..common import add_common_cli_args, configure_logging, build_connect_kwargs
 from kafka.errors import BrokerResponseError
@@ -41,7 +42,7 @@ def run_cli(args=None, prog=None):
     parser = build_parser([
         ACLsCommandGroup, ClusterCommandGroup, ConfigsCommandGroup,
         TopicsCommandGroup, PartitionsCommandGroup, GroupsCommandGroup,
-        UsersCommandGroup,
+        TransactionsCommandGroup, UsersCommandGroup,
     ], prog=prog)
     config = parser.parse_args(args)
     if not config.group:
@@ -94,14 +95,6 @@ def run_cli(args=None, prog=None):
 # Commands TODO:
     # --dry-run support
     # --trace ?
-
-    # [producers]
-    # describe (DescribeProducers)
-
-    # [transactions]
-    # describe (DescribeTransactions)
-    # list (ListTransactions)
-    # abort (EndTxn)
 
     # [cluster]
     # unregister-broker (UnregisterBroker)
