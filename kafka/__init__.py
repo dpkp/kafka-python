@@ -16,7 +16,7 @@ from kafka.consumer.subscription_state import (
     AsyncConsumerRebalanceListener, ConsumerRebalanceListener,
 )
 from kafka.producer import KafkaProducer
-from kafka.serializer import Serializer, Deserializer
+from kafka.serializer import DefaultSerializer, JsonSerializer, Serializer, Deserializer
 from kafka.structs import (
     ConsumerGroupMetadata, OffsetAndMetadata,
     TopicPartition, TopicPartitionReplica,
@@ -27,7 +27,7 @@ from kafka.protocol.consumer import IsolationLevel, OffsetSpec
 __all__ = [
     'KafkaAdminClient', 'KafkaConsumer', 'KafkaProducer',
     'AsyncConsumerRebalanceListener', 'ConsumerRebalanceListener',
-    'Serializer', 'Deserializer',
+    'DefaultSerializer', 'JsonSerializer', 'Serializer', 'Deserializer',
     'ConsumerGroupMetadata', 'OffsetAndMetadata',
     'TopicPartition', 'TopicPartitionReplica',
     'IsolationLevel', 'OffsetSpec',

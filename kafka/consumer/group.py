@@ -70,10 +70,12 @@ class KafkaConsumer:
             to avoid group rebalances caused by transient unavailability (e.g.
             process restarts). If not set, the consumer will join the group as
             a dynamic member, which is the traditional behavior. Default: None
-        key_deserializer (callable): Any callable that takes a
+        key_deserializer (kafka.serializer.Deserializer): Takes a
             raw message key and returns a deserialized key.
-        value_deserializer (callable): Any callable that takes a
+            Default: None.
+        value_deserializer (kafka.serializer.Deserializer): Takes a
             raw message value and returns a deserialized value.
+            Default: None.
         enable_incremental_fetch_sessions: (bool): Use incremental fetch sessions
             when available / supported by kafka broker. See KIP-227. Default: True.
         fetch_min_bytes (int): Minimum amount of data the server should
