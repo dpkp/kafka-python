@@ -18,12 +18,15 @@ from kafka.producer.sender import Sender
 from kafka.producer.transaction_manager import TransactionManager
 from kafka.record.default_records import DefaultRecordBatchBuilder
 from kafka.record.legacy_records import LegacyRecordBatchBuilder
-from kafka.serializer import Serializer
+from kafka.serializer import Serializer, SerializeWrapper
 from kafka.structs import TopicPartition
 from kafka.util import Timer
 
 
 log = logging.getLogger(__name__)
+
+_LOGGED_SERIALIZE_WARNING = False
+
 PRODUCER_CLIENT_ID_SEQUENCE = AtomicInteger()
 
 
@@ -472,6 +475,11 @@ class KafkaProducer:
             if key in configs:
                 self.config[key] = configs.pop(key)
 
+        for key in ('key_serializer', 'value_serializer'):
+            if self.config[key] is not None and not isinstance(self.config[key], Serializer):
+                warnings.warn('%s does not implement kafka.serializer.Serializer' % (key,), category=DeprecationWarning, stacklevel=3)
+                self.config[key] = SerializeWrapper(self.config[key])
+
         for key in self.DEPRECATED_CONFIGS:
             if key in configs:
                 configs.pop(key)
@@ -897,12 +905,19 @@ class KafkaProducer:
             raise ValueError('Null messages require kafka >= 0.8.1')
         if value is None and key is None:
             raise ValueError('Need at least one: key or value')
+        if headers is None:
+            headers = []
+        if not isinstance(headers, list):
+            raise TypeError('headers must be list-type')
+        if not all(isinstance(item, tuple) and len(item) == 2 and isinstance(item[0], str) and isinstance(item[1], bytes) for item in headers):
+            raise TypeError('All headers items must be (str, bytes) tuples')
+
         key_bytes = self._serialize(
             self.config['key_serializer'],
-            topic, key)
+            topic, headers, key)
         value_bytes = self._serialize(
             self.config['value_serializer'],
-            topic, value)
+            topic, headers, value)
         if type(key_bytes) not in (bytes, bytearray, memoryview, type(None)):
             raise TypeError("Unsupported type for serialized key: %s" % type(key_bytes))
         if type(value_bytes) not in (bytes, bytearray, memoryview, type(None)):
@@ -926,13 +941,6 @@ class KafkaProducer:
         partition = self._partition(topic, partition, key, value, key_bytes, value_bytes)
         if partition is None:
             raise ValueError(f'Partitioner did not assign a partition for topic {topic}!')
-
-        if headers is None:
-            headers = []
-        if not isinstance(headers, list):
-            raise TypeError('headers must be list-type')
-        if not all(isinstance(item, tuple) and len(item) == 2 and isinstance(item[0], str) and isinstance(item[1], bytes) for item in headers):
-            raise TypeError('All headers items must be (str, bytes) tuples')
 
         message_size = self._estimate_size_in_bytes(key_bytes, value_bytes, headers)
         self._ensure_valid_record_size(message_size)
@@ -1054,12 +1062,17 @@ class KafkaProducer:
         else:
             raise Errors.KafkaTimeoutError("Failed to update metadata after %.1f secs." % (max_wait_ms / 1000,))
 
-    def _serialize(self, f, topic, data):
-        if not f:
+    def _serialize(self, serializer, topic, headers, data):
+        if serializer is None:
             return data
-        if isinstance(f, Serializer):
-            return f.serialize(topic, data)
-        return f(data)
+        try:
+            return serializer.serialize(topic, headers, data)
+        except TypeError:
+            global _LOGGED_SERIALIZE_WARNING
+            if not _LOGGED_SERIALIZE_WARNING:
+                warnings.warn('serializer does not implement serialize(topic, headers, data)', category=DeprecationWarning)
+                LOGGED_SERIALIZE_WARNING = True
+            return serializer.serialize(topic, data)
 
     def _partition(self, topic, partition, key, value,
                    serialized_key, serialized_value):

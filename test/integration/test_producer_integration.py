@@ -4,6 +4,7 @@ import time
 import pytest
 
 from kafka import TopicPartition, OffsetAndMetadata
+from kafka.serializer import DefaultSerializer
 from test.testutil import env_kafka_version, random_string, maybe_skip_unsupported_compression
 
 
@@ -23,13 +24,13 @@ def test_end_to_end(kafka_consumer_factory, kafka_producer_factory, compression)
         'retries': 5,
         'max_block_ms': 30000,
         'compression_type': compression,
-        'value_serializer': str.encode,
+        'value_serializer': DefaultSerializer(),
     }
     consumer_args = {
         'group_id': None,
         'consumer_timeout_ms': 30000,
         'auto_offset_reset': 'earliest',
-        'value_deserializer': bytes.decode,
+        'value_deserializer': DefaultSerializer(),
     }
     with kafka_producer_factory(**producer_args) as producer, \
             kafka_consumer_factory(topics=(), **consumer_args) as consumer:
@@ -173,7 +174,7 @@ def test_idempotent_producer_max_in_flight(kafka_producer_factory, kafka_consume
         group_id=None,
         consumer_timeout_ms=30000,
         auto_offset_reset='earliest',
-        value_deserializer=bytes.decode,
+        value_deserializer=DefaultSerializer(),
     ) as consumer:
         consumer.subscribe([topic])
         received = set()
