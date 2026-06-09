@@ -35,6 +35,7 @@ Error Hierarchy
 * Make IncompatibleBrokerVersion a subclass of UnsupportedVersionError (#2924)
 * Eliminate NoBrokersAvailableError (#2942)
 * KafkaProtocolError is not retriable (#2941)
+* Prefer raised Exceptions to assert / AssertionError (#3042)
 
 Old Networking Stack Removal
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -109,7 +110,7 @@ Dynamic Protocol Classes
 ^^^^^^^^^^^^^^^^^^^^^^^^
 Protocol classes are now generated from the upstream Apache Kafka JSON schemas.
 
-* Dynamic protocol classes using upstream json schemas (#2727, #2745, #2779, #2782, #2787, #2810)
+* Dynamic protocol classes using upstream json schemas (#2727, #2745, #2779, #2782, #2787, #2810, #3037)
 * Add .pyi type annotation stubs for generated protocol classes (#2784)
 * Migrate all internal usage to new protocol classes (#2764, #2765, #2766, #2767, #2768, #2772)
 * Refactor treatment of versioned ApiMessage classes (#2739)
@@ -188,6 +189,7 @@ All consumer network I/O now flows through the shared IO thread; ``poll()`` no l
 * Consumer: use background thread for all network io; drop HeartbeatThread (#2965)
 * Consumer: send all requests from net io thread (#2980)
 * Consumer: simplify poll() with fetcher.fetch_records (#2960)
+* Consumer: sleep in poll() if timeout, no records, and no fetchable partitions (#3039)
 * Consumer: drop poll loop optimizations for pending offset resets and rejoins (#2959)
 * Consumer: _update_fetch_positions -> _refresh_committed_offsets; dont poll in position() (#2958)
 * Consumer: convert fetcher reset_offsets/send_list_offsets_requests to async def
@@ -352,6 +354,7 @@ Small quality-of-life additions to the public API surface.
 * Support context manager interface for consumer/producer/admin (#2969)
 * Make IncompatibleBrokerVersion a subclass of UnsupportedVersionError (#2924)
 * Add OffsetSpec / IsolationLevel to kafka imports (#2898)
+* Errors: subclasses for RetriableError and InvalidMetadataError (#3041)
 
 Fixes
 -----

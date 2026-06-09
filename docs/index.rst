@@ -19,22 +19,32 @@ kafka-python
 kafka-python is a pure-python client library for Apache Kafka, the distributed
 stream processing engine. It has no external dependencies and no Cython/C/rust
 core, making installation across a wide variety of environments simple and easy
-to manage. Users looking to add more raw throughput can pip install `crc32c` as
-an optional dependency, offloading one of the most CPU intensive subsystems
-to an optimized C library.
+to manage.
 
 kafka-python can also be used as a simple alternative to the apache kafka admin
 scripts, which require an installed/compatible jvm. A simple CLI interface for
-admin commands is provided as `kafka-python admin` / `python -m kafka.admin`.
+admin commands is provided as ``kafka-python admin`` / ``python -m kafka.admin``.
 
-.. code:: bash
+Users looking to add more raw throughput can ``pip install crc32c`` as
+an optional dependency, offloading one of the most CPU intensive subsystems
+to an optimized C library.
+
+
+.. code-block:: bash
 
     pip install kafka-python
+
     # callable as module or as cli-script
     kafka-python admin -b localhost:9092 cluster describe
+
+    # Create a topic with the admin cli
     python -m kafka.admin -b localhost:9092 topics create -t foo-topic
+
+    # Produce messages
     echo "foo message" | python -m kafka.producer -b localhost:9092 -t foo-topic
-    python -m kafka.consumer -b localhost:9092 -C auto_offset_reset=earliest -g foo-group -t foo-topic
+
+    # Consume messages
+    python -m kafka.consumer -b localhost:9092 -C auto_offset_reset=earliest -C consumer_timeout_ms=1000 -g foo-group -t foo-topic
 
 
 What's New in 3.0
@@ -61,14 +71,14 @@ for API and configuration details.
 The consumer iterator returns ConsumerRecords, which are simple namedtuples
 that expose basic message attributes: topic, partition, offset, key, and value:
 
-.. code:: python
+.. code-block:: python
 
     from kafka import KafkaConsumer
     consumer = KafkaConsumer('my_favorite_topic')
     for msg in consumer:
         print (msg)
 
-.. code:: python
+.. code-block:: python
 
     # join a consumer group for dynamic partition assignment and offset commits
     from kafka import KafkaConsumer
@@ -76,7 +86,7 @@ that expose basic message attributes: topic, partition, offset, key, and value:
     for msg in consumer:
         print (msg)
 
-.. code:: python
+.. code-block:: python
 
     # manually assign the partition list for the consumer
     from kafka import TopicPartition
@@ -84,7 +94,7 @@ that expose basic message attributes: topic, partition, offset, key, and value:
     consumer.assign([TopicPartition('foobar', 2)])
     msg = next(consumer)
 
-.. code:: python
+.. code-block:: python
 
     # Deserialize msgpack-encoded values
     consumer = KafkaConsumer(value_deserializer=msgpack.loads)
@@ -120,45 +130,45 @@ KafkaProducer
 The class is intended to operate as similarly as possible to the official java
 client. See `KafkaProducer <apidoc/KafkaProducer.html>`_ for more details.
 
-.. code:: python
+.. code-block:: python
 
     from kafka import KafkaProducer
     producer = KafkaProducer(bootstrap_servers='localhost:1234')
     for _ in range(100):
         producer.send('foobar', b'some_message_bytes')
 
-.. code:: python
+.. code-block:: python
 
     # Block until a single message is sent (or timeout)
     future = producer.send('foobar', b'another_message')
     result = future.get(timeout=60)
 
-.. code:: python
+.. code-block:: python
 
     # Block until all pending messages are at least put on the network
     # NOTE: This does not guarantee delivery or success! It is really
     # only useful if you configure internal batching using linger_ms
     producer.flush()
 
-.. code:: python
+.. code-block:: python
 
     # Use a key for hashed-partitioning
     producer.send('foobar', key=b'foo', value=b'bar')
 
-.. code:: python
+.. code-block:: python
 
     # Serialize json messages
     import json
     producer = KafkaProducer(value_serializer=lambda v: json.dumps(v).encode('utf-8'))
     producer.send('fizzbuzz', {'foo': 'bar'})
 
-.. code:: python
+.. code-block:: python
 
     # Serialize string keys
     producer = KafkaProducer(key_serializer=str.encode)
     producer.send('flipflap', key='ping', value=b'1234')
 
-.. code:: python
+.. code-block:: python
 
     # Compress messages
     producer = KafkaProducer(compression_type='gzip')
@@ -220,8 +230,8 @@ Optimized CRC32 Validation
 Kafka uses CRC32 checksums to validate messages. kafka-python includes a pure
 python implementation for compatibility. To improve performance for high-throughput
 applications, kafka-python will use `crc32c` for optimized native code if installed.
-See `Install <install.html>`_ for installation instructions and
-https://pypi.org/project/crc32c/ for details on the underlying crc32c lib.
+See `Install <install.html>`_ for installation instructions.
+See https://pypi.org/project/crc32c/ for details on the underlying crc32c lib.
 
 
 Protocol
@@ -229,10 +239,9 @@ Protocol
 
 A secondary goal of kafka-python is to provide an easy-to-use protocol layer
 for interacting with kafka brokers via the python repl. This is useful for
-testing, probing, and general experimentation. The protocol support is
-leveraged to enable a :meth:`~kafka.KafkaClient.check_version()`
-method that probes a kafka broker and
-attempts to identify which version it is running (0.8.0 to 2.6+).
+testing, probing, and general experimentation. In version 3.0 the protocol
+layer was re-written to generate encoder/decoder classes using json message
+definitions imported directly from the Apache Kafka project source.
 
 
 Debugging
