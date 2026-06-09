@@ -1,19 +1,15 @@
 kafka-python
 ############
 
-.. image:: https://img.shields.io/badge/kafka-4.3--0.8-brightgreen.svg
-    :target: https://kafka-python.readthedocs.io/en/master/compatibility.html
-.. image:: https://img.shields.io/pypi/pyversions/kafka-python.svg
-    :target: https://pypi.python.org/pypi/kafka-python
-.. image:: https://img.shields.io/badge/license-Apache%202-blue.svg
-    :target: https://github.com/dpkp/kafka-python/blob/master/LICENSE
-.. image:: https://img.shields.io/pypi/dw/kafka-python.svg
-    :target: https://pypistats.org/packages/kafka-python
 .. image:: https://img.shields.io/pypi/v/kafka-python.svg
     :target: https://pypi.org/project/kafka-python
-.. image:: https://img.shields.io/pypi/implementation/kafka-python
-    :target: https://github.com/dpkp/kafka-python/blob/master/pyproject.toml
+.. image:: https://img.shields.io/badge/kafka-4.3--0.8-brightgreen.svg
+    :target: https://kafka-python.readthedocs.io/en/master/compatibility.html
 
+.. image:: https://img.shields.io/badge/license-Apache%202-blue.svg
+    :target: https://github.com/dpkp/kafka-python/blob/master/LICENSE
+.. image:: https://img.shields.io/pypi/pyversions/kafka-python.svg
+    :target: https://pypi.python.org/pypi/kafka-python
 
 
 kafka-python is a pure-python client library for Apache Kafka, the distributed
