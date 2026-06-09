@@ -397,7 +397,7 @@ class ClusterMetadata:
             node_id (int or str) for coordinator, -1 if coordinator unknown
             None if the group does not exist.
         """
-        return self._coordinators.get((key_type, group))
+        return self._coordinators.get((key_type, key))
 
     def ttl(self):
         """Milliseconds until metadata should be refreshed"""
