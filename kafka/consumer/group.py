@@ -813,8 +813,16 @@ class KafkaConsumer:
         if self.config['group_id'] is not None:
             poll_timeout_ms = min(poll_timeout_ms, self._coordinator.time_to_next_poll() * 1000)
 
-        return self._fetcher.fetch_records(
+        records, idle = self._fetcher.fetch_records(
             max_records, update_offsets=update_offsets, timeout_ms=poll_timeout_ms)
+        if not records and idle and poll_timeout_ms > 0:
+            # Nothing fetchable and nothing in flight (no assignment, all
+            # paused, or no resolvable positions). Sleep up to poll_timeout_ms
+            # to avoid busy-looping; poll_timeout_ms is already capped by the
+            # coordinator's next-action deadline.
+            poll_timeout_ms = min(poll_timeout_ms, self.config['retry_backoff_ms'])
+            time.sleep(poll_timeout_ms / 1000)
+        return records
 
     def position(self, partition, timeout_ms=None):
         """Get the offset of the next record that will be fetched
