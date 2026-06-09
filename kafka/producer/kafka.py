@@ -11,8 +11,7 @@ import kafka.errors as Errors
 from kafka.net.compat import KafkaNetClient
 from kafka.codec import has_gzip, has_snappy, has_lz4, has_zstd
 from kafka.metrics import MetricConfig, Metrics
-from kafka.partitioner.default import DefaultPartitioner
-from kafka.partitioner.sticky import StickyPartitioner
+from kafka.partitioner import Partitioner, DefaultPartitioner
 from kafka.producer.future import FutureRecordMetadata, FutureProduceResult
 from kafka.producer.record_accumulator import AtomicInteger, RecordAccumulator
 from kafka.producer.sender import Sender
@@ -242,12 +241,11 @@ class KafkaProducer:
             would have the effect of reducing the number of requests sent but
             would add up to 5ms of latency to records sent in the absence of
             load. Default: 0.
-        partitioner (Partitioner): Used to determine which partition
-            each message is assigned to. Called (after key serialization):
-            partitioner.partition(topic, key_bytes, cluster_metadata).
-            The default partitioner implementation hashes each non-None key
-            using the same murmur2 algorithm as the java client so that
-            messages with the same key are assigned to the same partition.
+        partitioner (kafka.partitioner.Partitioner): Assigns each message
+            to a partition (after serialization). The default partitioner
+            implementation hashes each non-None serialized key using the same
+            algorithm as the java client (murmur2) so that messages with the
+            same key are assigned to the same partition.
             When a key is None, the message is delivered to a random partition
             (filtered to partitions with available leaders only, if possible).
         connections_max_idle_ms: Close idle connections after the number of
@@ -477,7 +475,7 @@ class KafkaProducer:
         for key in self.DEPRECATED_CONFIGS:
             if key in configs:
                 configs.pop(key)
-                warnings.warn('Deprecated Producer config: %s' % (key,), DeprecationWarning)
+                warnings.warn('Deprecated Producer config: %s' % (key,), category=DeprecationWarning)
 
         # Only check for extra config keys in top-level class
         if configs:
@@ -1075,8 +1073,12 @@ class KafkaProducer:
                 raise ValueError('Unrecognized partition %s for topic %s' % (partition, topic))
             return partition
 
-        return self.config['partitioner'].partition(
-            topic, serialized_key, self._metadata)
+        partitioner = self.config['partitioner']
+        if not isinstance(partitioner, Partitioner):
+            warnings.warn('partitioner does not implement kafka.partitioner.Partitioner', category=DeprecationWarning)
+            return partitioner.partition(topic, serialized_key, self._metadata)
+        return partitioner.partition(
+            topic, key, serialized_key, value, serialized_value, self._metadata)
 
     def metrics(self, raw=False):
         """Get metrics on producer performance.
