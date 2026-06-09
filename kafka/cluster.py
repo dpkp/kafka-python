@@ -12,7 +12,7 @@ import weakref
 from kafka import errors as Errors
 from kafka.future import Future
 from kafka.net.wakeup_notifier import WakeupNotifier
-from kafka.protocol.metadata import MetadataRequest, MetadataResponse
+from kafka.protocol.metadata import MetadataRequest, MetadataResponse, CoordinatorType
 from kafka.structs import TopicPartition
 from kafka.util import ensure_valid_topic_name
 
@@ -386,17 +386,18 @@ class ClusterMetadata:
         """
         return self._broker_partitions.get(broker_id)
 
-    def coordinator_for_group(self, group):
-        """Return node_id of group coordinator.
+    def get_coordinator(self, key, key_type=CoordinatorType.GROUP):
+        """Return node_id of group coordinator from cache.
 
         Arguments:
-            group (str): name of consumer group
+            key (str): name of consumer group or transaction_id
+            key_type (CoordinatorType, optional): Default GROUP
 
         Returns:
-            node_id (int or str) for group coordinator, -1 if coordinator unknown
+            node_id (int or str) for coordinator, -1 if coordinator unknown
             None if the group does not exist.
         """
-        return self._coordinators.get(('group', group))
+        return self._coordinators.get((key_type, group))
 
     def ttl(self):
         """Milliseconds until metadata should be refreshed"""
@@ -657,17 +658,17 @@ class ClusterMetadata:
 
         Arguments:
             response (FindCoordinatorResponse): broker response
-            key_type (str): 'group' or 'transaction'
+            key_type (CoordinatorType): GROUP / TRANSACTION / SHARE
             key (str): consumer_group or transactional_id
 
         Returns:
             string: coordinator node_id if metadata is updated, None on error
         """
-        log.debug("Updating coordinator for %s/%s: %s", key_type, key, response)
+        key_type = CoordinatorType.build_from(key_type)
+        log.debug("Updating coordinator for %s/%s: %s", key_type.name, key, response)
         error_type = Errors.for_code(response.error_code)
         if error_type is not Errors.NoError:
             log.error("FindCoordinatorResponse error: %s", error_type)
-            self._coordinators[(key_type, key)] = -1
             return
 
         # Use a coordinator-specific node id so that requests
@@ -679,7 +680,7 @@ class ClusterMetadata:
             response.port,
             None)
 
-        log.info("Coordinator for %s/%s is %s", key_type, key, coordinator)
+        log.info("Coordinator for %s/%s is %s", key_type.name, key, coordinator)
         self._coordinator_brokers[node_id] = coordinator
         self._coordinators[(key_type, key)] = node_id
         return node_id

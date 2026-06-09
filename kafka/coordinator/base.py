@@ -11,7 +11,7 @@ from kafka.future import Future
 from kafka.metrics import AnonMeasurable
 from kafka.metrics.stats import Avg, Count, Max, Rate
 from kafka.net.wakeup_notifier import WakeupNotifier
-from kafka.protocol.metadata import FindCoordinatorRequest
+from kafka.protocol.metadata import FindCoordinatorRequest, CoordinatorType
 from kafka.protocol.consumer import (
     HeartbeatRequest, JoinGroupRequest, LeaveGroupRequest, SyncGroupRequest,
     DEFAULT_GENERATION_ID, UNKNOWN_MEMBER_ID,
@@ -852,8 +852,8 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         error_type = Errors.for_code(result.error_code)
         if error_type is Errors.NoError:
             with self._lock:
-                coordinator_id = self._cluster.add_coordinator(result, 'group', self.group_id)
-                if not coordinator_id:
+                coordinator_id = self._cluster.add_coordinator(result, CoordinatorType.GROUP, self.group_id)
+                if coordinator_id is None:
                     # This could happen if coordinator metadata is different
                     # than broker metadata
                     raise Errors.IllegalStateError()
