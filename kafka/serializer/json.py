@@ -1,3 +1,5 @@
+import json
+
 from .abstract import Serializer, Deserializer
 
 
@@ -11,5 +13,5 @@ class JsonSerializer(Serializer, Deserializer):
     def deserialize(self, topic, data):
         if data is None:
             return None
-        s = super().deserialize(data)
+        s = super().deserialize(topic, data)
         return json.loads(s)
