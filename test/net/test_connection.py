@@ -166,6 +166,45 @@ class TestKafkaConnectionCheckApiVersions:
         if transport:
             transport.abort.assert_called()
 
+    def test_discovered_version_clamped_to_user_supplied(self, net):
+        # User pre-configures (1, 0); broker advertises (4, 0). The discovered
+        # version must be clamped down to the user's cap so requests don't
+        # negotiate higher than what the user explicitly asked for.
+        conn = self._make_conn(net)
+        conn.broker_version_data = BrokerVersionData((1, 0))
+        response = self._make_api_versions_response(broker_version=(4, 0))
+        self._run_initialize(net, conn, [response])
+        assert conn.broker_version == (1, 0)
+
+    def test_discovered_version_used_when_lower_than_user(self, net):
+        # User pre-configures (4, 0); broker advertises (1, 0). The broker is
+        # actually older, so we downgrade to the discovered version -- the
+        # client cannot speak APIs the broker does not support.
+        conn = self._make_conn(net)
+        conn.broker_version_data = BrokerVersionData((4, 0))
+        response = self._make_api_versions_response(broker_version=(1, 0))
+        self._run_initialize(net, conn, [response])
+        assert conn.broker_version == (1, 0)
+
+    def test_discovered_version_equal_to_user_preserved(self, net):
+        # User pre-configures (2, 0); broker advertises (2, 0). Either choice
+        # is correct, but the implementation keeps the user-supplied object.
+        conn = self._make_conn(net)
+        preconfigured = BrokerVersionData((2, 0))
+        conn.broker_version_data = preconfigured
+        response = self._make_api_versions_response(broker_version=(2, 0))
+        self._run_initialize(net, conn, [response])
+        assert conn.broker_version == (2, 0)
+        assert conn.broker_version_data is preconfigured
+
+    def test_discovered_version_used_when_no_user_config(self, net):
+        # No pre-configured version: whatever the broker advertises wins.
+        conn = self._make_conn(net)
+        assert conn.broker_version_data is None
+        response = self._make_api_versions_response(broker_version=(3, 5))
+        self._run_initialize(net, conn, [response])
+        assert conn.broker_version == (3, 5)
+
 
 class TestKafkaConnectionPause:
     def test_pause_unpause(self, connection):
