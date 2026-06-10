@@ -66,7 +66,7 @@ class DescribeClusterResponse(ApiMessage):
     cluster_id: str
     controller_id: int
     brokers: list[DescribeClusterBroker]
-    cluster_authorized_operations: set[int]
+    authorized_operations: set[int]
     def __init__(
         self,
         *args: Any,
@@ -77,7 +77,7 @@ class DescribeClusterResponse(ApiMessage):
         cluster_id: str = ...,
         controller_id: int = ...,
         brokers: list[DescribeClusterBroker] = ...,
-        cluster_authorized_operations: set[int] = ...,
+        authorized_operations: set[int] = ...,
         version: int | None = None,
         **kwargs: Any,
     ) -> None: ...

@@ -291,7 +291,7 @@ def test_describe_cluster_response_roundtrip(version):
                 is_fenced=True if version >= 2 else False,
             )
         ],
-        cluster_authorized_operations={2},
+        authorized_operations={2},
     )
     encoded = response.encode(version=version)
     decoded = DescribeClusterResponse.decode(encoded, version=version)

@@ -26,6 +26,7 @@ import struct
 import time
 
 import kafka.errors as Errors
+from kafka.protocol.admin import DescribeClusterRequest, DescribeClusterResponse
 from kafka.protocol.broker_version_data import BrokerVersionData
 from kafka.protocol.metadata import ApiVersionsRequest, ApiVersionsResponse, MetadataRequest, MetadataResponse
 
@@ -248,6 +249,22 @@ class MockBroker:
             controller_id=self.node_id,
             topics=topics or [],
         )
+        try:
+            DCBroker = DescribeClusterResponse.DescribeClusterBroker
+            self._describe_cluster_response = DescribeClusterResponse(
+                version=self._broker_version_data.api_version(DescribeClusterRequest),
+                throttle_time_ms=0,
+                error_code=0,
+                error_message=None,
+                endpoint_type=1,
+                cluster_id='mock-cluster',
+                controller_id=self.node_id,
+                brokers=[DCBroker(broker_id=b.node_id, host=b.host, port=b.port, rack=b.rack, is_fenced=False)
+                         for b in brokers],
+                authorized_operations=set(),
+            )
+        except Errors.IncompatibleBrokerVersion:
+            self._describe_cluster_response = None
 
     def respond(self, request_class, response):
         """Enqueue a scripted response for the next request of the given type.
@@ -360,6 +377,10 @@ class MockBroker:
         if api_key == MetadataRequest.API_KEY:
             return self._encode_response(
                 self._metadata_response, api_version, correlation_id)
+
+        if api_key == DescribeClusterRequest.API_KEY and self._describe_cluster_response is not None:
+            return self._encode_response(
+                self._describe_cluster_response, api_version, correlation_id)
 
         raise ValueError(
             'MockBroker: no handler for api_key=%d version=%d '
