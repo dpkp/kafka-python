@@ -1,9 +1,9 @@
-import abc
+from abc import ABC, abstractmethod
 
 
-class AbstractMeasurable(metaclass=abc.ABCMeta):
+class AbstractMeasurable(ABC):
     """A measurable quantity that can be registered as a metric"""
-    @abc.abstractmethod
+    @abstractmethod
     def measure(self, config, now):
         """
         Measure this quantity and return the result
@@ -16,7 +16,7 @@ class AbstractMeasurable(metaclass=abc.ABCMeta):
         Returns:
             The measured value
         """
-        raise NotImplementedError
+        pass
 
 
 class AnonMeasurable(AbstractMeasurable):

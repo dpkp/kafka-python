@@ -1,4 +1,4 @@
-import abc 
+from abc import ABC, abstractmethod, abstractproperty
 import collections
 from enum import IntEnum
 import heapq
@@ -812,7 +812,7 @@ class TransactionalRequestResult:
         return self._error
 
 
-class TxnRequestHandler(metaclass=abc.ABCMeta):
+class TxnRequestHandler(ABC):
     def __init__(self, transaction_manager, result=None):
         self.transaction_manager = transaction_manager
         self.retry_backoff_ms = transaction_manager.retry_backoff_ms
@@ -890,11 +890,11 @@ class TxnRequestHandler(metaclass=abc.ABCMeta):
     def is_retry(self):
         return self._is_retry
 
-    @abc.abstractmethod
+    @abstractmethod
     def handle_response(self, response):
         pass
 
-    @abc.abstractproperty
+    @abstractproperty
     def priority(self):
         pass
 

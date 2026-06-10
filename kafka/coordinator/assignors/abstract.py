@@ -1,4 +1,4 @@
-import abc
+from abc import ABC, abstractmethod, abstractproperty
 from enum import IntEnum
 
 from kafka.protocol.consumer.metadata import (
@@ -25,13 +25,13 @@ class RebalanceProtocol(IntEnum):
     COOPERATIVE = 1
 
 
-class AbstractPartitionAssignor(metaclass=abc.ABCMeta):
+class AbstractPartitionAssignor(ABC):
     """
     Abstract assignor implementation which does some common grunt work (in particular collecting
     partition counts which are always needed in assignors).
     """
 
-    @abc.abstractproperty
+    @abstractproperty
     def name(self):
         """.name should be a string identifying the assignor"""
         pass
@@ -48,7 +48,7 @@ class AbstractPartitionAssignor(metaclass=abc.ABCMeta):
         """
         return [RebalanceProtocol.EAGER]
 
-    @abc.abstractmethod
+    @abstractmethod
     def assign(self, cluster, members):
         """Perform group assignment given cluster metadata and member subscriptions
 
@@ -64,7 +64,7 @@ class AbstractPartitionAssignor(metaclass=abc.ABCMeta):
         """
         pass
 
-    @abc.abstractmethod
+    @abstractmethod
     def metadata(self, topics):
         """Generate ProtocolMetadata to be submitted via JoinGroupRequest.
 
@@ -76,7 +76,7 @@ class AbstractPartitionAssignor(metaclass=abc.ABCMeta):
         """
         pass
 
-    @abc.abstractmethod
+    @abstractmethod
     def on_assignment(self, assignment, generation):
         """Callback that runs on each assignment.
 

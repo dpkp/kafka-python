@@ -251,6 +251,7 @@ class KafkaProducer:
             same key are assigned to the same partition.
             When a key is None, the message is delivered to a random partition
             (filtered to partitions with available leaders only, if possible).
+            Default: DefaultPartitioner().
         connections_max_idle_ms: Close idle connections after the number of
             milliseconds specified by this config. The broker closes idle
             connections after connections.max.idle.ms, so this avoids hitting

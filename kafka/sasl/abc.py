@@ -1,24 +1,24 @@
-import abc
+from abc import ABC, abstractmethod
 
 
-class SaslMechanism(metaclass=abc.ABCMeta):
-    @abc.abstractmethod
+class SaslMechanism(ABC):
+    @abstractmethod
     def __init__(self, **config):
         pass
 
-    @abc.abstractmethod
+    @abstractmethod
     def auth_bytes(self):
         pass
 
-    @abc.abstractmethod
+    @abstractmethod
     def receive(self, auth_bytes):
         pass
 
-    @abc.abstractmethod
+    @abstractmethod
     def is_done(self):
         pass
 
-    @abc.abstractmethod
+    @abstractmethod
     def is_authenticated(self):
         pass
 
