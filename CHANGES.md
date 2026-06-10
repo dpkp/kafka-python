@@ -48,6 +48,7 @@ Complete refactor of the networking layer using a bespoke event-loop supporting 
 * kafka.net.manager: Add call_soon(coro) and run(coro) for sync/async bridge (#2862)
 * kafka.net.manager: Bootstrap is sync/blocking (#2919)
 * connection: short-circuit send/recv when closed (#2967)
+* Clamp broker_version to user-supplied api_version (#3052)
 
 ### Transports and Proxies
 * Default SSLContext -> PROTOCOL_TLS_CLIENT; minimum version TLS 1.2 (#2807)
@@ -78,12 +79,12 @@ Defensive checks throughout the kafka.net event loop and transport stack: improv
 * kafka.net.selector: Use threading.Lock() to detect concurrent access to poll() (#2945)
 * kafka.net.selector: Track pending tasks to prevent gc before completion (#2950)
 * kafka.net.selector: Support reschedule(when, task); idempotent unschedule (#2939)
-* kafka.net: Raise RuntimeError on concurrent access to net.poll or wakeup() (#2938)
-* kafka.net: Raise RuntimeError on run/call_at/call_soon_threadsafe after closed (#2971)
-* kafka.net: Catch unhandled exceptions in IO thread (#2970)
-* kafka.net: Improve error handling on sock read/write (#2995)
+* kafka.net.selector: Raise RuntimeError on concurrent access to net.poll or wakeup() (#2938)
+* kafka.net.selector: Raise RuntimeError on run/call_at/call_soon_threadsafe after closed (#2971)
+* kafka.net.selector: Catch unhandled exceptions in IO thread (#2970)
+* kafka.net.selector: Improve error handling on sock read/write (#2995)
+* kafka.net.selector: Check locks in `_poll_once`; add net.drain() (#2949)
 * kafka.net.transport: Close connection on socket write error (#2973)
-* kafka.net: Check locks in _poll_once; add net.drain() (#2949)
 
 ## Protocol
 
@@ -238,13 +239,13 @@ The admin client interface remains sync but wraps a fully-async internal api (do
 * Admin: convert request paths to async; cache coordinator_ids (#2851, #2862, #2863, #2866, #2867, #2870, #2871, #3050)
 * Admin: refactor `_send_request_to_controller` error handling (#2751)
 
-### KIP Support
+### Batch Protocol Support
 * KIP-699: FindCoordinatorRequest v4 -- multi-group support (#3025)
 * KIP-709: OffsetFetch v8 -- use batch interface when available (#3024)
 
 ### New Cluster and Quorum APIs
 * Admin: describe_metadata_quorum (#2914)
-* Admin: cluster features describe/update (#2908)
+* Admin: cluster features describe/update (#2908, #3053)
 * Admin: cluster get_broker_version_data / api_versions (#2903)
 
 ### Configs
