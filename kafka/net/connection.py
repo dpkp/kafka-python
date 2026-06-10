@@ -267,7 +267,11 @@ class KafkaConnection:
             self.transport.set_protocol(self)
         self.initializing = True
         self.transport.resume_reading()
-        log_prefix = 'node=%s[%s:%s]' % (self.node_id, *self.transport.getPeer())
+        try:
+            log_prefix = 'node=%s[%s:%s]' % (self.node_id, *self.transport.getPeer()[0:2])
+        except Exception:
+            log.exception('Failed to build connection log_prefix')
+            log_prefix = ''
         self.parser = KafkaProtocol(
             client_id=self.config['client_id'],
             receive_message_max_bytes=self.config['receive_message_max_bytes'],
