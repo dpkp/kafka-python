@@ -18,6 +18,12 @@ Default Configuration Changes
 * KIP-679: Update Producer defaults -- enable_idempotence=True, acks='all' (#3013)
 * KIP-735: Increase default consumer session_timeout_ms from 10s to 45s (#3030)
 * Rename api_version_auto_timeout_ms -> bootstrap_timeout_ms; default 30s (#3028)
+* Producer: Remove deprecation warning for buffer_memory config (now raises) (#3047)
+
+Abstract Interface Changes
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+* Serializer/Deserializer: Pass headers to serialize/deserialize (#3046)
+* Partitioner: pass both key/value, serialized and unserialized, to partition() (#3045)
 
 Admin API Changes
 ^^^^^^^^^^^^^^^^^
@@ -35,6 +41,7 @@ Error Hierarchy
 * Make IncompatibleBrokerVersion a subclass of UnsupportedVersionError (#2924)
 * Eliminate NoBrokersAvailableError (#2942)
 * KafkaProtocolError is not retriable (#2941)
+* Prefer raised Exceptions to assert / AssertionError (#3042)
 
 Old Networking Stack Removal
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -55,6 +62,7 @@ Async IO Substrate
 * kafka.net.manager: Add call_soon(coro) and run(coro) for sync/async bridge (#2862)
 * kafka.net.manager: Bootstrap is sync/blocking (#2919)
 * connection: short-circuit send/recv when closed (#2967)
+* Clamp broker_version to user-supplied api_version (#3052)
 
 Transports and Proxies
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -93,12 +101,12 @@ Defensive checks throughout the kafka.net event loop and transport stack: improv
 * kafka.net.selector: Use threading.Lock() to detect concurrent access to poll() (#2945)
 * kafka.net.selector: Track pending tasks to prevent gc before completion (#2950)
 * kafka.net.selector: Support reschedule(when, task); idempotent unschedule (#2939)
-* kafka.net: Raise RuntimeError on concurrent access to net.poll or wakeup() (#2938)
-* kafka.net: Raise RuntimeError on run/call_at/call_soon_threadsafe after closed (#2971)
-* kafka.net: Catch unhandled exceptions in IO thread (#2970)
-* kafka.net: Improve error handling on sock read/write (#2995)
+* kafka.net.selector: Raise RuntimeError on concurrent access to net.poll or wakeup() (#2938)
+* kafka.net.selector: Raise RuntimeError on run/call_at/call_soon_threadsafe after closed (#2971)
+* kafka.net.selector: Catch unhandled exceptions in IO thread (#2970)
+* kafka.net.selector: Improve error handling on sock read/write (#2995)
+* kafka.net.selector: Check locks in _poll_once; add net.drain() (#2949)
 * kafka.net.transport: Close connection on socket write error (#2973)
-* kafka.net: Check locks in _poll_once; add net.drain() (#2949)
 
 Protocol
 --------
@@ -109,7 +117,7 @@ Dynamic Protocol Classes
 ^^^^^^^^^^^^^^^^^^^^^^^^
 Protocol classes are now generated from the upstream Apache Kafka JSON schemas.
 
-* Dynamic protocol classes using upstream json schemas (#2727, #2745, #2779, #2782, #2787, #2810)
+* Dynamic protocol classes using upstream json schemas (#2727, #2745, #2779, #2782, #2787, #2810, #3037)
 * Add .pyi type annotation stubs for generated protocol classes (#2784)
 * Migrate all internal usage to new protocol classes (#2764, #2765, #2766, #2767, #2768, #2772)
 * Refactor treatment of versioned ApiMessage classes (#2739)
@@ -145,6 +153,7 @@ Helpers and Debugging
 * Store in-flight request headers only for protocol parser (#2723)
 * Debug log send/recv bytes from protocol parser (#2707)
 * Adjust protocol debug logging; add KAFKA_PYTHON_PROTOCOL_DEBUG_LOG (#2719)
+* CoordinatorType enum (GROUP/TRANSACTION/SHARE) (#3049)
 
 Broker Version Check
 --------------------
@@ -188,6 +197,7 @@ All consumer network I/O now flows through the shared IO thread; ``poll()`` no l
 * Consumer: use background thread for all network io; drop HeartbeatThread (#2965)
 * Consumer: send all requests from net io thread (#2980)
 * Consumer: simplify poll() with fetcher.fetch_records (#2960)
+* Consumer: sleep in poll() if timeout, no records, and no fetchable partitions (#3039)
 * Consumer: drop poll loop optimizations for pending offset resets and rejoins (#2959)
 * Consumer: _update_fetch_positions -> _refresh_committed_offsets; dont poll in position() (#2958)
 * Consumer: convert fetcher reset_offsets/send_list_offsets_requests to async def
@@ -276,18 +286,18 @@ Refactor and Async Migration
 The admin client interface remains sync but wraps a fully-async internal api (does not support asyncio yet). Adds cached coordinator lookups and a mixin structure to separate logical resource groups.
 
 * Admin: split into functional mixin classes (#2873, #2877, #2882)
-* Admin: convert request paths to async; cache coordinator_ids (#2851, #2862, #2863, #2866, #2867, #2870, #2871)
+* Admin: convert request paths to async; cache coordinator_ids (#2851, #2862, #2863, #2866, #2867, #2870, #2871, #3050)
 * Admin: refactor `_send_request_to_controller` error handling (#2751)
 
-KIP Support
-^^^^^^^^^^^
+Batch Protocol Support
+^^^^^^^^^^^^^^^^^^^^^^
 * KIP-699: FindCoordinatorRequest v4 -- multi-group support (#3025)
 * KIP-709: OffsetFetch v8 -- use batch interface when available (#3024)
 
 New Cluster and Quorum APIs
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 * Admin: describe_metadata_quorum (#2914)
-* Admin: cluster features describe/update (#2908)
+* Admin: cluster features describe/update (#2908, #3053)
 * Admin: cluster get_broker_version_data / api_versions (#2903)
 
 Configs
@@ -311,6 +321,10 @@ Groups
 * Admin: support group state/type filters for list_groups (#2910)
 * Admin: add extended group reset options (#2911)
 * Admin: Dont return MemberToRemove as key in remove_group_members dict result (#2893)
+
+Transactions
+^^^^^^^^^^^^
+* Admin: implement KIP-664 hanging-transaction tooling (#3051)
 
 Log Dirs
 ^^^^^^^^
@@ -344,6 +358,10 @@ Admin CLI
 * admin cli: catch AttributeError and print_help() (#2880)
 * admin cli: fix describe_configs (#2875)
 
+Consumer CLI
+^^^^^^^^^^^^
+* consumer cli does not require group_id (#3044)
+
 Compatibility / Misc
 --------------------
 
@@ -352,6 +370,8 @@ Small quality-of-life additions to the public API surface.
 * Support context manager interface for consumer/producer/admin (#2969)
 * Make IncompatibleBrokerVersion a subclass of UnsupportedVersionError (#2924)
 * Add OffsetSpec / IsolationLevel to kafka imports (#2898)
+* Errors: subclasses for RetriableError and InvalidMetadataError (#3041)
+* Helper classes: DefaultSerializer and JsonSerializer (#3046)
 
 Fixes
 -----

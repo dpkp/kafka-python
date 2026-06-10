@@ -1,19 +1,15 @@
-Kafka Python client
-------------------------
+kafka-python
+############
 
-.. image:: https://img.shields.io/badge/kafka-4.3--0.8-brightgreen.svg
-    :target: https://kafka-python.readthedocs.io/en/master/compatibility.html
-.. image:: https://img.shields.io/pypi/pyversions/kafka-python.svg
-    :target: https://pypi.python.org/pypi/kafka-python
-.. image:: https://img.shields.io/badge/license-Apache%202-blue.svg
-    :target: https://github.com/dpkp/kafka-python/blob/master/LICENSE
-.. image:: https://img.shields.io/pypi/dw/kafka-python.svg
-    :target: https://pypistats.org/packages/kafka-python
 .. image:: https://img.shields.io/pypi/v/kafka-python.svg
     :target: https://pypi.org/project/kafka-python
-.. image:: https://img.shields.io/pypi/implementation/kafka-python
-    :target: https://github.com/dpkp/kafka-python/blob/master/pyproject.toml
+.. image:: https://img.shields.io/badge/kafka-4.3--0.8-brightgreen.svg
+    :target: https://kafka-python.readthedocs.io/en/master/compatibility.html
 
+.. image:: https://img.shields.io/badge/license-Apache%202-blue.svg
+    :target: https://github.com/dpkp/kafka-python/blob/master/LICENSE
+.. image:: https://img.shields.io/pypi/pyversions/kafka-python.svg
+    :target: https://pypi.python.org/pypi/kafka-python
 
 
 kafka-python is a pure-python client library for Apache Kafka, the distributed
@@ -23,9 +19,9 @@ to manage.
 
 kafka-python can also be used as a simple alternative to the apache kafka admin
 scripts, which require an installed/compatible jvm. A simple CLI interface for
-admin commands is provided as `kafka-python admin` / `python -m kafka.admin`.
+admin commands is provided as ``kafka-python admin`` / ``python -m kafka.admin``.
 
-Users looking to add more raw throughput can pip install `crc32c` as
+Users looking to add more raw throughput can ``pip install crc32c`` as
 an optional dependency, offloading one of the most CPU intensive subsystems
 to an optimized C library.
 
@@ -33,11 +29,18 @@ to an optimized C library.
 .. code-block:: bash
 
     pip install kafka-python
+
     # callable as module or as cli-script
     kafka-python admin -b localhost:9092 cluster describe
+
+    # Create a topic with the admin cli
     python -m kafka.admin -b localhost:9092 topics create -t foo-topic
+
+    # Produce messages
     echo "foo message" | python -m kafka.producer -b localhost:9092 -t foo-topic
-    python -m kafka.consumer -b localhost:9092 -C auto_offset_reset=earliest -g foo-group -t foo-topic
+
+    # Consume messages
+    python -m kafka.consumer -b localhost:9092 -C auto_offset_reset=earliest -C consumer_timeout_ms=1000 -g foo-group -t foo-topic
 
 
 What's New in 3.0
