@@ -1,4 +1,4 @@
-import abc
+from abc import ABC, abstractproperty
 from io import BytesIO
 
 from .abstract import AbstractType
@@ -7,9 +7,9 @@ from .types import Schema, TaggedFields
 from kafka.util import WeakMethod
 
 
-class Struct(metaclass=abc.ABCMeta):
+class Struct(ABC):
 
-    @abc.abstractproperty
+    @abstractproperty
     def SCHEMA(self):
         """An instance of Schema() representing the structure"""
         pass

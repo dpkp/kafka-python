@@ -1,12 +1,12 @@
-import abc
+from abc import ABC, abstractmethod
 
 
-class AbstractStat(metaclass=abc.ABCMeta):
+class AbstractStat(ABC):
     """
     An AbstractStat is a quantity such as average, max, etc that is computed
     off the stream of updates to a sensor
     """
-    @abc.abstractmethod
+    @abstractmethod
     def record(self, config, value, time_ms):
         """
         Record the given value
@@ -16,4 +16,4 @@ class AbstractStat(metaclass=abc.ABCMeta):
             value (float): The value to record
             timeMs (int): The POSIX time in milliseconds this value occurred
         """
-        raise NotImplementedError
+        pass

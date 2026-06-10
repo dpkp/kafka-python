@@ -1,4 +1,4 @@
-import abc
+from abc import ABC, abstractmethod
 import copy
 import logging
 import threading
@@ -70,7 +70,7 @@ class UnjoinedGroupException(Errors.RetriableError):
     pass
 
 
-class BaseCoordinator(metaclass=abc.ABCMeta):
+class BaseCoordinator(ABC):
     """
     BaseCoordinator implements group management for a single group member
     by interacting with a designated Kafka broker (the coordinator). Group
@@ -225,7 +225,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
     def group_instance_id(self):
         return self.config['group_instance_id']
 
-    @abc.abstractmethod
+    @abstractmethod
     def protocol_type(self):
         """
         Unique identifier for the class of supported protocols
@@ -236,7 +236,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         """
         pass
 
-    @abc.abstractmethod
+    @abstractmethod
     def group_protocols(self):
         """Return the list of supported group protocols and metadata.
 
@@ -270,7 +270,7 @@ class BaseCoordinator(metaclass=abc.ABCMeta):
         """
         pass
 
-    @abc.abstractmethod
+    @abstractmethod
     def _perform_assignment(self, leader_id, protocol, members):
         """Perform assignment for the group.
 

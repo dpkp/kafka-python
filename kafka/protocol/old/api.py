@@ -1,4 +1,4 @@
-import abc
+from abc import ABC, abstractmethod, abstractproperty
 from io import BytesIO
 import weakref
 
@@ -61,17 +61,17 @@ class ResponseHeaderV2(Struct):
     )
 
 
-class RequestResponse(Struct, metaclass=abc.ABCMeta):
+class RequestResponse(Struct, ABC):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._header = None
 
-    @abc.abstractproperty
+    @abstractproperty
     def API_KEY(self):
         """Integer identifier for api request"""
         pass
 
-    @abc.abstractproperty
+    @abstractproperty
     def API_VERSION(self):
         """Integer of api request version"""
         pass
@@ -80,7 +80,7 @@ class RequestResponse(Struct, metaclass=abc.ABCMeta):
         return _to_object(self.SCHEMA, self)
 
     @classmethod
-    @abc.abstractmethod
+    @abstractmethod
     def is_request(cls):
         pass
 
@@ -114,7 +114,7 @@ class RequestResponse(Struct, metaclass=abc.ABCMeta):
         return b''.join(bits)
 
     @classmethod
-    @abc.abstractmethod
+    @abstractmethod
     def header_class(cls):
         pass
 

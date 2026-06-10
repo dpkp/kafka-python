@@ -1,4 +1,4 @@
-import abc
+from abc import ABC, abstractmethod
 from collections import OrderedDict
 from collections.abc import Sequence
 from enum import IntEnum
@@ -731,7 +731,7 @@ class TopicPartitionState:
             self._position = validated_position
 
 
-class ConsumerRebalanceListener(metaclass=abc.ABCMeta):
+class ConsumerRebalanceListener(ABC):
     """
     A callback interface that the user can implement to trigger custom actions
     when the set of partitions assigned to the consumer changes.
@@ -779,7 +779,7 @@ class ConsumerRebalanceListener(metaclass=abc.ABCMeta):
     taking over that partition has their on_partitions_assigned() callback
     called to load the state.
     """
-    @abc.abstractmethod
+    @abstractmethod
     def on_partitions_revoked(self, revoked):
         """
         A callback method the user can implement to provide handling of offset
@@ -801,7 +801,7 @@ class ConsumerRebalanceListener(metaclass=abc.ABCMeta):
         """
         pass
 
-    @abc.abstractmethod
+    @abstractmethod
     def on_partitions_assigned(self, assigned):
         """
         A callback method the user can implement to provide handling of
@@ -840,7 +840,7 @@ class ConsumerRebalanceListener(metaclass=abc.ABCMeta):
         return self.on_partitions_revoked(lost)
 
 
-class AsyncConsumerRebalanceListener(metaclass=abc.ABCMeta):
+class AsyncConsumerRebalanceListener(ABC):
     """
     Async variant of :class:`ConsumerRebalanceListener`.
 
@@ -856,7 +856,7 @@ class AsyncConsumerRebalanceListener(metaclass=abc.ABCMeta):
     invokes ``on_partitions_assigned``. Both methods must be defined as
     ``async def``; otherwise use :class:`ConsumerRebalanceListener`.
     """
-    @abc.abstractmethod
+    @abstractmethod
     async def on_partitions_revoked(self, revoked):
         """Async-callback for the start of a rebalance operation.
 
@@ -870,7 +870,7 @@ class AsyncConsumerRebalanceListener(metaclass=abc.ABCMeta):
         """
         pass
 
-    @abc.abstractmethod
+    @abstractmethod
     async def on_partitions_assigned(self, assigned):
         """Async-callback for the completion of a partition re-assignment.
 
