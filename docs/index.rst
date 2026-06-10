@@ -263,4 +263,5 @@ See https://docs.python.org/3/howto/logging.html for overview / howto.
    compatibility
    support
    license
+   Upgrading to 3.0 <upgrade_to_3_0>
    changelog
