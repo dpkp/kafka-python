@@ -1,7 +1,7 @@
 from unittest import mock
 
-from kafka.sasl import get_sasl_mechanism
-import kafka.sasl.gssapi
+from kafka.net.sasl import get_sasl_mechanism
+import kafka.net.sasl.gssapi
 
 
 def test_gssapi():
@@ -18,10 +18,10 @@ def test_gssapi():
         return wrapped
     client_ctx.unwrap.side_effect = mocked_message_wrapper
     client_ctx.wrap.side_effect = mocked_message_wrapper
-    kafka.sasl.gssapi.gssapi = mock.Mock()
-    kafka.sasl.gssapi.gssapi.SecurityContext.return_value = client_ctx
+    kafka.net.sasl.gssapi.gssapi = mock.Mock()
+    kafka.net.sasl.gssapi.gssapi.SecurityContext.return_value = client_ctx
     gssapi = get_sasl_mechanism('GSSAPI')(**config)
-    assert isinstance(gssapi, kafka.sasl.gssapi.SaslMechanismGSSAPI)
+    assert isinstance(gssapi, kafka.net.sasl.gssapi.SaslMechanismGSSAPI)
     client_ctx.step.assert_called_with(None)
 
     while not gssapi.is_done():

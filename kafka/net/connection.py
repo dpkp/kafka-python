@@ -8,11 +8,11 @@ import time
 import kafka.errors as Errors
 from kafka.future import Future
 from kafka.net.metrics import KafkaConnectionMetrics
+from kafka.net.sasl import get_sasl_mechanism
 from kafka.protocol.metadata import ApiVersionsRequest
 from kafka.protocol.sasl import SaslAuthenticateRequest, SaslHandshakeRequest, SaslBytesRequest
 from kafka.protocol.broker_version_data import BrokerVersionData
 from kafka.protocol.parser import KafkaProtocol
-from kafka.sasl import get_sasl_mechanism
 from kafka.version import __version__
 
 

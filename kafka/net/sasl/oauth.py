@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
 import logging
 
+from .abc import SaslMechanism
 from kafka.errors import KafkaConfigurationError
-from kafka.sasl.abc import SaslMechanism
 
 
 log = logging.getLogger(__name__)
@@ -14,7 +14,7 @@ class SaslMechanismOAuth(SaslMechanism):
         if 'sasl_oauth_token_provider' not in config:
             raise KafkaConfigurationError('sasl_oauth_token_provider required for OAUTHBEARER sasl')
         if not isinstance(config['sasl_oauth_token_provider'], AbstractTokenProvider):
-            raise KafkaConfigurationError('sasl_oauth_token_provider must implement kafka.sasl.oauth.AbstractTokenProvider')
+            raise KafkaConfigurationError('sasl_oauth_token_provider must implement kafka.net.sasl.oauth.AbstractTokenProvider')
         self.token_provider = config['sasl_oauth_token_provider']
         self._error = None
         self._is_done = False
