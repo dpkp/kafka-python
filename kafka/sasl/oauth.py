@@ -1,4 +1,4 @@
-import abc
+from abc import ABC, abstractmethod
 import logging
 
 from kafka.errors import KafkaConfigurationError
@@ -58,8 +58,6 @@ class SaslMechanismOAuth(SaslMechanism):
             raise RuntimeError('Not authenticated yet!')
         return 'Authenticated via SASL / OAuth'
 
-# This statement is compatible with both Python 2.7 & 3+
-ABC = abc.ABCMeta('ABC', (object,), {'__slots__': ()})
 
 class AbstractTokenProvider(ABC):
     """
@@ -78,7 +76,7 @@ class AbstractTokenProvider(ABC):
     def __init__(self, **config):
         pass
 
-    @abc.abstractmethod
+    @abstractmethod
     def token(self):
         """
         Returns a (str) ID/Access Token to be sent to the Kafka
