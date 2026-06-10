@@ -66,7 +66,7 @@ class ClusterAdminMixin:
             response = await self._manager.send(request)
             error_type = Errors.for_code(response.error_code)
             if error_type is not Errors.NoError:
-                raise error_type(response.error_message or '')
+                raise error_type(response.error_message)
             metadata = response.to_dict()
             metadata.pop('error_code')
             metadata.pop('error_message')
