@@ -59,7 +59,6 @@ class ClusterAdminMixin:
 
     async def _describe_cluster(self):
         try:
-            self._manager.broker_version_data.api_version(DescribeClusterRequest)
             request = DescribeClusterRequest(
                 include_cluster_authorized_operations=True,
                 include_fenced_brokers=True,
@@ -71,6 +70,7 @@ class ClusterAdminMixin:
             metadata = response.to_dict()
             metadata.pop('error_code')
             metadata.pop('error_message')
+            metadata.pop('endpoint_type')
             metadata.pop('throttle_time_ms', None)
             self._process_acl_operations(metadata)
             return metadata
