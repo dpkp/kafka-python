@@ -4,19 +4,17 @@ Tests
 .. image:: https://img.shields.io/github/actions/workflow/status/dpkp/kafka-python/python-package.yml
     :target: https://github.com/dpkp/kafka-python/actions/workflows/python-package.yml
 
-The test suite is run via pytest.
-
-Linting is run via pylint.
-
-Test coverage details are currently published as an html build artifact.
+Testing uses pytest and pylint.
 
 The test suite includes unit tests that mock network interfaces, mock broker tests
 that simulate request/receive network messaging, as well as integration tests that
 setup and teardown kafka broker (and zookeeper where required) fixtures.
 
+Test coverage details are currently published as an html build artifact.
+
 
 Unit tests
-------------------
+----------
 
 To run the tests locally, install test dependencies:
 
