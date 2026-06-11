@@ -219,7 +219,8 @@ KafkaProducer
 
 
 ClusterMetadata
-=============
+===============
+
 .. code:: python
 
     from kafka.cluster import ClusterMetadata
@@ -240,8 +241,10 @@ ClusterMetadata
 
 
 KafkaAdminClient
-=============
+================
+
 .. code:: python
+
     from kafka import KafkaAdminClient
     from kafka.admin import NewTopic
 

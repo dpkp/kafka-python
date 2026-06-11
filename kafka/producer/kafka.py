@@ -346,8 +346,9 @@ class KafkaProducer:
             timeout (see bootstrap_timeout_ms below).
             Different versions enable different functionality.
 
-            Examples:
-                (4, 2) most recent broker release, enable all supported features
+            Examples::
+
+                (4, 3) most recent broker release, enable all supported features
                 (0, 11) enables message format v2 (internal)
                 (0, 10, 0) enables sasl authentication and message format v1
                 (0, 9) enables full group coordination features with automatic
