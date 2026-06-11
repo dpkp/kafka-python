@@ -37,20 +37,6 @@ class KafkaAdminClient(
 ):
     """A class for administering the Kafka cluster.
 
-    Warning:
-        This is an unstable interface that was recently added and is subject to
-        change without warning. In particular, many methods currently return
-        raw protocol tuples. In future releases, we plan to make these into
-        nicer, more pythonic objects. Unfortunately, this will likely break
-        those interfaces.
-
-    The KafkaAdminClient class will negotiate for the latest version of each message
-    protocol format supported by both the kafka-python client library and the
-    Kafka broker. Usage of optional fields from protocol versions that are not
-    supported by the broker will result in IncompatibleBrokerVersion exceptions.
-
-    Use of this class requires a minimum broker version >= 0.10.0.0.
-
     Keyword Arguments:
         bootstrap_servers: 'host[:port]' string (or list of 'host[:port]'
             strings) that the consumer should contact to bootstrap initial
@@ -137,6 +123,7 @@ class KafkaAdminClient(
             Examples::
 
                 (4, 3) most recent broker release, enable all supported features
+                (2, 7) support SCRAM user credential apis
                 (0, 11) enables message format v2 (internal)
                 (0, 10, 0) enables sasl authentication and message format v1
                 (0, 9) enables full group coordination features with automatic
