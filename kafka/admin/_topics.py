@@ -99,7 +99,7 @@ class TopicAdminMixin:
 
                     {topic_name: {num_partitions: int (default -1),
                                   replication_factor: int (default -1),
-                                  assignments: {partition: [broker_ids]},
+                                  assignments: {partition_id: [broker_ids]},
                                   configs: {key: value}}}
 
                 List of NewTopic objects is deprecated.
