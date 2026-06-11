@@ -1,11 +1,10 @@
 Install
 #######
 
-Install with your favorite package manager
+Package Install
+***************
 
-Latest Release
-**************
-Pip:
+Releases are published to pypi and can be installed with pip (or uv, etc)
 
 .. code:: bash
 
@@ -14,8 +13,7 @@ Pip:
 Releases are also listed at https://github.com/dpkp/kafka-python/releases
 
 
-Bleeding-Edge
-*************
+For latest bleed-edge code, install from github:
 
 .. code:: bash
 
