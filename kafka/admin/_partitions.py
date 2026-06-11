@@ -510,7 +510,7 @@ class PartitionAdminMixin:
                 )
         return results
 
-    async def _async_list_partition_offsets(self, topic_partition_specs, isolation_level='read_uncommitted', timeout_ms=None):
+    async def _async_list_partition_offsets(self, topic_partition_specs, isolation_level=IsolationLevel.READ_UNCOMMITTED, timeout_ms=None):
         isolation_level = IsolationLevel.build_from(isolation_level)
         timer = Timer(self._validate_timeout(timeout_ms))
         backoff_secs = self.config['retry_backoff_ms'] / 1000
@@ -539,7 +539,7 @@ class PartitionAdminMixin:
                 await self._net.sleep(min(backoff_secs, max(0.0, timer.timeout_secs or 0.0)))
         return results
 
-    def list_partition_offsets(self, topic_partition_specs, isolation_level='read_uncommitted', timeout_ms=None):
+    def list_partition_offsets(self, topic_partition_specs, isolation_level=IsolationLevel.READ_UNCOMMITTED, timeout_ms=None):
         """Look up offsets for the given partitions by spec.
 
         Partitions are routed to their respective leader brokers via cluster
@@ -554,9 +554,8 @@ class PartitionAdminMixin:
                 wire-level sentinel).
 
         Keyword Arguments:
-            isolation_level (str, optional): One of ``'read_uncommitted'``
-                (default) or ``'read_committed'``. ``read_committed`` requires
-                broker support for ListOffsets v2+.
+            isolation_level (IsolationLevel, optional): Requires broker support
+                for ListOffsets v2+. Default: IsolationLevel.READ_UNCOMMITTED.
             timeout_ms (int, optional): Maximum time to spend retrying
                 NotLeaderForPartitionError. Default: ``request_timeout_ms``.
 
