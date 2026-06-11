@@ -80,6 +80,12 @@ working with the lower-level protocol layer).
   ``(offset, metadata, leader_epoch)``.
 - :class:`~kafka.OffsetSpec` - enum for partition offset queries.
 - :class:`~kafka.IsolationLevel` - enum for transactional isolation.
+- :class:`~kafka.Serializer` - base class for serialization / deserialization
+  of key and value bytes. Includes helper classes `~kafka.DefaultSerializer`
+  and `~kafka.JsonSerializer`.
+- :class:`~kafka.ConsumerRebalanceListener` - base class for consumer
+  class to receive join/rebalance group hooks. Also includes async
+  interface `~kafka.AsyncConsumerRebalanceListener`.
 
 .. toctree::
    :maxdepth: 1
@@ -90,3 +96,6 @@ working with the lower-level protocol layer).
    OffsetAndMetadata <misc/OffsetAndMetadata>
    OffsetSpec <misc/OffsetSpec>
    IsolationLevel <misc/IsolationLevel>
+   Serializer <misc/Serializer>
+   ConsumerRebalanceListener <misc/ConsumerRebalanceListener>
+   Partitioner <misc/Partitioner>
