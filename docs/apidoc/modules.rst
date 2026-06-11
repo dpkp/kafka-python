@@ -12,13 +12,13 @@ kafka
 Application code typically interacts with one of three top-level clients.
 Each owns a background IO thread and a shared async networking layer.
 
-- :class:`~kafka.KafkaConsumer` — high-level, group-aware message consumer.
+- :class:`~kafka.KafkaConsumer` - high-level, group-aware message consumer.
   Iterable, with manual or automatic offset commits, cooperative rebalance,
   pluggable deserializers, and transactional-read isolation.
-- :class:`~kafka.KafkaProducer` — high-level, asynchronous message producer.
+- :class:`~kafka.KafkaProducer` - high-level, asynchronous message producer.
   Batches records into a background sender thread, with optional
   idempotence, transactions, compression, and pluggable serializers.
-- :class:`~kafka.KafkaAdminClient` — admin operations: topic, ACL, config,
+- :class:`~kafka.KafkaAdminClient` - admin operations: topic, ACL, config,
   consumer group, partition, quota, log-directory, and quorum management.
 
 .. toctree::
@@ -34,14 +34,14 @@ kafka.net
 =========
 
 The clients share a single async networking layer (``kafka.net``). These
-classes are exposed for advanced use cases — embedding the connection
+classes are exposed for advanced use cases - embedding the connection
 pool, building a custom client on top of the kafka.net event loop, or
 driving the protocol layer directly from the REPL.
 
-- :mod:`~kafka.net.manager` — connection pool and
+- :mod:`~kafka.net.manager` - connection pool and
   high-level facade over the shared IO event loop. Each top-level client
   owns one.
-- :mod:`~kafka.net.connection` — per-broker async
+- :mod:`~kafka.net.connection` - per-broker async
   connection: state machine, request/response correlation, and SASL
   handshake.
 - :mod:`~kafka.net.transport` - Async socket I/O with write buffering,
@@ -71,12 +71,12 @@ other / misc
 Lightweight data types used throughout the client APIs (and useful when
 working with the lower-level protocol layer).
 
-- :class:`~kafka.cluster.ClusterMetadata` — in-memory cache of brokers,
+- :class:`~kafka.cluster.ClusterMetadata` - in-memory cache of brokers,
   topics, partitions, and the active controller. Refreshes itself on the
   shared IO thread.
-- :class:`~kafka.TopicPartition` — namedtuple identifying a partition as
+- :class:`~kafka.TopicPartition` - namedtuple identifying a partition as
   ``(topic, partition)``.
-- :class:`~kafka.OffsetAndMetadata` — committed-offset record
+- :class:`~kafka.OffsetAndMetadata` - committed-offset record
   ``(offset, metadata, leader_epoch)``.
 - :class:`~kafka.OffsetSpec` - enum for partition offset queries.
 - :class:`~kafka.IsolationLevel` - enum for transactional isolation.
