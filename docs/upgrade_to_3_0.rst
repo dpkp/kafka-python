@@ -8,10 +8,10 @@ matter.
 
 Most applications using the public ``KafkaProducer`` / ``KafkaConsumer`` /
 ``KafkaAdminClient`` APIs at default settings should still work without
-code changes. The exceptions are: pinning a Python 2 interpreter,
-constructing ``KafkaProducer`` with ``buffer_memory=...``, catching
-``NoBrokersAvailableError``, or implementing a custom ``Serializer`` /
-``Deserializer`` / ``Partitioner``.
+code changes. The exceptions are: running Python 2, catching
+``NoBrokersAvailableError``, implementing a custom 'kafka_client',
+or implementing a non-default ``Serializer`` / ``Deserializer``,
+producer ``Partitioner``, or consumer ``AbstractPartitionAssignor``.
 
 A full list of changes is in the :doc:`changelog`. This page covers only
 the user-visible breaking changes and the most useful additions.
@@ -99,14 +99,14 @@ The ``Serializer`` and ``Deserializer`` abstract interfaces now receive
             ...
 
 Old single-argument callables (or two-argument ``(topic, data)``
-serializers) still work — ``KafkaProducer`` / ``KafkaConsumer`` wrap
-them automatically — but emit a ``DeprecationWarning``. Update your
-classes to take ``headers``; pass-through (``ignore headers``) is fine
-if you don't need them.
+serializers) still work - ``KafkaProducer`` / ``KafkaConsumer`` wrap
+them automatically - but emit a ``DeprecationWarning``. Update your
+classes to accept the ``headers`` arg.
 
 Two helper classes are now shipped: ``DefaultSerializer`` (a UTF-8
 serializer/deserializer) and ``JsonSerializer``. Importable from
-``kafka.serializer``.
+``kafka.serializer``. Both serialize/deserialize None<->None to
+maintain expected key partitioning behavior.
 
 
 Partitioner interface
@@ -118,7 +118,7 @@ In 3.0 partitioners are instances of the ``kafka.partitioner.Partitioner``
 ABC with a ``partition(...)`` method that receives the topic, both the
 raw and serialized key / value, and the live ``cluster`` snapshot::
 
-    # old (2.3) — a callable
+    # old (2.3) - a callable
     class MyPartitioner:
         def __call__(self, key, all_partitions, available):
             ...
@@ -137,7 +137,7 @@ Legacy callables that match the old shape still work (with a
 new signature.
 
 The default partitioner is still ``DefaultPartitioner`` (murmur2 hash
-on the serialized key; null keys go to a random available partition) —
+on the serialized key; null keys go to a random available partition) -
 **unchanged** routing behavior for callers using the default.
 
 A **sticky partitioner**
@@ -174,7 +174,7 @@ response classes. If your code accesses fields by attribute
 ``create_topics`` now accepts any of the following:
 
 - a list of topic name strings (uses broker defaults for partitions /
-  replication on broker ≥ 2.4)
+  replication on broker >= 2.4)
 - a dict ``{name: {num_partitions, replication_factor, assignments, configs}}``
 - a list of ``NewTopic`` instances (deprecated)
 
@@ -188,7 +188,8 @@ Group APIs renamed
 The group management APIs were renamed and expanded; consult the
 :doc:`apidoc/KafkaAdminClient` reference for the current method names.
 The most common 2.x names (``describe_consumer_groups``,
-``list_consumer_groups``, ``delete_consumer_groups``) continue to work.
+``list_consumer_groups``, ``delete_consumer_groups``) continue to work,
+but were renamed to ``describe_groups``, ``list_groups``, etc...
 New: ``list_group_offsets``, ``list_group_members``,
 ``reset_group_offsets`` (with extended options),
 ``remove_group_members``.
@@ -200,16 +201,10 @@ Consumer API
 ``partition_assignment_strategy``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-You may now pass assignor *instances* in addition to assignor classes::
-
-    from kafka.coordinator.assignors.sticky.sticky_assignor import StickyPartitionAssignor
-
-    KafkaConsumer(
-        ...,
-        partition_assignment_strategy=[StickyPartitionAssignor()],
-    )
-
-Passing classes still works for backward compatibility.
+Assignor classes passed as ``partition_assignment_strategy`` are now
+always instantiated before use. If you have a custom AbstractPartitionAssignor
+class that uses @classmethod you will need to drop the decorators and update
+to instance method definitions.
 
 Incremental cooperative rebalance
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -245,6 +240,19 @@ Error hierarchy
   available for catching whole categories of errors at once.
 
 
+Broker version checks
+---------------------
+
+kafka-python now relies exclusively on ApiVersionsRequest to determine
+broker verions. For early brokers older than 0.10 you must now pass
+an explicit ``api_version`` in order to connect.
+
+In addition the configuration ``api_version_auto_timeout_ms=`` which
+previously was used to manage timeouts during the broker version check
+process has been removed. It has been replaced with the more general
+``bootstrap_timeout_ms`` (see above).
+
+
 Removed and relocated internals
 -------------------------------
 
@@ -257,6 +265,11 @@ level API), several modules have moved or been removed:
   ``kafka.net.compat.KafkaNetClient`` exposes the legacy
   ``client.poll()`` / ``client.send()`` shape for callers that have
   not migrated.
+- Users that implemented a custom ``kafka_client`` will need to evaluate
+  independently. Due to the migration to ``kafka.net`` most internals
+  no longer directly rely on the ``kafka_client`` interface, instead
+  using the simpler ``kafka.net.manager`` connection manager and
+  ``kafka.net.selector`` IO event loop.
 - ``HeartbeatThread`` is gone; consumer heartbeats now run as an
   ``async def`` coroutine on a shared IO thread.
 - The hand-written protocol classes in ``kafka.protocol.*`` have been
@@ -275,10 +288,10 @@ explicitly if you need to talk to one.
 New conveniences
 ----------------
 
-A few additions worth knowing about:
+A few additions that may be useful:
 
 - **Context managers.** ``KafkaProducer``, ``KafkaConsumer``, and
-  ``KafkaAdminClient`` all support ``with`` syntax::
+  ``KafkaAdminClient`` all now support ``with`` syntax::
 
       with KafkaProducer(bootstrap_servers=...) as producer:
           producer.send('my-topic', b'hello')
@@ -290,7 +303,7 @@ A few additions worth knowing about:
   now importable directly from ``kafka``.
 - **HTTP CONNECT proxy support.** Pass ``proxy_url='http://...'`` to
   any client to tunnel through an HTTP CONNECT proxy
-  (`RFC 7231 §4.3.6 <https://datatracker.ietf.org/doc/html/rfc7231#section-4.3.6>`_).
+  (`RFC 7231 S4.3.6 <https://datatracker.ietf.org/doc/html/rfc7231#section-4.3.6>`_).
 - **TCP keepalive** is now enabled by default on broker sockets.
 - **TLS minimum version** is now TLS 1.2; the default ``SSLContext``
   uses ``PROTOCOL_TLS_CLIENT``.
@@ -301,13 +314,13 @@ Upgrade checklist
 
 In order, the things most likely to bite an upgrading 2.3 application:
 
-1. You're on Python 3.8+.
+1. Make sure you are using Python 3.8+.
 2. If you pass ``buffer_memory=`` to ``KafkaProducer``, remove it.
 3. If you pass ``api_version_auto_timeout_ms=``, rename to
    ``bootstrap_timeout_ms``.
 4. If your application can't tolerate idempotent / ``acks=all``
-   semantics — typically because you explicitly want ``acks=0`` /
-   ``acks=1`` — pass ``enable_idempotence=False`` to ``KafkaProducer``.
+   semantics - typically because you explicitly want ``acks=0`` /
+   ``acks=1`` - pass ``enable_idempotence=False`` to ``KafkaProducer``.
 5. If you catch ``NoBrokersAvailableError``, replace it with
    ``KafkaTimeoutError``.
 6. If you catch ``RuntimeError`` from kafka-python code, switch to
