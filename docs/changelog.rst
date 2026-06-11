@@ -48,6 +48,10 @@ Old Networking Stack Removal
 * Remove kafka.client_async / kafka.conn legacy modules (#2918)
 * Drop version probes for pre-0.10/ApiVersionsRequest brokers
 
+SASL Module Rename
+^^^^^^^^^^^^^^^^^^
+* Rename kafka.sasl -> kafka.net.sasl
+
 Networking (kafka.net)
 ----------------------
 

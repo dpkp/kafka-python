@@ -5,8 +5,8 @@ import logging
 import uuid
 
 
+from .abc import SaslMechanism
 from kafka.errors import KafkaConfigurationError
-from kafka.sasl.abc import SaslMechanism
 
 
 log = logging.getLogger(__name__)

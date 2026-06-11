@@ -9,7 +9,7 @@ except (ImportError, OSError):
     gssapi = None
     GSSError = None
 
-from kafka.sasl.abc import SaslMechanism
+from .abc import SaslMechanism
 
 
 class SaslMechanismGSSAPI(SaslMechanism):

@@ -597,8 +597,8 @@ class TestKafkaConnectionSasl:
         conn._send_request = mock_send_request
 
         captured = {}
-        from kafka.sasl import register_sasl_mechanism
-        from kafka.sasl.plain import SaslMechanismPlain
+        from kafka.net.sasl import register_sasl_mechanism
+        from kafka.net.sasl.plain import SaslMechanismPlain
 
         class RecordingPlain(SaslMechanismPlain):
             def __init__(self, **config):

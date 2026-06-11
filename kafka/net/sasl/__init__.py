@@ -1,11 +1,11 @@
 import platform
 
-from kafka.sasl.gssapi import SaslMechanismGSSAPI
-from kafka.sasl.msk import SaslMechanismAwsMskIam
-from kafka.sasl.oauth import SaslMechanismOAuth
-from kafka.sasl.plain import SaslMechanismPlain
-from kafka.sasl.scram import SaslMechanismScram
-from kafka.sasl.sspi import SaslMechanismSSPI
+from .gssapi import SaslMechanismGSSAPI
+from .msk import SaslMechanismAwsMskIam
+from .oauth import SaslMechanismOAuth
+from .plain import SaslMechanismPlain
+from .scram import SaslMechanismScram
+from .sspi import SaslMechanismSSPI
 
 
 SASL_MECHANISMS = {}

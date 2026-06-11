@@ -174,7 +174,7 @@ class KafkaAdminClient(
             sasl mechanism handshake. Default: 'kafka'
         sasl_kerberos_domain_name (str): kerberos domain name to use in GSSAPI
             sasl mechanism handshake. Default: one of bootstrap servers
-        sasl_oauth_token_provider (kafka.sasl.oauth.AbstractTokenProvider): OAuthBearer
+        sasl_oauth_token_provider (kafka.net.sasl.oauth.AbstractTokenProvider): OAuthBearer
             token provider instance. Default: None
         proxy_url (str): URL to proxy socket connections through. Supports SOCKS5 only.
             Requires scheme:// (e.g., socks5://foo.bar/). Default: None

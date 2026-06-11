@@ -36,6 +36,9 @@ This is a major release with significant changes to kafka-python internals to si
 * Remove kafka.client_async / kafka.conn legacy modules (#2918)
 * Drop version probes for pre-0.10/ApiVersionsRequest brokers
 
+### SASL Module Rename
+* Rename kafka.sasl -> kafka.net.sasl
+
 ## Networking (kafka.net)
 
 Complete refactor of the networking layer using a bespoke event-loop supporting async/await (but no asyncio yet). All three clients (Admin, Consumer, Producer) use a dedicated IO thread that drives a selector-based event loop. AdminClient/KafkaConsumer leverage a built-in io thread supplied by kafka.net, KafkaProducer continues to use its existing background Sender thread for now.

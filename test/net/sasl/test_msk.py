@@ -3,7 +3,7 @@ import json
 import sys
 from unittest import mock
 
-from kafka.sasl.msk import AwsMskIamClient, SaslMechanismAwsMskIam
+from kafka.net.sasl.msk import AwsMskIamClient, SaslMechanismAwsMskIam
 
 
 def client_factory(token=None):
@@ -11,7 +11,7 @@ def client_factory(token=None):
         now = datetime.datetime.fromtimestamp(1629321911, datetime.timezone.utc)
     else:
         now = datetime.datetime.utcfromtimestamp(1629321911)
-    with mock.patch('kafka.sasl.msk.datetime') as mock_dt:
+    with mock.patch('kafka.net.sasl.msk.datetime') as mock_dt:
         mock_dt.datetime.utcnow = mock.Mock(return_value=now)
         return AwsMskIamClient(
             host='localhost',
@@ -68,7 +68,7 @@ def test_aws_msk_iam_client_temporary_credentials():
 
 
 def test_aws_msk_iam_sasl_mechanism():
-    with mock.patch('kafka.sasl.msk.BotoSession'):
+    with mock.patch('kafka.net.sasl.msk.BotoSession'):
         sasl = SaslMechanismAwsMskIam(security_protocol='SASL_SSL', host='localhost')
         with mock.patch.object(sasl, '_build_client', return_value=client_factory(token=None)):
             assert sasl.auth_bytes() != b''

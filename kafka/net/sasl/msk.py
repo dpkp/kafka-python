@@ -13,8 +13,8 @@ except ImportError:
     # no botocore available, will disable AWS_MSK_IAM mechanism
     BotoSession = None
 
+from .abc import SaslMechanism
 from kafka.errors import KafkaConfigurationError
-from kafka.sasl.abc import SaslMechanism
 
 
 log = logging.getLogger(__name__)
