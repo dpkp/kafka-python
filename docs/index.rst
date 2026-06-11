@@ -224,7 +224,7 @@ Module CLI Interface
 
 kafka-python also provides simple command-line interfaces for consumer, producer, and admin clients.
 Access via ``python -m kafka.consumer``, ``python -m kafka.producer``, and ``python -m kafka.admin``.
-See `Usage <usage.html>`_ for more details.
+See `CLI <cli/index.html>`_ for the full reference.
 
 
 Compression
@@ -277,7 +277,8 @@ See https://docs.python.org/3/howto/logging.html for overview / howto.
    :hidden:
    :maxdepth: 2
 
-   Usage Overview <usage>
+   High-level Clients <high_level>
+   Command Line Interface <cli/index>
    API </apidoc/modules>
    install
    tests
