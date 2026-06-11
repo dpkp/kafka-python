@@ -70,7 +70,7 @@ disruptions. Set ``session_timeout_ms=10000`` to restore the old
 default.
 
 ``api_version_auto_timeout_ms`` renamed to ``bootstrap_timeout_ms``
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The config previously named ``api_version_auto_timeout_ms`` is now
 ``bootstrap_timeout_ms``, applies to the entire bootstrap process
@@ -311,7 +311,7 @@ A few additions that may be useful:
 
 - **CLI.** A single ``kafka-python`` entry point wraps the admin /
   consumer / producer subcommands (also runnable as
-  ``python -m kafka.admin`` etc.). See :doc:`usage` for examples.
+  ``python -m kafka.admin`` etc.). See :doc:`cli/index` for examples.
 - **New public exports.** ``OffsetSpec`` and ``IsolationLevel`` are
   now importable directly from ``kafka``.
 - **HTTP CONNECT proxy support.** Pass ``proxy_url='http://...'`` to

@@ -20,6 +20,10 @@ import sys
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 sys.path.insert(0, os.path.abspath('../'))
 
+# Suppress ANSI color escapes from argparse 3.14+ help/usage output captured
+# by sphinx-argparse.
+os.environ['NO_COLOR'] = '1'
+
 # -- General configuration ------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
@@ -34,6 +38,7 @@ extensions = [
     'sphinx.ext.viewcode',
     'sphinx.ext.napoleon',
     'sphinx_rtd_theme',
+    'sphinxarg.ext',
 ]
 
 # Add any paths that contain templates here, relative to this directory.

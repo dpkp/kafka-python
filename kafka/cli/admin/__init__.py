@@ -16,6 +16,17 @@ from ..common import add_common_cli_args, configure_logging, build_connect_kwarg
 from kafka.errors import BrokerResponseError
 
 
+DEFAULT_COMMAND_GROUPS = (
+    ACLsCommandGroup, ClusterCommandGroup, ConfigsCommandGroup,
+    TopicsCommandGroup, PartitionsCommandGroup, GroupsCommandGroup,
+    TransactionsCommandGroup, UsersCommandGroup,
+)
+
+
+def main_parser(prog=None):
+    return build_parser(DEFAULT_COMMAND_GROUPS, prog=prog)
+
+
 def build_parser(groups=(), prog=None):
     parser = argparse.ArgumentParser(
         prog=prog or 'python -m kafka.admin',
@@ -39,11 +50,7 @@ def build_parser(groups=(), prog=None):
 
 
 def run_cli(args=None, prog=None):
-    parser = build_parser([
-        ACLsCommandGroup, ClusterCommandGroup, ConfigsCommandGroup,
-        TopicsCommandGroup, PartitionsCommandGroup, GroupsCommandGroup,
-        TransactionsCommandGroup, UsersCommandGroup,
-    ], prog=prog)
+    parser = main_parser(prog=prog)
     config = parser.parse_args(args)
     if not config.group:
         parser.print_help()
