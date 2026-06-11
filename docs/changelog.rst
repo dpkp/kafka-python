@@ -1,8 +1,8 @@
 Changelog
 =========
 
-3.0.0 (Unreleased)
-##################
+3.0.0 (Jun 11, 2026)
+####################
 
 This is a major release with significant changes to kafka-python internals to simplify networking and feature development. It introduces a new networking layer (`kafka.net`) and a dynamic protocol system that uses JSON schema files imported from Apache Kafka. It substantially refactors and expands the Admin client, including breaking changes to some API signatures, and it lands a long list of KIP features/changes across the producer, consumer, admin, and networking/metadata clients. Protocol support across kafka-python is now at or beyond the apache kafka 3.0 baseline.
 
