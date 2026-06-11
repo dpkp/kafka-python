@@ -8,10 +8,14 @@ matter.
 
 Most applications using the public ``KafkaProducer`` / ``KafkaConsumer`` /
 ``KafkaAdminClient`` APIs at default settings should still work without
-code changes. The exceptions are: running Python 2, catching
-``NoBrokersAvailableError``, implementing a custom 'kafka_client',
-or implementing a non-default ``Serializer`` / ``Deserializer``,
-producer ``Partitioner``, or consumer ``AbstractPartitionAssignor``.
+code changes. The biggest change is that kafka-python no longer works on
+Python 2. Python 3.8 is now the minimum supported python interpreter.
+Other use cases that will need changes are: catching
+``NoBrokersAvailableError`` (error removed), implementing a custom
+``'kafka_client'`` (internals have changed substantially), using a
+non-default ``Serializer`` / ``Deserializer``, producer ``Partitioner``,
+or consumer ``AbstractPartitionAssignor`` (minor abstract interface changes),
+or using the ``'sasl_oauth_token_provider'`` configuration (import rename).
 
 A full list of changes is in the :doc:`changelog`. This page covers only
 the user-visible breaking changes and the most useful additions.
@@ -72,6 +76,15 @@ The config previously named ``api_version_auto_timeout_ms`` is now
 ``bootstrap_timeout_ms``, applies to the entire bootstrap process
 (not just the API-version probe), and defaults to 30000 (30s).
 The old name is no longer accepted.
+
+``sasl_oauth_token_provider`` abstract baseclass / ``kafka.sasl`` module moved
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The ``kafka.sasl`` module has been moved to ``kafka.net.sasl``. Users that have
+implemented an ``AbstractTokenProvider`` (or implemented a custom SASL mechanism)
+will need to modify imports::
+
+    from kafka.net.sasl.oauth import AbstractTokenProvider
 
 ``buffer_memory`` removed
 ^^^^^^^^^^^^^^^^^^^^^^^^^
