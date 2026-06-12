@@ -17,6 +17,15 @@ Usage::
     broker.attach(manager)
 
     # Or use the consumer/client factory fixtures for a one-liner setup.
+
+For multi-broker scenarios (coordinator failover, leader movement), use
+MockCluster, which routes connections to the matching broker by (host, port)::
+
+    cluster = MockCluster(num_brokers=2)
+    cluster.attach(manager)
+    cluster.set_coordinator('my-group', 0)   # brokers answer FindCoordinator
+    cluster[0].stop()   # kill broker 0: live connections abort, reconnects fail
+    cluster.set_coordinator('my-group', 1)   # "election": broker 1 takes over
 """
 
 import collections
@@ -24,11 +33,16 @@ import copy
 import logging
 import struct
 import time
+import weakref
 
 import kafka.errors as Errors
 from kafka.protocol.admin import DescribeClusterRequest, DescribeClusterResponse
 from kafka.protocol.broker_version_data import BrokerVersionData
-from kafka.protocol.metadata import ApiVersionsRequest, ApiVersionsResponse, MetadataRequest, MetadataResponse
+from kafka.protocol.metadata import (
+    ApiVersionsRequest, ApiVersionsResponse, CoordinatorType,
+    FindCoordinatorRequest, FindCoordinatorResponse,
+    MetadataRequest, MetadataResponse,
+)
 
 
 class _MockBrokerFailure:
@@ -73,6 +87,7 @@ class MockTransport:
         self._write_buffer = bytearray()
         self.last_read = time.monotonic()
         self.last_write = time.monotonic()
+        broker._register_transport(self)
 
     @property
     def last_activity(self):
@@ -209,9 +224,19 @@ class MockBroker:
         # Scripted response queue: list of (api_key, response_object) pairs
         self._response_queue = collections.deque()
 
+        # Persistent responses checked after the scripted queue: api_key -> response/fn
+        self._always_responses = {}
+
+        # Broker lifecycle: stop() flips this and aborts live transports
+        self.online = True
+        self._transports = weakref.WeakSet()
+
         # Counters for debugging
         self.requests_received = 0
         self.responses_sent = 0
+
+    def _register_transport(self, transport):
+        self._transports.add(transport)
 
     def set_broker_version(self, broker_version):
         self.broker_version = broker_version
@@ -299,6 +324,54 @@ class MockBroker:
         """
         self._response_queue.append((request_class.API_KEY, fn))
 
+    def respond_always(self, request_class, response):
+        """Set a persistent response for all requests of the given type.
+
+        Unlike :meth:`respond`, the response is not consumed -- every matching
+        request gets it. Scripted queue entries (:meth:`respond` /
+        :meth:`respond_fn` / :meth:`fail_next`) take precedence; built-in
+        auto-responses (ApiVersions / Metadata / DescribeCluster) are checked
+        after, so a persistent response can override them. Useful for periodic
+        traffic like heartbeats.
+
+        Arguments:
+            request_class: The request class for API key matching.
+            response: A response object, or a callable / coroutine function
+                with the same signature as :meth:`respond_fn`.
+        """
+        self._always_responses[request_class.API_KEY] = response
+
+    def stop(self, error=None):
+        """Take the broker down, as if the process was killed.
+
+        Aborts all live transports with ``error`` and refuses new connections
+        (an attached manager's ``_build_transport`` raises
+        ``KafkaConnectionError``) until :meth:`start` is called. This
+        exercises the client's real connection-lost, connect-failure, and
+        reconnect-backoff paths.
+
+        Arguments:
+            error: Exception delivered to live transports' ``abort()``.
+                Defaults to ``Errors.KafkaConnectionError``.
+        """
+        if error is None:
+            error = Errors.KafkaConnectionError('MockBroker stopped')
+        self.online = False
+        for transport in list(self._transports):
+            if transport.is_closing():
+                continue
+            # abort() must run on the event loop: connection_lost mutates
+            # state the loop owns. call_soon_threadsafe works both when the
+            # loop runs on an IO thread and when a test drives poll() inline.
+            try:
+                transport._net.call_soon_threadsafe(lambda t=transport: t.abort(error))
+            except RuntimeError:
+                pass  # selector already closed; nothing left to abort
+
+    def start(self):
+        """Bring a stopped broker back online. New connections succeed again."""
+        self.online = True
+
     def fail_next(self, request_class, error=None):
         """Enqueue a transport failure for the next request of the given type.
 
@@ -338,14 +411,16 @@ class MockBroker:
                 del self._response_queue[i]
                 if isinstance(queued_response, _MockBrokerFailure):
                     return queued_response
-                if callable(queued_response):
-                    response = queued_response(api_key, api_version, correlation_id, request_bytes)
-                    # Support both sync and async respond_fn callables
-                    if hasattr(response, '__await__'):
-                        response = await response
-                else:
-                    response = queued_response
+                response = await self._resolve_response(
+                    queued_response, api_key, api_version, correlation_id, request_bytes)
                 return self._encode_response(response, api_version, correlation_id)
+
+        # Then persistent responses set via respond_always
+        if api_key in self._always_responses:
+            response = await self._resolve_response(
+                self._always_responses[api_key], api_key, api_version,
+                correlation_id, request_bytes)
+            return self._encode_response(response, api_version, correlation_id)
 
         # Fall back to auto-responses
         if api_key == ApiVersionsRequest.API_KEY:
@@ -389,6 +464,17 @@ class MockBroker:
                len(self._response_queue),
                [(k, type(r).__name__) for k, r in self._response_queue]))
 
+    @staticmethod
+    async def _resolve_response(response, api_key, api_version, correlation_id, request_bytes):
+        """Resolve a scripted entry to a response object, calling/awaiting
+        respond_fn-style callables as needed."""
+        if callable(response):
+            response = response(api_key, api_version, correlation_id, request_bytes)
+            # Support both sync and async respond_fn callables
+            if hasattr(response, '__await__'):
+                response = await response
+        return response
+
     def attach(self, manager):
         """Monkey-patch a KafkaConnectionManager to route all connections
         through this MockBroker.
@@ -403,6 +489,10 @@ class MockBroker:
         broker = self
 
         async def _mock_build_transport(node, timeout_at=None):
+            if not broker.online:
+                raise Errors.KafkaConnectionError(
+                    'connect to %s:%s refused (MockBroker stopped)'
+                    % (node.host, node.port))
             return MockTransport(
                 manager._net, broker,
                 node_id=node.node_id, host=node.host, port=node.port)
@@ -448,3 +538,158 @@ class MockBroker:
         r.API_VERSION = version
         r.with_header(correlation_id=correlation_id)
         return r.encode(header=True, framed=True)
+
+
+class MockCluster:
+    """A set of MockBrokers routed by (host, port) for multi-broker tests.
+
+    Broker ``i`` gets ``node_id=i`` and ``port=base_port + i``. All brokers
+    advertise the same broker list via :meth:`set_metadata`; individual
+    brokers can still be given divergent metadata with
+    ``cluster[i].set_metadata(...)`` to simulate stale views.
+
+    Scripting is per-broker via the usual MockBroker API, and brokers can be
+    taken down and brought back with ``cluster[i].stop()`` / ``start()``.
+
+    Arguments:
+        num_brokers (int): Number of brokers. Default 3.
+        broker_version (tuple): Version for all brokers. Default ``(4, 2)``.
+        host (str): Hostname shared by all brokers. Default 'localhost'.
+        base_port (int): Port of broker 0. Default 9092.
+    """
+
+    def __init__(self, num_brokers=3, broker_version=(4, 2), host='localhost', base_port=9092):
+        self.broker_version = broker_version
+        self.brokers = [
+            MockBroker(node_id=i, host=host, port=base_port + i,
+                       broker_version=broker_version)
+            for i in range(num_brokers)
+        ]
+        self._by_addr = {(b.host, b.port): b for b in self.brokers}
+        self._coordinators = {}
+        self.set_metadata()
+
+    def __getitem__(self, node_id):
+        return self.brokers[node_id]
+
+    def __iter__(self):
+        return iter(self.brokers)
+
+    def __len__(self):
+        return len(self.brokers)
+
+    def bootstrap_servers(self):
+        """Comma-separated host:port list covering all brokers, for client config."""
+        return ','.join('%s:%d' % (b.host, b.port) for b in self.brokers)
+
+    def set_metadata(self, topics=None):
+        """Configure a consistent MetadataRequest auto-response on every broker.
+
+        Arguments:
+            topics: List of MetadataResponseTopic objects to include.
+        """
+        Broker = MetadataResponse.MetadataResponseBroker
+        brokers = [Broker(node_id=b.node_id, host=b.host, port=b.port, rack=None)
+                   for b in self.brokers]
+        for b in self.brokers:
+            b.set_metadata(topics=topics, brokers=brokers)
+
+    def set_coordinator(self, key, broker_id, key_type=CoordinatorType.GROUP):
+        """Name a broker as coordinator for a group / transactional id.
+
+        After the first call, every broker auto-answers
+        ``FindCoordinatorRequest`` from the cluster's coordinator map
+        (scripted ``respond()`` / ``respond_fn()`` entries still take
+        precedence, and a per-broker ``respond_always()`` for
+        FindCoordinator overrides the cluster handler on that broker).
+        Keys without a mapping are answered with COORDINATOR_NOT_AVAILABLE,
+        so tests can model election gaps.
+
+        The map does not react to :meth:`MockBroker.stop`: like a real
+        cluster mid-failover, surviving brokers keep naming the dead
+        coordinator until the test re-points the key.
+
+        Arguments:
+            key (str): group_id or transactional_id.
+            broker_id (int or None): Index of the coordinator broker. None
+                clears the mapping (subsequent lookups get
+                COORDINATOR_NOT_AVAILABLE).
+            key_type (CoordinatorType or int): GROUP (0), TRANSACTION (1),
+                or SHARE (2). Default: GROUP.
+        """
+        if broker_id is None:
+            self._coordinators.pop((int(key_type), key), None)
+        else:
+            self._coordinators[(int(key_type), key)] = self.brokers[broker_id].node_id
+        for b in self.brokers:
+            b.respond_always(FindCoordinatorRequest, self._handle_find_coordinator)
+
+    def _handle_find_coordinator(self, api_key, api_version, correlation_id, request_bytes):
+        request = FindCoordinatorRequest.decode(
+            request_bytes, version=api_version, header=True)
+        # v4+ (KIP-699) carry the keys in an array; v0-v3 a single key field.
+        keys = list(request.coordinator_keys) or [request.key]
+        Coordinator = FindCoordinatorResponse.Coordinator
+        coordinators = []
+        for key in keys:
+            broker_id = self._coordinators.get((request.key_type, key))
+            if broker_id is None:
+                coordinators.append(Coordinator(
+                    key=key, node_id=-1, host='', port=-1,
+                    error_code=Errors.CoordinatorNotAvailableError.errno,
+                    error_message=None))
+            else:
+                broker = self.brokers[broker_id]
+                coordinators.append(Coordinator(
+                    key=key, node_id=broker.node_id, host=broker.host,
+                    port=broker.port, error_code=0, error_message=None))
+        # Top-level fields serve v0-v3 (single key); the array serves v4+.
+        first = coordinators[0]
+        return FindCoordinatorResponse(
+            throttle_time_ms=0,
+            error_code=first.error_code, error_message=first.error_message,
+            node_id=first.node_id, host=first.host, port=first.port,
+            coordinators=coordinators)
+
+    def attach(self, manager):
+        """Monkey-patch a KafkaConnectionManager to route each new connection
+        to the cluster member matching the target node's (host, port).
+
+        Routing by address (rather than node_id) also covers bootstrap
+        connections, which use synthetic node ids like 'bootstrap-0', and
+        synthesized coordinator ids like 'coordinator-1'. Connection attempts
+        to an unknown address or a stopped broker raise
+        ``KafkaConnectionError``, like a real connect to a dead host.
+
+        Arguments:
+            manager: A ``KafkaConnectionManager`` instance.
+        """
+        cluster = self
+
+        async def _mock_build_transport(node, timeout_at=None):
+            broker = cluster._by_addr.get((node.host, node.port))
+            if broker is None or not broker.online:
+                raise Errors.KafkaConnectionError(
+                    'connect to %s:%s refused' % (node.host, node.port))
+            return MockTransport(
+                manager._net, broker,
+                node_id=node.node_id, host=node.host, port=node.port)
+
+        manager._build_transport = _mock_build_transport
+
+    def client_factory(self):
+        """Return a callable suitable for passing as ``kafka_client=...`` to
+        ``KafkaConsumer``, ``KafkaProducer``, or ``KafkaAdminClient``.
+
+        Pass ``bootstrap_servers=cluster.bootstrap_servers()`` alongside so
+        the client's bootstrap addresses match the cluster's brokers.
+        """
+        cluster = self
+
+        def factory(**kwargs):
+            from kafka.net.compat import KafkaNetClient
+            client = KafkaNetClient(**kwargs)
+            cluster.attach(client._manager)
+            return client
+
+        return factory
