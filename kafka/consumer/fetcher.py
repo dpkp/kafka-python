@@ -26,6 +26,36 @@ _LOGGED_DESERIALIZE_WARNING = False
 ConsumerRecord = collections.namedtuple("ConsumerRecord",
     ["topic", "partition", "leader_epoch", "offset", "timestamp", "timestamp_type",
      "key", "value", "headers", "checksum", "serialized_key_size", "serialized_value_size", "serialized_header_size"])
+ConsumerRecord.__doc__ = """A single record (message) consumed from a topic partition.
+
+Yielded by :meth:`~kafka.KafkaConsumer.poll` (inside the returned
+``{TopicPartition: [ConsumerRecord, ...]}`` mapping) and by iterating
+over a :class:`~kafka.KafkaConsumer`. ``key`` and ``value`` are decoded
+by the consumer's configured deserializers.
+
+Keyword Arguments:
+    topic (str): The topic this record was received from.
+    partition (int): The partition this record was received from.
+    leader_epoch (int): The partition leader epoch for this record, or -1
+        if unknown.
+    offset (int): The position of this record in the topic partition.
+    timestamp (int): The timestamp of this record, in milliseconds since
+        the epoch (UTC), or -1 if unknown.
+    timestamp_type (int): The type of the timestamp: 0 for CreateTime (set
+        by the producer) or 1 for LogAppendTime (set by the broker).
+    key: The (deserialized) key of the record, or None.
+    value: The (deserialized) value of the record, or None.
+    headers (list): A list of ``(key, value)`` header tuples, where key is
+        a str and value is bytes.
+    checksum (int): Deprecated. The CRC32 checksum of the record, or None.
+        Removed in message format v2 (Kafka 0.11+).
+    serialized_key_size (int): The size of the serialized, uncompressed key
+        in bytes, or -1 if the key is None.
+    serialized_value_size (int): The size of the serialized, uncompressed
+        value in bytes, or -1 if the value is None.
+    serialized_header_size (int): The size of the serialized, uncompressed
+        headers in bytes, or -1 if there are no headers.
+"""
 
 
 CompletedFetch = collections.namedtuple("CompletedFetch",

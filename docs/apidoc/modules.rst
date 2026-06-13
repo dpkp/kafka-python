@@ -6,18 +6,69 @@ with Apache Kafka. The following sections group them by role; each class
 links to its own API reference page.
 
 
-kafka
-=====
-
 Application code typically interacts with one of three top-level clients.
 Each owns a background IO thread and a shared async networking layer.
+The sections below group each client with the data types and extension
+points specific to it.
+
+
+kafka.consumer
+==============
+
+The high-level, group-aware message consumer and the data types it
+produces.
 
 - :class:`~kafka.KafkaConsumer` - high-level, group-aware message consumer.
   Iterable, with manual or automatic offset commits, cooperative rebalance,
   pluggable deserializers, and transactional-read isolation.
+- :class:`~kafka.consumer.fetcher.ConsumerRecord` - a single record
+  consumed from a topic partition, as yielded by
+  :meth:`~kafka.KafkaConsumer.poll` and consumer iteration.
+- :class:`~kafka.ConsumerRebalanceListener` - base class for receiving
+  partition join/revoke callbacks during a group rebalance. Also includes
+  the async interface :class:`~kafka.AsyncConsumerRebalanceListener`.
+
+.. toctree::
+   :maxdepth: 1
+   :hidden:
+
+   KafkaConsumer <KafkaConsumer>
+   ConsumerRecord <misc/ConsumerRecord>
+   ConsumerRebalanceListener <misc/ConsumerRebalanceListener>
+
+
+kafka.producer
+==============
+
+The high-level, asynchronous message producer and the data types and
+extension points specific to it.
+
 - :class:`~kafka.KafkaProducer` - high-level, asynchronous message producer.
   Batches records into a background sender thread, with optional
   idempotence, transactions, compression, and pluggable serializers.
+- :class:`~kafka.producer.future.FutureRecordMetadata` - asynchronous
+  handle returned by :meth:`~kafka.KafkaProducer.send`; resolves to a
+  ``RecordMetadata`` once the record is acknowledged.
+- :class:`~kafka.producer.future.RecordMetadata` - metadata about a
+  produced record after the broker has acknowledged it.
+- :class:`~kafka.partitioner.Partitioner` - base class for pluggable
+  partition selection; controls which partition a record is assigned to.
+
+.. toctree::
+   :maxdepth: 1
+   :hidden:
+
+   KafkaProducer <KafkaProducer>
+   FutureRecordMetadata <misc/FutureRecordMetadata>
+   RecordMetadata <misc/RecordMetadata>
+   Partitioner <misc/Partitioner>
+
+
+kafka.admin
+===========
+
+Cluster administration operations.
+
 - :class:`~kafka.KafkaAdminClient` - admin operations: topic, ACL, config,
   consumer group, partition, quota, log-directory, and quorum management.
 
@@ -25,8 +76,6 @@ Each owns a background IO thread and a shared async networking layer.
    :maxdepth: 1
    :hidden:
 
-   KafkaConsumer <KafkaConsumer>
-   KafkaProducer <KafkaProducer>
    KafkaAdminClient <KafkaAdminClient>
 
 
@@ -68,7 +117,7 @@ driving the protocol layer directly from the REPL.
 other / misc
 ============
 
-Lightweight data types used throughout the client APIs (and useful when
+Lightweight data types shared across the clients (and useful when
 working with the lower-level protocol layer).
 
 - :class:`~kafka.cluster.ClusterMetadata` - in-memory cache of brokers,
@@ -81,11 +130,8 @@ working with the lower-level protocol layer).
 - :class:`~kafka.OffsetSpec` - enum for partition offset queries.
 - :class:`~kafka.IsolationLevel` - enum for transactional isolation.
 - :class:`~kafka.Serializer` - base class for serialization / deserialization
-  of key and value bytes. Includes helper classes `~kafka.DefaultSerializer`
-  and `~kafka.JsonSerializer`.
-- :class:`~kafka.ConsumerRebalanceListener` - base class for consumer
-  class to receive join/rebalance group hooks. Also includes async
-  interface `~kafka.AsyncConsumerRebalanceListener`.
+  of key and value bytes. Includes helper classes :class:`~kafka.DefaultSerializer`
+  and :class:`~kafka.JsonSerializer`.
 
 .. toctree::
    :maxdepth: 1
@@ -97,5 +143,3 @@ working with the lower-level protocol layer).
    OffsetSpec <misc/OffsetSpec>
    IsolationLevel <misc/IsolationLevel>
    Serializer <misc/Serializer>
-   ConsumerRebalanceListener <misc/ConsumerRebalanceListener>
-   Partitioner <misc/Partitioner>
