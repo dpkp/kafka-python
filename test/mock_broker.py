@@ -38,6 +38,12 @@ import weakref
 import kafka.errors as Errors
 from kafka.protocol.admin import DescribeClusterRequest, DescribeClusterResponse
 from kafka.protocol.broker_version_data import BrokerVersionData
+from kafka.protocol.consumer import (
+    HeartbeatRequest, HeartbeatResponse,
+    JoinGroupRequest, JoinGroupResponse,
+    LeaveGroupRequest, LeaveGroupResponse,
+    SyncGroupRequest, SyncGroupResponse,
+)
 from kafka.protocol.metadata import (
     ApiVersionsRequest, ApiVersionsResponse, CoordinatorType,
     FindCoordinatorRequest, FindCoordinatorResponse,
@@ -574,6 +580,7 @@ class MockCluster:
         ]
         self._by_addr = {(b.host, b.port): b for b in self.brokers}
         self._coordinators = {}
+        self._groups = {}
         self.set_metadata()
 
     def __getitem__(self, node_id):
@@ -658,6 +665,25 @@ class MockCluster:
             node_id=first.node_id, host=first.host, port=first.port,
             coordinators=coordinators)
 
+    def add_group(self, group_id, coordinator=0):
+        """Install a minimal classic-protocol group coordinator on a broker.
+
+        Points ``FindCoordinator`` for ``group_id`` at the ``coordinator``
+        broker (via :meth:`set_coordinator`) and registers a :class:`MockGroup`
+        there that auto-answers JoinGroup / SyncGroup / Heartbeat / LeaveGroup,
+        so a real consumer can complete a rebalance without the test scripting
+        each response. Returns the :class:`MockGroup` for inspection and
+        rebalance control (e.g. ``group.trigger_rebalance()``).
+
+        Arguments:
+            group_id (str): consumer group id.
+            coordinator (int): index of the coordinator broker. Default 0.
+        """
+        self.set_coordinator(group_id, coordinator)
+        group = MockGroup(self.brokers[coordinator], group_id)
+        self._groups[group_id] = group
+        return group
+
     def attach(self, manager):
         """Monkey-patch a KafkaConnectionManager to route each new connection
         to the cluster member matching the target node's (host, port).
@@ -700,3 +726,112 @@ class MockCluster:
             return client
 
         return factory
+
+
+def _as_bytes(value):
+    """Coerce a decoded metadata/assignment field (bytes or memoryview) to bytes."""
+    if isinstance(value, bytes):
+        return value
+    return bytes(value)
+
+
+class MockGroup:
+    """Minimal classic-protocol consumer-group coordinator for a MockBroker.
+
+    Auto-answers JoinGroup / SyncGroup / Heartbeat / LeaveGroup so a real
+    consumer (or ConsumerCoordinator) can complete a rebalance against a mock
+    without the test scripting each response. Models the common case:
+
+    - The first member to join (or whoever sent a non-empty member_id) is
+      elected leader; only the leader receives the full member list so it can
+      run the assignor.
+    - SyncGroup routes the leader-computed assignment back to each member --
+      the broker just echoes ``assignments[member_id]`` from the request.
+    - Heartbeat returns NoError, unless :meth:`trigger_rebalance` armed a
+      one-shot RebalanceInProgress to drive a broker-initiated rejoin.
+
+    This is deliberately not a full broker: no session-timeout eviction, no
+    generation fencing beyond what the handlers below do, classic
+    JoinGroup/SyncGroup only (not KIP-848). Use :attr:`members` /
+    :attr:`generation` / :attr:`leader` for assertions.
+
+    Typically created via :meth:`MockCluster.add_group`.
+    """
+
+    def __init__(self, broker, group_id):
+        self.broker = broker
+        self.group_id = group_id
+        self.generation = 0
+        self.members = {}          # member_id -> subscription metadata bytes
+        self.leader = None
+        self._next_member_id = 0
+        self._force_rebalance = False
+        broker.respond_always(JoinGroupRequest, self._on_join)
+        broker.respond_always(SyncGroupRequest, self._on_sync)
+        broker.respond_always(HeartbeatRequest, self._on_heartbeat)
+        broker.respond_always(LeaveGroupRequest, self._on_leave)
+
+    def trigger_rebalance(self):
+        """Arm a one-shot RebalanceInProgress on the next Heartbeat, forcing
+        the consumer to rejoin (a broker-initiated rebalance)."""
+        self._force_rebalance = True
+
+    def _on_join(self, api_key, api_version, correlation_id, request_bytes):
+        request = JoinGroupRequest.decode(request_bytes, version=api_version, header=True)
+        member_id = request.member_id
+        if not member_id:
+            member_id = '%s-member-%d' % (self.group_id, self._next_member_id)
+            self._next_member_id += 1
+        # Record/refresh this member's subscription (first supported protocol).
+        protocol = request.protocols[0]
+        self.members[member_id] = _as_bytes(protocol.metadata)
+        if self.leader is None or self.leader not in self.members:
+            self.leader = member_id
+        self.generation += 1
+
+        Member = JoinGroupResponse.JoinGroupResponseMember
+        # Only the leader needs the member list (to compute the assignment).
+        members = []
+        if member_id == self.leader:
+            members = [Member(member_id=m, group_instance_id=None, metadata=md)
+                       for m, md in self.members.items()]
+        return JoinGroupResponse(
+            throttle_time_ms=0, error_code=0,
+            generation_id=self.generation,
+            protocol_type='consumer',
+            protocol_name=protocol.name,
+            leader=self.leader,
+            member_id=member_id,
+            members=members)
+
+    def _on_sync(self, api_key, api_version, correlation_id, request_bytes):
+        request = SyncGroupRequest.decode(request_bytes, version=api_version, header=True)
+        # The leader carries every member's assignment; a follower sends none.
+        # Route this member's slice back (empty if not found).
+        assignment = b''
+        for entry in request.assignments:
+            if entry.member_id == request.member_id:
+                assignment = _as_bytes(entry.assignment)
+                break
+        return SyncGroupResponse(
+            throttle_time_ms=0, error_code=0,
+            protocol_type='consumer',
+            protocol_name=request.protocol_name,
+            assignment=assignment)
+
+    def _on_heartbeat(self, api_key, api_version, correlation_id, request_bytes):
+        if self._force_rebalance:
+            self._force_rebalance = False
+            return HeartbeatResponse(
+                throttle_time_ms=0,
+                error_code=Errors.RebalanceInProgressError.errno)
+        return HeartbeatResponse(throttle_time_ms=0, error_code=0)
+
+    def _on_leave(self, api_key, api_version, correlation_id, request_bytes):
+        request = LeaveGroupRequest.decode(request_bytes, version=api_version, header=True)
+        Member = LeaveGroupResponse.MemberResponse
+        members = []
+        for m in getattr(request, 'members', None) or []:
+            members.append(Member(member_id=m.member_id, error_code=0))
+            self.members.pop(m.member_id, None)
+        return LeaveGroupResponse(throttle_time_ms=0, error_code=0, members=members)
