@@ -9,10 +9,30 @@ from kafka import KafkaProducer
 from kafka.partitioner import Partitioner, StickyPartitioner
 from kafka.producer.transaction_manager import TransactionManager, ProducerIdAndEpoch
 
+from test.mock_broker import MockBroker
+
+
+def _mock_producer(**configs):
+    """A KafkaProducer wired to a fresh MockBroker (no real network).
+
+    Defaults to a non-idempotent producer (no InitProducerId traffic). Use
+    as a context manager so close() joins the Sender thread.
+    """
+    broker = MockBroker(broker_version=(4, 3))
+    configs.setdefault('api_version', (4, 3))
+    configs.setdefault('enable_idempotence', False)
+    return KafkaProducer(
+        kafka_client=broker.client_factory(),
+        bootstrap_servers=['%s:%d' % (broker.host, broker.port)],
+        **configs)
+
 
 def test_kafka_producer_thread_close():
+    # Explicit close() (rather than the context manager) is the behavior under
+    # test here -- it must join the Sender thread and return the thread count
+    # to baseline.
     threads = threading.active_count()
-    producer = KafkaProducer(api_version=(2, 1), enable_idempotence=False)
+    producer = _mock_producer()
     assert threading.active_count() == threads + 1
     producer.close()
     assert threading.active_count() == threads
@@ -20,7 +40,7 @@ def test_kafka_producer_thread_close():
 
 def test_kafka_producer_context_manager_closes_on_exit():
     threads = threading.active_count()
-    with KafkaProducer(api_version=(2, 1), enable_idempotence=False) as producer:
+    with _mock_producer() as producer:
         assert threading.active_count() == threads + 1
         assert producer._closed is False
     assert producer._closed is True
@@ -72,8 +92,15 @@ def test_partition_explicit_partition_rejects_unknown_partition():
 
 def _producer_for_send_test(partitioner):
     """Build a real KafkaProducer but replace the accumulator + sender
-    with mocks so ``send()`` doesn't try to actually push data."""
-    producer = KafkaProducer(api_version=(2, 1), partitioner=partitioner, enable_idempotence=False)
+    with mocks so ``send()`` doesn't try to actually push data.
+
+    __init__ already starts a real Sender thread; we stop and join it before
+    swapping in the mock so it isn't orphaned (close() would otherwise act on
+    the mock and leak the real daemon thread). MockBroker keeps it off the
+    real network."""
+    producer = _mock_producer(partitioner=partitioner)
+    producer._sender.initiate_close()
+    producer._sender.join(2)
     producer._accumulator = MagicMock()
     producer._sender = MagicMock()
     producer._metadata = MagicMock()
@@ -99,11 +126,10 @@ def test_send_null_key_triggers_on_new_batch_via_abort_retry():
     matching KafkaProducer.doSend's abort-for-new-batch retry path."""
     partitioner = MagicMock(spec=StickyPartitioner)
     partitioner.partition.side_effect = [3, 7]  # initial pick, post-rotate
-    producer = _producer_for_send_test(partitioner)
     abort = (None, False, False, True)
-    producer._accumulator.append.side_effect = [abort, _success_result()]
 
-    try:
+    with _producer_for_send_test(partitioner) as producer:
+        producer._accumulator.append.side_effect = [abort, _success_result()]
         producer.send('t', value=b'msg')
         # Initial pick + post-rotate re-pick.
         assert partitioner.partition.call_count == 2
@@ -116,8 +142,6 @@ def test_send_null_key_triggers_on_new_batch_via_abort_retry():
         second_call = producer._accumulator.append.call_args_list[1]
         tp_arg = second_call.args[0]
         assert tp_arg.partition == 7
-    finally:
-        producer.close(timeout=1)
 
 
 def test_send_keyed_skips_on_new_batch():
@@ -125,36 +149,30 @@ def test_send_keyed_skips_on_new_batch():
     must not fire."""
     partitioner = MagicMock(spec=StickyPartitioner)
     partitioner.partition.return_value = 0
-    producer = _producer_for_send_test(partitioner)
-    producer._accumulator.append.return_value = _success_result()
 
-    try:
+    with _producer_for_send_test(partitioner) as producer:
+        producer._accumulator.append.return_value = _success_result()
         producer.send('t', key=b'k', value=b'v')
         partitioner.on_new_batch.assert_not_called()
         # Keyed records pass abort_on_new_batch=False directly - one append.
         assert producer._accumulator.append.call_count == 1
         kwargs = producer._accumulator.append.call_args.kwargs
         assert kwargs.get('abort_on_new_batch') is False
-    finally:
-        producer.close(timeout=1)
 
 
 def test_send_with_explicit_partition_skips_on_new_batch():
     """Explicit partition overrides the partitioner entirely - no
     rotation hook should fire."""
     partitioner = MagicMock(spec=StickyPartitioner)
-    producer = _producer_for_send_test(partitioner)
-    producer._accumulator.append.return_value = _success_result()
 
-    try:
+    with _producer_for_send_test(partitioner) as producer:
+        producer._accumulator.append.return_value = _success_result()
         producer.send('t', value=b'v', partition=1)
         partitioner.partition.assert_not_called()
         partitioner.on_new_batch.assert_not_called()
         # Explicit partition also goes straight to abort_on_new_batch=False.
         kwargs = producer._accumulator.append.call_args.kwargs
         assert kwargs.get('abort_on_new_batch') is False
-    finally:
-        producer.close(timeout=1)
 
 
 def test_idempotent_producer_reset_producer_id(cluster):
@@ -162,7 +180,7 @@ def test_idempotent_producer_reset_producer_id(cluster):
         transactional_id=None,
         transaction_timeout_ms=1000,
         retry_backoff_ms=100,
-        api_version=(0, 11),
+        api_version=(4, 3),
         metadata=cluster,
     )
 
