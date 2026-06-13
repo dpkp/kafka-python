@@ -506,3 +506,67 @@ class TestMockCluster:
             assert client.is_ready(0)
         finally:
             client.close()
+
+
+class TestMockGroup:
+    """The MockCluster.add_group auto-coordinator (JoinGroup/SyncGroup/
+    Heartbeat/LeaveGroup), tested at the protocol-handler level.
+
+    The handlers return response objects directly (the broker encodes them
+    on the way out), so the tests can feed an encoded request in and assert
+    on the response object's fields.
+    """
+
+    def _join(self, group, member_id='', topics=('t',), api_version=7):
+        from kafka.coordinator.assignors.abstract import ConsumerProtocolSubscription
+        from kafka.protocol.consumer import JoinGroupRequest
+        request = JoinGroupRequest(
+            group_id=group.group_id, session_timeout_ms=30000,
+            rebalance_timeout_ms=300000, member_id=member_id,
+            group_instance_id=None, protocol_type='consumer',
+            protocols=[('range', ConsumerProtocolSubscription(0, list(topics), b'').encode())],
+            max_version=api_version)
+        request.API_VERSION = api_version
+        request.with_header(correlation_id=1)
+        return group._on_join(JoinGroupRequest.API_KEY, api_version, 1,
+                              request.encode(header=True))
+
+    def test_add_group_elects_first_member_leader(self):
+        cluster = MockCluster(num_brokers=1)
+        group = cluster.add_group('g', coordinator=0)
+        # First join with an empty member_id: broker assigns one, elects it leader.
+        resp = self._join(group, member_id='')
+        assert resp.error_code == 0
+        assert resp.leader == resp.member_id        # this member is leader
+        assert resp.member_id                       # a member_id was assigned
+        assert resp.generation_id == 1
+        assert len(resp.members) == 1               # leader gets the member list
+        assert group.leader == resp.member_id
+        assert list(group.members) == [resp.member_id]
+
+        # A rejoin reusing the member_id keeps it leader and bumps generation.
+        resp2 = self._join(group, member_id=resp.member_id)
+        assert resp2.member_id == resp.member_id
+        assert resp2.leader == resp.member_id
+        assert resp2.generation_id == 2
+        assert list(group.members) == [resp.member_id]   # no duplicate member
+
+    def test_trigger_rebalance_is_one_shot(self):
+        import kafka.errors as Errors
+        from kafka.protocol.consumer import HeartbeatRequest
+        cluster = MockCluster(num_brokers=1)
+        group = cluster.add_group('g', coordinator=0)
+
+        def heartbeat():
+            req = HeartbeatRequest(group_id='g', generation_id=1, member_id='m',
+                                   group_instance_id=None)
+            req.API_VERSION = 3
+            req.with_header(correlation_id=1)
+            return group._on_heartbeat(HeartbeatRequest.API_KEY, 3, 1, req.encode(header=True))
+
+        # Default: healthy heartbeats.
+        assert heartbeat().error_code == 0
+        # Armed: next heartbeat reports a rebalance, then heals.
+        group.trigger_rebalance()
+        assert heartbeat().error_code == Errors.RebalanceInProgressError.errno
+        assert heartbeat().error_code == 0

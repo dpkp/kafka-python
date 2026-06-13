@@ -2587,3 +2587,178 @@ def test_heartbeat_coordinator_broker_failover(mocker, net, metrics):
         coordinator.close(timeout_ms=0)
         client.close()
         manager.close()
+
+
+def _apply_topic_metadata(cluster, topic, num_partitions, node_id=0):
+    """Build a MetadataResponse advertising `topic` with `num_partitions` and
+    apply it to `cluster`, firing its metadata-update listeners (which includes
+    the coordinator's _handle_metadata_update)."""
+    Broker = MetadataResponse.MetadataResponseBroker
+    Topic = MetadataResponse.MetadataResponseTopic
+    Partition = Topic.MetadataResponsePartition
+    response = MetadataResponse(
+        version=8, throttle_time_ms=0,
+        brokers=[Broker(node_id=node_id, host='localhost', port=9092, rack=None, version=8)],
+        cluster_id='mock-cluster', controller_id=node_id,
+        topics=[Topic(version=8, error_code=0, name=topic, is_internal=False,
+                      partitions=[
+                          Partition(version=8, error_code=0, partition_index=p,
+                                    leader_id=node_id, leader_epoch=0,
+                                    replica_nodes=[node_id], isr_nodes=[node_id],
+                                    offline_replicas=[])
+                          for p in range(num_partitions)])])
+    # Round-trip through the wire so every nested container carries _version,
+    # the same shape update_metadata sees from a real MetadataResponse.
+    cluster.update_metadata(MetadataResponse.decode(response.encode(), version=8))
+
+
+def _single_member(topic, member_id='member-1'):
+    return [JoinGroupResponse.JoinGroupResponseMember(
+        member_id=member_id,
+        metadata=ConsumerProtocolSubscription(0, [topic], b'').encode())]
+
+
+def test_leader_rejoins_when_metadata_changes_after_assignment(coordinator):
+    """Once the leader has assigned partitions, a metadata change that alters
+    the subscribed topic's partition count must flip need_rejoin()
+    to True so the change is not silently lost."""
+    coordinator._subscription.subscribe(topics=['t'])
+    # Topic has 1 partition when the leader computes the assignment.
+    _apply_topic_metadata(coordinator._cluster, 't', num_partitions=1)
+    assert coordinator._metadata_snapshot == {'t': {0}}
+
+    # Perform assignment -> becomes leader and snapshots the metadata used.
+    coordinator._perform_assignment('member-1', 'range', _single_member('t'))
+    assert coordinator._is_leader
+    assert coordinator._assignment_snapshot == {'t': {0}}
+
+    # Simulate the rest of a completed join (the leader keeps its snapshot).
+    coordinator._joined_subscription = {'t'}
+    coordinator._generation = Generation(1, 'member-1', 'range')
+    coordinator.state = MemberState.STABLE
+    coordinator.rejoin_needed = False
+    assert not coordinator.need_rejoin()
+
+    # Topic grows to 2 partitions while the member is assigned. The metadata
+    # listener updates _metadata_snapshot; the assignment snapshot is now stale.
+    _apply_topic_metadata(coordinator._cluster, 't', num_partitions=2)
+    assert coordinator._metadata_snapshot == {'t': {0, 1}}
+    assert coordinator._assignment_snapshot == {'t': {0}}
+    assert coordinator.need_rejoin()
+
+
+def test_follower_does_not_rejoin_on_metadata_change(coordinator):
+    """Only the leader watches metadata for partition changes. A follower
+    (assignment_snapshot is None, cleared in _on_join_complete) must not rejoin
+    just because the topic's partition count changed."""
+    coordinator._subscription.subscribe(topics=['t'])
+    _apply_topic_metadata(coordinator._cluster, 't', num_partitions=1)
+
+    # Simulate a completed join as a follower: snapshot cleared, joined.
+    coordinator._assignment_snapshot = None
+    coordinator._is_leader = False
+    coordinator._joined_subscription = {'t'}
+    coordinator._generation = Generation(1, 'member-1', 'range')
+    coordinator.state = MemberState.STABLE
+    coordinator.rejoin_needed = False
+    assert not coordinator.need_rejoin()
+
+    # Metadata changes -- a follower must not be driven to rejoin by it.
+    _apply_topic_metadata(coordinator._cluster, 't', num_partitions=2)
+    assert coordinator._metadata_snapshot == {'t': {0, 1}}
+    assert not coordinator.need_rejoin()
+
+
+def _metadata_topic(name, num_partitions, node_id=0):
+    """A MetadataResponseTopic for MockCluster.set_metadata(topics=[...])."""
+    Topic = MetadataResponse.MetadataResponseTopic
+    Partition = Topic.MetadataResponsePartition
+    return Topic(version=8, error_code=0, name=name, is_internal=False,
+                 partitions=[
+                     Partition(version=8, error_code=0, partition_index=p,
+                               leader_id=node_id, leader_epoch=0,
+                               replica_nodes=[node_id], isr_nodes=[node_id],
+                               offline_replicas=[])
+                     for p in range(num_partitions)])
+
+
+def _group_coordinator(net, metrics, mock_cluster, **configs):
+    """Build a ConsumerCoordinator wired to a MockCluster, bootstrapped."""
+    manager = KafkaConnectionManager(
+        net, bootstrap_servers=mock_cluster.bootstrap_servers(),
+        api_version=mock_cluster.broker_version, request_timeout_ms=5000)
+    mock_cluster.attach(manager)
+    client = KafkaNetClient(net=net, manager=manager)
+    coordinator = ConsumerCoordinator(
+        client, SubscriptionState(), metrics=metrics,
+        api_version=mock_cluster.broker_version,
+        heartbeat_interval_ms=20, retry_backoff_ms=20, **configs)
+    manager.bootstrap(timeout_ms=5000)
+    return coordinator, manager, client
+
+
+def test_mock_group_single_member_join_assigns_all_partitions(net, metrics):
+    """Smoke test for MockCluster.add_group: a single consumer joins the group,
+    is elected leader, runs the assignor, and is assigned every partition of
+    the subscribed topic."""
+    mock_cluster = MockCluster(num_brokers=1)
+    mock_cluster.set_metadata(topics=[_metadata_topic('t', num_partitions=3)])
+    group = mock_cluster.add_group('my-group', coordinator=0)
+    coordinator, manager, client = _group_coordinator(
+        net, metrics, mock_cluster, group_id='my-group')
+    try:
+        coordinator._subscription.subscribe(topics=['t'])
+        # Ensure the cluster has the topic metadata the assignor needs.
+        client.cluster.request_update()
+
+        assert coordinator.ensure_active_group(timeout_ms=5000)
+
+        assert coordinator._subscription.assigned_partitions() == {
+            TopicPartition('t', 0), TopicPartition('t', 1), TopicPartition('t', 2)}
+        assert coordinator._is_leader
+        assert len(group.members) == 1
+        assert group.generation == 1
+    finally:
+        coordinator._close_heartbeat()
+        coordinator.reset_generation()
+        coordinator.close(timeout_ms=0)
+        client.close()
+        manager.close()
+
+
+def test_metadata_growth_triggers_rejoin_end_to_end(net, metrics):
+    """KAFKA-3949 end-to-end: a consumer is the group leader with a 1-partition
+    topic; the topic grows to 2 partitions; a metadata refresh must drive a
+    rejoin so the consumer ends up assigned both partitions (the change is not
+    lost)."""
+    mock_cluster = MockCluster(num_brokers=1)
+    mock_cluster.set_metadata(topics=[_metadata_topic('t', num_partitions=1)])
+    group = mock_cluster.add_group('my-group', coordinator=0)
+    coordinator, manager, client = _group_coordinator(
+        net, metrics, mock_cluster, group_id='my-group')
+    try:
+        coordinator._subscription.subscribe(topics=['t'])
+        assert coordinator.ensure_active_group(timeout_ms=5000)
+        assert coordinator._subscription.assigned_partitions() == {TopicPartition('t', 0)}
+        assert group.generation == 1
+
+        # The topic grows to 2 partitions. Refresh metadata so the coordinator's
+        # listener sees the change (the racing metadata update from KAFKA-3949).
+        mock_cluster.set_metadata(topics=[_metadata_topic('t', num_partitions=2)])
+        future = client.cluster.request_update()
+        client.poll(future=future, timeout_ms=5000)
+
+        # The leader's assignment snapshot is now stale -> must rejoin.
+        assert coordinator.need_rejoin()
+
+        # Rejoin picks up the new partition; the change was not lost.
+        assert coordinator.ensure_active_group(timeout_ms=5000)
+        assert coordinator._subscription.assigned_partitions() == {
+            TopicPartition('t', 0), TopicPartition('t', 1)}
+        assert group.generation == 2
+    finally:
+        coordinator._close_heartbeat()
+        coordinator.reset_generation()
+        coordinator.close(timeout_ms=0)
+        client.close()
+        manager.close()
