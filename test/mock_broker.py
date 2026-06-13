@@ -413,6 +413,11 @@ class MockBroker:
                     return queued_response
                 response = await self._resolve_response(
                     queued_response, api_key, api_version, correlation_id, request_bytes)
+                # A resolved response of None means "request handled, send
+                # nothing back" -- the real broker behavior for acks=0
+                # ProduceRequests, which the client does not expect a response to.
+                if response is None:
+                    return None
                 return self._encode_response(response, api_version, correlation_id)
 
         # Then persistent responses set via respond_always
@@ -420,6 +425,8 @@ class MockBroker:
             response = await self._resolve_response(
                 self._always_responses[api_key], api_key, api_version,
                 correlation_id, request_bytes)
+            if response is None:
+                return None
             return self._encode_response(response, api_version, correlation_id)
 
         # Fall back to auto-responses

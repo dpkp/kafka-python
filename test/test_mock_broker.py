@@ -34,6 +34,17 @@ def _poll_for_future(client, future, timeout_ms=5000):
     return future
 
 
+def _run_coroutine(coro):
+    """Drive a coroutine that is expected to complete without suspending,
+    returning its value. Used to unit-test MockBroker.handle_request for
+    synchronous (non-awaiting) respond_fns."""
+    try:
+        coro.send(None)
+    except StopIteration as stop:
+        return stop.value
+    raise AssertionError('coroutine suspended unexpectedly')
+
+
 # ---------------------------------------------------------------------------
 # MockBroker unit tests (no event loop, no connections)
 # ---------------------------------------------------------------------------
@@ -77,6 +88,28 @@ class TestMockBrokerUnit:
         assert len(broker._response_queue) == 2
         assert broker._response_queue[0][1] is r1
         assert broker._response_queue[1][1] is r2
+
+    def test_respond_fn_returning_none_sends_no_response(self):
+        """A respond_fn that resolves to None means 'request handled, send
+        nothing back' -- the real broker behavior for acks=0 ProduceRequests.
+        handle_request still consumes the queue entry and returns None so
+        MockTransport delivers no bytes."""
+        broker = MockBroker()
+        seen = []
+
+        def fn(api_key, api_version, correlation_id, request_bytes):
+            seen.append(correlation_id)
+            return None
+
+        broker.respond_fn(MetadataRequest, fn)
+        result = _run_coroutine(broker.handle_request(
+            MetadataRequest.API_KEY, 0, correlation_id=99, request_bytes=b''))
+
+        assert result is None
+        assert seen == [99]
+        # The queue entry was consumed even though no response was produced.
+        assert len(broker._response_queue) == 0
+        assert broker.requests_received == 1
 
 
 # ---------------------------------------------------------------------------
