@@ -76,10 +76,13 @@ def test_group_metadata_unjoined(coordinator):
     assert gm.member_id == ''  # UNKNOWN_MEMBER_ID is ''
     assert gm.generation_id == -1  # DEFAULT_GENERATION_ID
     assert gm.group_instance_id is None
+    # Live coordination state: unjoined.
+    assert gm.state == MemberState.UNJOINED
 
 
 def test_group_metadata_after_join(coordinator):
-    """After joining, group_metadata() reflects the live generation."""
+    """After joining, group_metadata() reflects the live generation and the
+    MemberState."""
     coordinator._generation = Generation(generation_id=42,
                                          member_id='mbr-1',
                                          protocol='range')
@@ -89,11 +92,15 @@ def test_group_metadata_after_join(coordinator):
     assert gm.member_id == 'mbr-1'
     # group_instance_id comes from config (None by default for this fixture).
     assert gm.group_instance_id is None
+    assert gm.state == MemberState.STABLE
 
     # Still returns the snapshot even while rebalancing - the producer needs
-    # *something* to send and the broker handles fencing.
+    # *something* to send and the broker handles fencing. The state field
+    # tracks the in-progress (re)join.
     coordinator.state = MemberState.REBALANCING
-    assert coordinator.group_metadata().generation_id == 42
+    gm = coordinator.group_metadata()
+    assert gm.generation_id == 42
+    assert gm.state == MemberState.REBALANCING
 
 
 def test_group_protocols(coordinator):
