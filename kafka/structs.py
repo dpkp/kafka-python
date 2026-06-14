@@ -51,6 +51,12 @@ Keyword Arguments:
 """
 
 
+class MemberState:
+    UNJOINED = '<unjoined>'  # the client is not part of a group
+    REBALANCING = '<rebalancing>'  # the client has begun rebalancing
+    STABLE = '<stable>'  # the client has joined and is sending heartbeats
+
+
 ConsumerGroupMetadata = namedtuple("ConsumerGroupMetadata",
     ["group_id", "generation_id", "member_id", "group_instance_id"],
     defaults=[-1, '', None])

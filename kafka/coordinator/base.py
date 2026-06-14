@@ -16,17 +16,11 @@ from kafka.protocol.consumer import (
     HeartbeatRequest, JoinGroupRequest, LeaveGroupRequest, SyncGroupRequest,
     DEFAULT_GENERATION_ID, UNKNOWN_MEMBER_ID,
 )
-from kafka.structs import ConsumerGroupMetadata
+from kafka.structs import ConsumerGroupMetadata, MemberState
 from kafka.util import Timer
 
 log = logging.getLogger('kafka.coordinator')
 heartbeat_log = logging.getLogger('kafka.coordinator.heartbeat')
-
-
-class MemberState:
-    UNJOINED = '<unjoined>'  # the client is not part of a group
-    REBALANCING = '<rebalancing>'  # the client has begun rebalancing
-    STABLE = '<stable>'  # the client has joined and is sending heartbeats
 
 
 class Generation:
