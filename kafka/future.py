@@ -8,16 +8,31 @@ log = logging.getLogger(__name__)
 
 
 class Future:
-    __slots__ = ('is_done', 'value', 'exception', '_callbacks', '_errbacks', '_lock')
-    error_on_callbacks = False # and errbacks
+    __slots__ = ('is_done', 'value', 'exception', '_callbacks', '_errbacks', '_lock', '_error_on_callbacks')
 
-    def __init__(self):
+    # Class-level default for error_on_callbacks. Per-instance values passed to
+    # __init__ take precedence; this remains overridable globally (e.g. test
+    # suites set it to surface callback exceptions).
+    _default_error_on_callbacks = False
+
+    def __init__(self, error_on_callbacks=None):
         self.is_done = False
         self.value = None
         self.exception = None
         self._callbacks = []
         self._errbacks = []
         self._lock = threading.Lock()
+        # None means "inherit the class-level default"; an explicit bool
+        # overrides it for this instance only.
+        self._error_on_callbacks = error_on_callbacks
+
+    @property
+    def error_on_callbacks(self):
+        """When True, exceptions raised inside callbacks/errbacks are re-raised
+        to the caller instead of only being logged."""
+        if self._error_on_callbacks is None:
+            return self._default_error_on_callbacks
+        return self._error_on_callbacks
 
     def succeeded(self):
         return self.is_done and self.exception is None

@@ -55,3 +55,45 @@ class TestFutureAwait:
         f1.failure(ValueError('err'))
         assert f2.failed()
         assert isinstance(f2.exception, ValueError)
+
+
+def _raise(exc):
+    raise exc
+
+
+class TestFutureErrorOnCallbacks:
+    """error_on_callbacks is now a per-instance option (see #2366).
+
+    An explicit value passed to ``Future(error_on_callbacks=...)`` takes
+    precedence over the class-level default. (Note: the test suite sets the
+    class-level default to True via ``test/__init__.py``, so these tests pass
+    explicit values to assert override behavior independent of that default.)
+    """
+
+    def test_none_inherits_class_default(self):
+        assert Future().error_on_callbacks is Future._default_error_on_callbacks
+
+    def test_explicit_false_overrides_class_default(self):
+        f = Future(error_on_callbacks=False)
+        assert f.error_on_callbacks is False
+        f.add_callback(lambda v: _raise(ValueError('boom')))
+        f.success(1)  # suppressed despite class default True
+        assert f.succeeded()
+
+    def test_callback_exception_raised_when_enabled(self):
+        f = Future(error_on_callbacks=True)
+        f.add_callback(lambda v: _raise(ValueError('boom')))
+        with pytest.raises(ValueError, match='boom'):
+            f.success(1)
+
+    def test_errback_exception_raised_when_enabled(self):
+        f = Future(error_on_callbacks=True)
+        f.add_errback(lambda e: _raise(RuntimeError('boom')))
+        with pytest.raises(RuntimeError, match='boom'):
+            f.failure(ValueError('orig'))
+
+    def test_already_done_callback_raises_when_enabled(self):
+        f = Future(error_on_callbacks=True)
+        f.success(1)
+        with pytest.raises(ValueError, match='boom'):
+            f.add_callback(lambda v: _raise(ValueError('boom')))

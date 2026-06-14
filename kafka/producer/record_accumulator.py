@@ -71,6 +71,7 @@ class RecordAccumulator:
         'retry_backoff_ms': 100,
         'transaction_manager': None,
         'message_version': 2,
+        'error_on_callbacks': None,
     }
 
     def __init__(self, **configs):
@@ -182,7 +183,7 @@ class RecordAccumulator:
                     self.config['batch_size']
                 )
 
-                batch = ProducerBatch(tp, records, now=now)
+                batch = ProducerBatch(tp, records, now=now, error_on_callbacks=self.config['error_on_callbacks'])
                 future = batch.try_append(timestamp_ms, key, value, headers, now=now)
                 if not future:
                     raise Exception()
@@ -271,7 +272,7 @@ class RecordAccumulator:
                 self.config['compression_attrs'],
                 self.config['batch_size'],
             )
-            current_batch = ProducerBatch(tp, builder, now=now)
+            current_batch = ProducerBatch(tp, builder, now=now, error_on_callbacks=self.config['error_on_callbacks'])
             current_batch.created = batch.created
 
             for record in group:
@@ -285,7 +286,7 @@ class RecordAccumulator:
                         self.config['compression_attrs'],
                         self.config['batch_size'],
                     )
-                    current_batch = ProducerBatch(tp, builder, now=now)
+                    current_batch = ProducerBatch(tp, builder, now=now, error_on_callbacks=self.config['error_on_callbacks'])
                     current_batch.created = batch.created
                     metadata = builder.append(record.timestamp, record.key, record.value, record.headers)
 

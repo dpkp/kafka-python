@@ -16,7 +16,7 @@ class FinalState(IntEnum):
 
 
 class ProducerBatch:
-    def __init__(self, tp, records, now=None):
+    def __init__(self, tp, records, now=None, error_on_callbacks=None):
         now = time.monotonic() if now is None else now
         self.max_record_size = 0
         self.created = now
@@ -29,6 +29,10 @@ class ProducerBatch:
         self.produce_future = FutureProduceResult(tp)
         self._record_futures = []
         self._retry = False
+        # Propagated to each per-record FutureRecordMetadata so user callbacks
+        # registered via send().add_callback()/add_errback() can opt in to
+        # re-raising exceptions instead of only logging them.
+        self._error_on_callbacks = error_on_callbacks
         self._final_state = None
 
     @property
@@ -71,7 +75,8 @@ class ProducerBatch:
             metadata.crc,
             len(key) if key is not None else -1,
             len(value) if value is not None else -1,
-            sum(len(h_key.encode("utf-8")) + len(h_val) for h_key, h_val in headers) if headers else -1)
+            sum(len(h_key.encode("utf-8")) + len(h_val) for h_key, h_val in headers) if headers else -1,
+            error_on_callbacks=self._error_on_callbacks)
         self._record_futures.append(future)
         return future
 

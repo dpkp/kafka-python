@@ -220,6 +220,10 @@ class KafkaProducer:
             acknowledgement. Users should generally prefer to leave this config
             unset and instead use delivery_timeout_ms to control retry behavior.
             Default: float('inf') (infinite)
+        error_on_callbacks (bool): If True, exceptions raised inside callbacks
+            and errbacks registered on the future returned by send() are
+            re-raised to the caller instead of only being logged. If None, the
+            Future class-level default is used (False). Default: None.
         batch_size (int): Requests sent to brokers will contain multiple
             batches, one for each partition with data available to be sent.
             A small batch size will make batching less common and may reduce
@@ -414,6 +418,7 @@ class KafkaProducer:
         'acks': -1,
         'compression_type': None,
         'retries': float('inf'),
+        'error_on_callbacks': None,
         'batch_size': 16384,
         'linger_ms': 0,
         'partitioner': DefaultPartitioner(),
@@ -936,6 +941,7 @@ class KafkaProducer:
                     len(key_bytes) if key_bytes is not None else -1,
                     len(value_bytes) if value_bytes is not None else -1,
                     sum(len(h_key.encode("utf-8")) + len(h_value) for h_key, h_value in headers) if headers else -1,
+                    error_on_callbacks=self.config['error_on_callbacks'],
                 ).failure(e)
 
         # Track if the user passed an explicit partition b/c sticky logic does not apply

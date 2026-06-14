@@ -44,8 +44,8 @@ class FutureRecordMetadata(Future):
     :class:`~kafka.errors.KafkaTimeoutError`).
     """
     __slots__ = ('_produce_future', 'args')
-    def __init__(self, produce_future, batch_index, timestamp_ms, checksum, serialized_key_size, serialized_value_size, serialized_header_size):
-        super().__init__()
+    def __init__(self, produce_future, batch_index, timestamp_ms, checksum, serialized_key_size, serialized_value_size, serialized_header_size, error_on_callbacks=None):
+        super().__init__(error_on_callbacks=error_on_callbacks)
         self._produce_future = produce_future
         # packing args as a tuple is a minor speed optimization
         self.args = (batch_index, timestamp_ms, checksum, serialized_key_size, serialized_value_size, serialized_header_size)

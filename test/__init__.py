@@ -25,4 +25,4 @@ if log_file_path:
 
 
 from kafka.future import Future
-Future.error_on_callbacks = True  # always fail during testing
+Future._default_error_on_callbacks = True  # always fail during testing

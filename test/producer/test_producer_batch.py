@@ -3,6 +3,7 @@
 import pytest
 
 from kafka.errors import IllegalStateError, KafkaError
+from kafka.future import Future
 from kafka.producer.future import FutureRecordMetadata, RecordMetadata
 from kafka.producer.producer_batch import ProducerBatch
 from kafka.record.memory_records import MemoryRecordsBuilder
@@ -22,6 +23,23 @@ def memory_records_builder():
 @pytest.fixture
 def batch(tp, memory_records_builder):
     return ProducerBatch(tp, memory_records_builder)
+
+
+def test_producer_batch_error_on_callbacks_default(tp, memory_records_builder):
+    # Unset -> record futures inherit the Future class-level default (#2366).
+    batch = ProducerBatch(tp, memory_records_builder)
+    future = batch.try_append(0, b'key', b'value', [])
+    assert future.error_on_callbacks is Future._default_error_on_callbacks
+
+
+def test_producer_batch_error_on_callbacks_propagates(tp, memory_records_builder):
+    # ProducerBatch threads an explicit error_on_callbacks down to each record
+    # future, overriding the class-level default in both directions (#2366).
+    batch = ProducerBatch(tp, memory_records_builder, error_on_callbacks=True)
+    assert batch.try_append(0, b'k', b'v', []).error_on_callbacks is True
+
+    batch_off = ProducerBatch(tp, memory_records_builder, error_on_callbacks=False)
+    assert batch_off.try_append(0, b'k', b'v', []).error_on_callbacks is False
 
 
 def test_producer_batch_producer_id(tp, memory_records_builder):
