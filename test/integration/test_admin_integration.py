@@ -1,5 +1,4 @@
 from logging import info
-from threading import Event, Thread
 from time import monotonic as time, sleep
 
 import pytest
@@ -170,95 +169,31 @@ def test_describe_configs_invalid_broker_id_raises(kafka_admin_client):
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 11), reason='Describe consumer group requires broker >=0.11')
-def test_describe_group_exists(kafka_admin_client, kafka_consumer_factory, topic):
-    """Tests that the describe consumer group call returns valid consumer group information
-    This test takes inspiration from the test 'test_group' in test_consumer_group.py.
-    """
-    consumers = {}
-    stop = {}
-    threads = {}
+def test_describe_group_exists(kafka_admin_client, consumer_group, topic):
+    """Tests that the describe consumer group call returns valid consumer group information"""
     random_group_id = 'test-group-' + random_string(6)
     group_id_list = [random_group_id, random_group_id + '_2']
-    generations = {group_id_list[0]: set(), group_id_list[1]: set()}
-    def consumer_thread(i, group_id):
-        assert i not in consumers
-        assert i not in stop
-        stop[i] = Event()
-        with kafka_consumer_factory(group_id=group_id) as c:
-            consumers[i] = c
-            while not stop[i].is_set():
-                consumers[i].poll(timeout_ms=200)
-        consumers[i] = None
-        stop[i] = None
 
-    num_consumers = 3
-    for i in range(num_consumers):
-        group_id = group_id_list[i % 2]
-        t = Thread(target=consumer_thread, args=(i, group_id,))
-        t.start()
-        threads[i] = t
+    # Two members in the first group, one in the second.
+    consumer_group.spawn(group_id=group_id_list[0], count=2)
+    consumer_group.spawn(group_id=group_id_list[1], count=1)
+    consumer_group.wait_for_stable(timeout=35)
 
-    try:
-        timeout = time() + 35
-        while True:
-            info('Checking consumers...')
-            for c in range(num_consumers):
-
-                # Verify all consumers have been created
-                if c not in consumers:
-                    break
-
-                # Verify all consumers have an assignment
-                elif not consumers[c].assignment():
-                    break
-
-            # If all consumers exist and have an assignment
-            else:
-
-                info('All consumers have assignment... checking for stable group')
-                # Verify all consumers are in the same generation
-                # then log state and break while loop
-
-                for consumer in consumers.values():
-                    generations[consumer.config['group_id']].add(consumer._coordinator._generation.generation_id)
-
-                is_same_generation = any([len(consumer_generation) == 1 for consumer_generation in generations.values()])
-
-                # New generation assignment is not complete until
-                # coordinator.rejoining = False
-                rejoining = any([consumer._coordinator.rejoining
-                                 for consumer in list(consumers.values())])
-
-                if not rejoining and is_same_generation:
-                    break
-            assert time() < timeout, "timeout waiting for assignments"
-            info('sleeping...')
-            sleep(1)
-
-        info('Group stabilized; verifying assignment')
-        output = kafka_admin_client.describe_groups(group_id_list)
-        assert len(output) == 2
-        groups = set()
-        for group in output.values():
-            assert(group['group_id'] in group_id_list)
-            if group['group_id'] == group_id_list[0]:
-                assert(len(group['members']) == 2)
-            else:
-                assert(len(group['members']) == 1)
-            for member in group['members']:
-                    assert(member['member_metadata']['topics'] == [topic])
-                    assert(member['member_assignment']['assigned_partitions'][0]['topic'] == topic)
-            groups.add(group['group_id'])
-        assert(sorted(list(groups)) == group_id_list)
-    finally:
-        info('Shutting down %s consumers', num_consumers)
-        for c in range(num_consumers):
-            info('Stopping consumer %s', c)
-            stop[c].set()
-        for c in range(num_consumers):
-            info('Waiting for consumer thread %s', c)
-            threads[c].join()
-            threads[c] = None
+    info('Group stabilized; verifying assignment')
+    output = kafka_admin_client.describe_groups(group_id_list)
+    assert len(output) == 2
+    groups = set()
+    for group in output.values():
+        assert(group['group_id'] in group_id_list)
+        if group['group_id'] == group_id_list[0]:
+            assert(len(group['members']) == 2)
+        else:
+            assert(len(group['members']) == 1)
+        for member in group['members']:
+            assert(member['member_metadata']['topics'] == [topic])
+            assert(member['member_assignment']['assigned_partitions'][0]['topic'] == topic)
+        groups.add(group['group_id'])
+    assert(sorted(list(groups)) == group_id_list)
 
 
 @pytest.mark.skipif(env_kafka_version() < (1, 1), reason="Delete consumer groups requires broker >=1.1")

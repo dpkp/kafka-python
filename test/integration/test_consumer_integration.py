@@ -1,6 +1,4 @@
-import collections
 import logging
-import threading
 import time
 from unittest.mock import patch, ANY
 
@@ -346,119 +344,45 @@ def test_kafka_consumer_position_after_seek_to_end(kafka_consumer_factory, topic
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 9), reason='Unsupported Kafka Version')
-def test_group(kafka_consumer_factory, topic):
+def test_group(consumer_group, topic):
     num_partitions = 4
-    consumers = {}
-    stop = {}
-    threads = {}
-    messages = collections.defaultdict(lambda: collections.defaultdict(list))
-    group_id = 'test-group-' + random_string(6)
-    def consumer_thread(i):
-        assert i not in consumers
-        assert i not in stop
-        stop[i] = threading.Event()
-        # Tight session/request timeouts so close() can't outlast the
-        # join(timeout=5) below. request_timeout_ms must exceed
-        # session_timeout_ms, and both must exceed heartbeat_interval_ms
-        # (default 500 in the consumer_factory fixture).
-        with kafka_consumer_factory(group_id=group_id,
-                                    client_id="consumer_thread-%s" % i,
-                                    session_timeout_ms=3000,
-                                    request_timeout_ms=4000,
-                                    bootstrap_timeout_ms=5000) as c:
-            consumers[i] = c
-            while not stop[i].is_set():
-                for tp, records in consumers[i].poll(timeout_ms=200).items():
-                    messages[i][tp].extend(records)
-        consumers[i] = None
-        stop[i] = None
-
     num_consumers = 4
-    for i in range(num_consumers):
-        t = threading.Thread(target=consumer_thread, args=(i,))
-        t.daemon = True
-        t.start()
-        threads[i] = t
+    group_id = 'test-group-' + random_string(6)
 
-    try:
-        timeout = time.monotonic() + 15
-        while True:
-            assert time.monotonic() < timeout, "timeout waiting for assignments"
-            # Verify all consumers have been created
-            missing_consumers =  set(range(num_consumers)) - set(consumers.keys())
-            if missing_consumers:
-                logging.info('Waiting on consumer threads: %s', missing_consumers)
-                time.sleep(1)
+    # Tight session/request timeouts so close() can't outlast the join(timeout=5)
+    # at teardown. request_timeout_ms must exceed session_timeout_ms, and both
+    # must exceed heartbeat_interval_ms (default 500 in the consumer factory).
+    consumers = consumer_group.spawn(
+        group_id=group_id, count=num_consumers,
+        session_timeout_ms=3000, request_timeout_ms=4000, bootstrap_timeout_ms=5000)
+
+    consumer_group.wait_for_stable(timeout=15)
+
+    logging.info('Group stabilized; verifying assignment')
+    group_assignment = set()
+    for c in consumers:
+        assert len(c.assignment()) != 0
+        assert set.isdisjoint(c.assignment(), group_assignment)
+        group_assignment.update(c.assignment())
+
+    assert group_assignment == set([
+        TopicPartition(topic, partition)
+        for partition in range(num_partitions)])
+    logging.info('Assignment looks good!')
+
+    logging.info('Verifying heartbeats')
+    while True:
+        for c in consumers:
+            heartbeat = c._coordinator.heartbeat
+            last_hb = time.monotonic() - 0.5
+            if (heartbeat.heartbeat_failed or
+                heartbeat.last_receive < last_hb or
+                heartbeat.last_reset > last_hb):
+                time.sleep(0.1)
                 continue
-
-            unassigned_consumers = {c for c, consumer in consumers.items() if not consumer.assignment()}
-            if unassigned_consumers:
-                logging.info('Waiting for consumer assignments: %s', unassigned_consumers)
-                time.sleep(1)
-                continue
-
-            # If all consumers exist and have an assignment
-            logging.info('All consumers have assignment... checking for stable group')
-            # Verify all consumers are in the same generation
-            # then log state and break while loop
-            generations = set([consumer._coordinator._generation.generation_id
-                               for consumer in consumers.values()])
-
-            # New generation assignment is not complete until
-            # coordinator.rejoining = False
-            rejoining = set([c for c, consumer in consumers.items() if consumer._coordinator.rejoining])
-
-            if not rejoining and len(generations) == 1:
-                for c, consumer in consumers.items():
-                    logging.info("[%s] %s %s: %s", c,
-                                 consumer._coordinator._generation.generation_id,
-                                 consumer._coordinator._generation.member_id,
-                                 consumer.assignment())
-                break
-            else:
-                logging.info('Rejoining: %s, generations: %s', rejoining, generations)
-                time.sleep(1)
-                continue
-
-        logging.info('Group stabilized; verifying assignment')
-        group_assignment = set()
-        for c in range(num_consumers):
-            assert len(consumers[c].assignment()) != 0
-            assert set.isdisjoint(consumers[c].assignment(), group_assignment)
-            group_assignment.update(consumers[c].assignment())
-
-        assert group_assignment == set([
-            TopicPartition(topic, partition)
-            for partition in range(num_partitions)])
-        logging.info('Assignment looks good!')
-
-        logging.info('Verifying heartbeats')
-        while True:
-            for c in range(num_consumers):
-                heartbeat = consumers[c]._coordinator.heartbeat
-                last_hb = time.monotonic() - 0.5
-                if (heartbeat.heartbeat_failed or
-                    heartbeat.last_receive < last_hb or
-                    heartbeat.last_reset > last_hb):
-                    time.sleep(0.1)
-                    continue
-            else:
-                break
-        logging.info('Heartbeats look good')
-
-    finally:
-        logging.info('Shutting down %s consumers', num_consumers)
-        # Signal all stops first, then join. Serial stop-then-join causes the
-        # broker to process N back-to-back rebalances (one per LeaveGroup);
-        # parallel teardown lets all consumers close concurrently against a
-        # single rebalance pass and keeps each join() within budget.
-        for c in range(num_consumers):
-            logging.info('Stopping consumer %s', c)
-            stop[c].set()
-        for c in range(num_consumers):
-            threads[c].join(timeout=5)
-            assert not threads[c].is_alive()
-            threads[c] = None
+        else:
+            break
+    logging.info('Heartbeats look good')
 
 
 @pytest.mark.skipif(env_kafka_version() < (0, 9), reason='Unsupported Kafka Version')
