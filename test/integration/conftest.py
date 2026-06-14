@@ -1,5 +1,8 @@
+import collections
 import contextlib
 import os
+import threading
+import time
 from urllib.parse import urlparse
 import uuid
 
@@ -7,6 +10,7 @@ import pytest
 
 from kafka import KafkaAdminClient, KafkaConsumer, KafkaProducer
 from kafka.net.compat import KafkaNetClient
+from kafka.structs import MemberState
 from kafka.util import TOPIC_LEGAL_CHARS, TOPIC_MAX_LENGTH, ensure_valid_topic_name
 from test.testutil import env_kafka_version, random_string
 from test.integration.fixtures import KafkaFixture, ZookeeperFixture, create_topics, client_params
@@ -248,3 +252,121 @@ def send_messages(topic, producer, request):
         return [msg for (msg, f) in messages_and_futures]
 
     return _send_messages
+
+
+class ConsumerGroupRunner:
+    """Manage pools of group-consuming threads for integration tests.
+
+    Each spawned consumer runs ``poll()`` in its own background thread until
+    the runner is torn down. Use :meth:`wait_for_stable` to block until every
+    member has joined and the group has finished rebalancing. Threads are
+    stopped and joined automatically when the ``consumer_group`` fixture tears
+    down, so tests don't need their own ``try/finally`` bookkeeping.
+
+        consumers = consumer_group.spawn(group_id='g', count=4)
+        consumer_group.wait_for_stable()
+        # ... assert on consumers[i].assignment() ...
+
+    ``wait_for_stable`` reads ``consumer.group_metadata()`` / ``assignment()``
+    from the test thread while each consumer polls on its own thread. Both
+    reads are lock-protected snapshots, so this cross-thread observation is
+    safe even though KafkaConsumer is otherwise single-threaded.
+    """
+    def __init__(self, consumer_factory):
+        self._factory = consumer_factory
+        self._members = []  # [{thread, stop, ready, consumer, error}, ...]
+
+    @property
+    def consumers(self):
+        """Live consumers in spawn order (across all groups)."""
+        return [m['consumer'] for m in self._members]
+
+    def spawn(self, group_id, count=1, client_id_prefix='consumer', **consumer_params):
+        """Start ``count`` consumer threads in ``group_id``; return their consumers.
+
+        Blocks until each consumer has been constructed (or re-raises whatever
+        the consumer thread failed with during startup). Extra keyword args are
+        passed through to ``kafka_consumer_factory``.
+        """
+        started = []
+        for _ in range(count):
+            member = {
+                'stop': threading.Event(),
+                'ready': threading.Event(),
+                'consumer': None,
+                'error': None,
+            }
+            client_id = '%s-%d' % (client_id_prefix, len(self._members))
+
+            def run(member=member, client_id=client_id):
+                try:
+                    with self._factory(group_id=group_id, client_id=client_id,
+                                       **consumer_params) as c:
+                        member['consumer'] = c
+                        member['ready'].set()
+                        while not member['stop'].is_set():
+                            c.poll(timeout_ms=200)
+                except Exception as e:  # surfaced via spawn() / stop()
+                    member['error'] = e
+                finally:
+                    member['ready'].set()
+
+            member['thread'] = threading.Thread(target=run, name=client_id, daemon=True)
+            self._members.append(member)
+            member['thread'].start()
+            assert member['ready'].wait(timeout=15), \
+                'consumer %s failed to start within 15s' % client_id
+            if member['error'] is not None:
+                raise member['error']
+            started.append(member['consumer'])
+        return started
+
+    def wait_for_stable(self, timeout=30, poll_interval=1):
+        """Block until every member is STABLE, assigned, and on one generation.
+
+        "One generation" is checked per group_id: a fully converged group has
+        all of its members reporting the same generation_id, which means the
+        most recent rebalance has propagated to everyone.
+        """
+        deadline = time.monotonic() + timeout
+        while True:
+            generations = collections.defaultdict(set)
+            converged = True
+            for c in self.consumers:
+                meta = c.group_metadata()
+                if meta.state != MemberState.STABLE or not c.assignment():
+                    converged = False
+                    break
+                generations[meta.group_id].add(meta.generation_id)
+            if converged and all(len(g) == 1 for g in generations.values()):
+                return
+            assert time.monotonic() < deadline, 'timeout waiting for stable group'
+            time.sleep(poll_interval)
+
+    def stop(self):
+        """Signal all threads to stop, then join them (called at teardown)."""
+        for member in self._members:
+            member['stop'].set()
+        for member in self._members:
+            member['thread'].join(timeout=5)
+            assert not member['thread'].is_alive(), \
+                'consumer thread %s did not exit' % member['thread'].name
+
+
+@pytest.fixture
+def consumer_group(kafka_consumer_factory):
+    """Return a ConsumerGroupRunner for multi-threaded consumer group tests.
+
+    Spawns group-consuming threads on demand and tears them all down (stop +
+    join) when the test finishes::
+
+        def test_something(consumer_group, topic):
+            consumer_group.spawn(group_id='g', count=3)
+            consumer_group.wait_for_stable()
+            ...
+    """
+    runner = ConsumerGroupRunner(kafka_consumer_factory)
+    try:
+        yield runner
+    finally:
+        runner.stop()
