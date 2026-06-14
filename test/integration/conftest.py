@@ -317,7 +317,7 @@ class ConsumerGroupRunner:
             assert member['ready'].wait(timeout=15), \
                 'consumer %s failed to start within 15s' % client_id
             if member['error'] is not None:
-                raise member['error']
+                raise member['error']  # pylint: disable=raising-bad-type
             started.append(member['consumer'])
         return started
 
