@@ -16,17 +16,11 @@ from kafka.protocol.consumer import (
     HeartbeatRequest, JoinGroupRequest, LeaveGroupRequest, SyncGroupRequest,
     DEFAULT_GENERATION_ID, UNKNOWN_MEMBER_ID,
 )
-from kafka.structs import ConsumerGroupMetadata
+from kafka.structs import ConsumerGroupMetadata, MemberState
 from kafka.util import Timer
 
 log = logging.getLogger('kafka.coordinator')
 heartbeat_log = logging.getLogger('kafka.coordinator.heartbeat')
-
-
-class MemberState:
-    UNJOINED = '<unjoined>'  # the client is not part of a group
-    REBALANCING = '<rebalancing>'  # the client has begun rebalancing
-    STABLE = '<stable>'  # the client has joined and is sending heartbeats
 
 
 class Generation:
@@ -891,13 +885,16 @@ class BaseCoordinator(ABC):
             return self._generation
 
     def group_metadata(self):
-        """Return a snapshot of this member's group identity (KIP-447).
+        """Return a snapshot of this member's group membership.
 
         Returns the current generation_id / member_id / group_instance_id even
         when the group is not stable; the caller (typically
         KafkaProducer.send_offsets_to_transaction) needs whatever is current
-        so the broker can fence stale instances. If the consumer has never
-        joined, the snapshot has the no-generation defaults.
+        so the broker can fence stale instances (KIP-447). If the consumer has
+        never joined, the snapshot has the no-generation defaults.
+
+        Also carries the live MemberState (``state``) so callers can observe
+        whether the group has converged (it is ignored by the fencing path).
         """
         with self._lock:
             return ConsumerGroupMetadata(
@@ -905,6 +902,7 @@ class BaseCoordinator(ABC):
                 generation_id=self._generation.generation_id,
                 member_id=self._generation.member_id,
                 group_instance_id=self.group_instance_id,
+                state=self.state,
             )
 
     # deprecated

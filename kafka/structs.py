@@ -51,19 +51,33 @@ Keyword Arguments:
 """
 
 
-ConsumerGroupMetadata = namedtuple("ConsumerGroupMetadata",
-    ["group_id", "generation_id", "member_id", "group_instance_id"],
-    defaults=[-1, '', None])
-ConsumerGroupMetadata.__doc__ = """A snapshot of a consumer's group membership (KIP-447).
+class MemberState:
+    UNJOINED = '<unjoined>'  # the client is not part of a group
+    REBALANCING = '<rebalancing>'  # the client has begun rebalancing
+    STABLE = '<stable>'  # the client has joined and is sending heartbeats
 
-Passed to KafkaProducer.send_offsets_to_transaction() so the broker can fence
-stale consumer instances when committing offsets inside a transaction. The
-broker uses member_id + generation_id + group_instance_id to verify the
-producer is acting on behalf of the current group generation.
+
+ConsumerGroupMetadata = namedtuple("ConsumerGroupMetadata",
+    ["group_id", "generation_id", "member_id", "group_instance_id", "state"],
+    defaults=[None, -1, '', None, MemberState.UNJOINED])
+ConsumerGroupMetadata.__doc__ = """A snapshot of a consumer's group membership.
+
+The first four fields are the KIP-447 fencing identity: pass the snapshot to
+KafkaProducer.send_offsets_to_transaction() so the broker can fence stale
+consumer instances when committing offsets inside a transaction. The broker
+uses member_id + generation_id + group_instance_id to verify the producer is
+acting on behalf of the current group generation.
+
+The ``state`` field exposes the live MemberState (it is ignored by the
+producer/fencing path). It lets callers observe whether the consumer has
+converged on a stable assignment - useful for monitoring and for tests that
+wait for a group to finish rebalancing.
 
 Keyword Arguments:
-    group_id (str): The consumer group id.
+    group_id (str): The consumer group id, or None for manual assignment.
     generation_id (int): The current generation id (-1 if unjoined).
     member_id (str): The current member id ('' if unjoined).
     group_instance_id (str): The static membership instance id, or None.
+    state (str): The current MemberState (one of MemberState.UNJOINED,
+        MemberState.REBALANCING, MemberState.STABLE).
 """

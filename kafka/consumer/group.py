@@ -662,13 +662,17 @@ class KafkaConsumer:
         self._coordinator.commit_offsets_sync(offsets, timeout_ms=timeout_ms)
 
     def group_metadata(self):
-        """Return a snapshot of this consumer's group membership (KIP-447).
+        """Return a snapshot of this consumer's group membership.
 
         Pass the result to KafkaProducer.send_offsets_to_transaction() so the
         broker can fence stale instances of this consumer when committing
-        offsets inside a transaction. The snapshot is always safe to call:
-        if no group_id is configured (manual assignment) the returned
-        ConsumerGroupMetadata has group_id=None.
+        offsets inside a transaction (KIP-447). The snapshot also exposes the
+        current MemberState (``state``), so callers can observe whether the
+        consumer has converged on a stable assignment.
+
+        The snapshot is always safe to call: if no group_id is configured
+        (manual assignment) the returned ConsumerGroupMetadata has
+        group_id=None and is permanently unjoined.
 
         Returns:
             ConsumerGroupMetadata
