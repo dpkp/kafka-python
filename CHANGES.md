@@ -1,3 +1,22 @@
+# 3.0.1 (Jun 17, 2026)
+
+### Fixes
+* receive_message_max_bytes default 100MiB (consumer/producer/admin); check against fetch_max_bytes and max_partition_fetch_bytes in Consumer (#3075)
+
+### Consumer
+* Add MemberState to ConsumerGroupMetadata / consumer.group_metadata() (#3071)
+
+### Tests
+* Add ConsumerGroupRunner fixture to manage multi-consumer group integration tests (#3072)
+* Add MockGroup and test coordinator rebalance / metadata snapshot changes (#3069)
+* Use 4.3 api_version for producer tests; fixup inadvertent sender thread leak in test (#3068)
+* Add test coverage for producer acks (#3067)
+* Fill-in empty sender tests (#3066)
+* Add MockCluster; test failover on CoordinatorNotAvailableError (#3065)
+
+### Documentation
+* Add ConsumerRecord, RecordMetadata, and FutureRecordMetadata to docs (#3070)
+
 # 3.0.0 (Jun 11, 2026)
 
 This is a major release with significant changes to kafka-python internals to simplify networking and feature development. It introduces a new networking layer (`kafka.net`) and a dynamic protocol system that uses JSON schema files imported from Apache Kafka. It substantially refactors and expands the Admin client, including breaking changes to some API signatures, and it lands a long list of KIP features/changes across the producer, consumer, admin, and networking/metadata clients. Protocol support across kafka-python is now at or beyond the apache kafka 3.0 baseline.

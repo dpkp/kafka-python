@@ -1,6 +1,31 @@
 Changelog
 =========
 
+3.0.1 (Jun 17, 2026)
+####################
+
+Fixes
+-----
+* receive_message_max_bytes default 100MiB (consumer/producer/admin); check against fetch_max_bytes and max_partition_fetch_bytes in Consumer (#3075)
+
+Consumer
+--------
+* Add MemberState to ConsumerGroupMetadata / consumer.group_metadata() (#3071)
+
+Tests
+-----
+* Add ConsumerGroupRunner fixture to manage multi-consumer group integration tests (#3072)
+* Add MockGroup and test coordinator rebalance / metadata snapshot changes (#3069)
+* Use 4.3 api_version for producer tests; fixup inadvertent sender thread leak in test (#3068)
+* Add test coverage for producer acks (#3067)
+* Fill-in empty sender tests (#3066)
+* Add MockCluster; test failover on CoordinatorNotAvailableError (#3065)
+
+Documentation
+-------------
+* Add ConsumerRecord, RecordMetadata, and FutureRecordMetadata to docs (#3070)
+
+
 3.0.0 (Jun 11, 2026)
 ####################
 
