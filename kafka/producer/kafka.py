@@ -282,7 +282,7 @@ class KafkaProducer:
             Default: 30000.
         receive_message_max_bytes (int): Maximum allowed network frame size.
             Used to avoid OOM when decoding malformed network message header.
-            Default: 1000000.
+            Default: 100_000_000.
         receive_buffer_bytes (int): The size of the TCP receive buffer
             (SO_RCVBUF) to use when reading data. Default: None (relies on
             system defaults). Java client defaults to 32768.
@@ -425,7 +425,7 @@ class KafkaProducer:
         'client_dns_lookup': 'use_all_dns_ips',
         'retry_backoff_ms': 100,
         'request_timeout_ms': 30000,
-        'receive_message_max_bytes': 1000000,
+        'receive_message_max_bytes': 100_000_000,
         'receive_buffer_bytes': None,
         'send_buffer_bytes': None,
         'socket_options': [(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)],
