@@ -59,7 +59,7 @@ jobs:
         shard: [1, 2, 3, 4]
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Python ${{ github.event.inputs.python_version }}
         uses: actions/setup-python@v6
