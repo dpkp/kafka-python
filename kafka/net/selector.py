@@ -632,13 +632,6 @@ class NetworkSelector:
         if self._io_thread is not None:
             self.stop()
         self.drain()
-        # Retire anything still pending (scheduled timers, suspended I/O
-        # waiters) so their generators are closed and frames released instead
-        # of leaking at teardown.
-        for task in list(self._pending_tasks):
-            self._retire_task(task)
-        self._scheduled.clear()
-        self._ready.clear()
         for s in (self._wakeup_r, self._wakeup_w):
             try:
                 self._selector.unregister(s)
