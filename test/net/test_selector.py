@@ -507,6 +507,23 @@ class TestNetworkSelector:
         net.poll(timeout_ms=1000, future=done)
         assert results == [('a', 'b')]
 
+    def test_unschedule_does_not_close_task_in_ready(self):
+        """Regression: a timer that has already fired -- popped from the heap
+        into _ready must survive unschedule(). """
+        net = NetworkSelector()
+        fired = []
+        timer = net.call_at(time.monotonic() - 1, lambda: fired.append(True))
+        net._schedule_tasks()  # move the due timer from the heap into _ready
+        assert timer in net._ready
+        assert timer.scheduled_at is None
+
+        net.unschedule(timer)
+
+        assert not timer.is_done, \
+            'unschedule() closed a task already queued in _ready'
+        net.drain()  # must drive the queued timer without raising
+        assert fired == [True]
+
 
 class TestSlowTaskMonitor:
     """Detection for tasks that hog the event loop (livelock guard).
