@@ -396,8 +396,10 @@ class NetworkSelector:
         task.close()
 
     def unschedule(self, task):
+        was_scheduled = task.scheduled_at is not None
         self._remove_scheduled(task)
-        self._retire_task(task)
+        if was_scheduled:
+            self._retire_task(task)
 
     def reschedule(self, when, task):
         self._remove_scheduled(task)
