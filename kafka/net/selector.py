@@ -122,6 +122,21 @@ class Task:
             raise RuntimeError('Task exception is already set!')
         self._exc = exc
 
+    def close(self):
+        stack = self._stack
+        while stack:
+            coro, stack = stack
+            if inspect.isgenerator(coro) or inspect.iscoroutine(coro):
+                try:
+                    coro.close()
+                except ValueError:
+                    # currently-executing coroutine -- can't close it from
+                    # within itself; bail without corrupting _stack.
+                    return
+                except Exception:
+                    log.exception('Error closing coroutine for cancelled task')
+        self._stack = None
+
     @property
     def is_done(self):
         return self._stack is None
@@ -363,13 +378,29 @@ class NetworkSelector:
             result = await result
         return result
 
-    def unschedule(self, task):
+    def _remove_scheduled(self, task):
         if task.scheduled_at is not None:
-            self._scheduled.remove((task.scheduled_at, task))
+            try:
+                self._scheduled.remove((task.scheduled_at, task))
+            except ValueError:
+                pass
+            else:
+                # re-heapify to ensure heap structure is valid
+                heapq.heapify(self._scheduled)
             task.scheduled_at = None
 
+    def _retire_task(self, task):
+        if task is self._current:
+            return
+        self._pending_tasks.discard(task)
+        task.close()
+
+    def unschedule(self, task):
+        self._remove_scheduled(task)
+        self._retire_task(task)
+
     def reschedule(self, when, task):
-        self.unschedule(task)
+        self._remove_scheduled(task)
         self.call_at(when, task)
         return task
 
@@ -601,6 +632,13 @@ class NetworkSelector:
         if self._io_thread is not None:
             self.stop()
         self.drain()
+        # Retire anything still pending (scheduled timers, suspended I/O
+        # waiters) so their generators are closed and frames released instead
+        # of leaking at teardown.
+        for task in list(self._pending_tasks):
+            self._retire_task(task)
+        self._scheduled.clear()
+        self._ready.clear()
         for s in (self._wakeup_r, self._wakeup_w):
             try:
                 self._selector.unregister(s)
