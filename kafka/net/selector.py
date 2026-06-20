@@ -50,13 +50,15 @@ class KernelEvent:
 
 
 class TaskState(enum.Enum):
-    CREATED   = 'created'
-    SCHEDULED = 'scheduled'   # in _scheduled heap
-    READY     = 'ready'       # in _ready deque
-    RUNNING   = 'running'     # is _current
-    SUSPENDED = 'suspended'   # parked on I/O or a Future
-    DONE      = 'done'        # completed (exception is None or not)
-    CANCELLED = 'cancelled'
+    CREATED     = 'created'
+    SCHEDULED   = 'scheduled'   # in _scheduled heap
+    UNSCHEDULED = 'unscheduled' # maybe lost
+    READY       = 'ready'       # in _ready deque
+    RUNNING     = 'running'     # is _current
+    WAIT_IO     = 'wait_io'     # parked on I/O
+    WAIT_FUTURE = 'wait_future' # waiting on Future to resolve
+    DONE        = 'done'        # completed (exception is None or not)
+    CANCELLED   = 'cancelled'
 
 
 class Task:
@@ -95,7 +97,6 @@ class Task:
 
                 if isinstance(ret, (KernelEvent, Future)):
                     # handle in event loop
-                    self.state = TaskState.SUSPENDED
                     return ret
 
                 elif inspect.isgenerator(ret) or inspect.iscoroutine(ret) or inspect.isfunction(ret):
@@ -138,7 +139,7 @@ class Task:
         self._exc = exc
 
     def close(self):
-        if self.state in (TaskState.DONE, TaskState.CANCELLED):
+        if self.is_done:
             return
         stack = self._stack
         while stack:
@@ -154,6 +155,7 @@ class Task:
                     log.exception('Error closing coroutine for cancelled task')
         self._stack = None
         self.state = TaskState.CANCELLED
+        self._exc = Errors.Cancelled()
 
     @property
     def is_done(self):
@@ -354,10 +356,15 @@ class NetworkSelector:
         self._ready.append(task)
         task.state = TaskState.READY
 
+    def _task_done(self, task):
+        if not task.is_done:
+            raise RuntimeError('Task is not done yet!')
+        self._pending_tasks.discard(task)
+        task.state = TaskState.DONE
+
     def call_soon(self, task):
         if not isinstance(task, Task):
             task = Task(task)
-        task.state = TaskState.READY
         self._add_ready_task(task)
         self._pending_tasks.add(task)
         return task
@@ -403,36 +410,35 @@ class NetworkSelector:
         return result
 
     def _unschedule(self, task):
-        if task.scheduled_at is not None:
-            try:
-                self._scheduled.remove((task.scheduled_at, task))
-            except ValueError:
-                pass
-            else:
-                # re-heapify to ensure heap structure is valid
-                heapq.heapify(self._scheduled)
-            task.scheduled_at = None
+        assert task.state is TaskState.SCHEDULED
+        assert task.scheduled_at is not None
+        try:
+            self._scheduled.remove((task.scheduled_at, task))
+        except ValueError:
+            pass
+        else:
+            # re-heapify to ensure heap structure is valid
+            heapq.heapify(self._scheduled)
+        task.scheduled_at = None
+        task.state = TaskState.UNSCHEDULED
 
     def cancel(self, task):
-        if task.state is TaskState.DONE:
+        if task.state in (TaskState.DONE, TaskState.CANCELLED):
             return
         elif task.state is TaskState.RUNNING:
             assert task is self._current
-            log.warning('Cannot cancel running task!')
-            return
-        elif task.state is TaskState.READY:
-            task.state = TaskState.CANCELLED
-            return
+            raise RuntimeError('Cannot cancel running task!')
         elif task.state is TaskState.SCHEDULED:
             self._unschedule(task)
-        elif task.state is TaskState.SUSPENDED:
+        elif task.state is TaskState.WAIT_IO:
             # unregister_event?
             pass
         self._pending_tasks.discard(task)
         task.close()
 
     def reschedule(self, when, task):
-        self._unschedule(task)
+        if task.state is TaskState.SCHEDULED:
+            self._unschedule(task)
         self.call_at(when, task)
         return task
 
@@ -466,10 +472,7 @@ class NetworkSelector:
         def on_resume():
             state['fired'] = True
             if state['timer'] is not None:
-                try:
-                    self.cancel(state['timer'])
-                except ValueError:
-                    pass
+                self.cancel(state['timer'])
             self.unregister_event(fileobj, event)
 
         def on_timeout():
@@ -589,7 +592,6 @@ class NetworkSelector:
                 self._current = self._ready.popleft()
                 # Silently skip tasks that are done or cancelled
                 if self._current.state in (TaskState.DONE, TaskState.CANCELLED):
-                    self._pending_tasks.discard(self._current)
                     continue
                 self._current.state = TaskState.RUNNING
                 step_start = time.monotonic() if threshold else None
@@ -603,21 +605,21 @@ class NetworkSelector:
                         event = self._current()
 
                 except StopIteration:
-                    # Task ran to completion. Drop the strong ref so the Task
-                    # (and its coroutine, frames, locals) is now collectable.
-                    self._pending_tasks.discard(self._current)
+                    self._task_done(self._current)
 
                 except BaseException as e:
                     log.exception(e)
                     # Same as StopIteration -- task is done either way.
-                    self._pending_tasks.discard(self._current)
+                    self._task_done(self._current)
 
                 else:
                     if isinstance(event, KernelEvent):
                         log_trace('kernel event %s', event.method)
                         getattr(self, event.method)(*event.args)
+                        self._current.state = TaskState.WAIT_IO
                     elif isinstance(event, Future):
                         event.add_both(lambda _, task=self._current: self.call_soon(task))
+                        self._current.state = TaskState.WAIT_FUTURE
                     else:
                         raise RuntimeError('Unhandled event type: %s' % event)
 

@@ -324,12 +324,13 @@ class TestNetworkSelector:
         assert len(net._scheduled) == 0
         assert t.scheduled_at is None
 
-    def test_unschedule_unscheduled(self):
+    def test_unschedule_unscheduled_raises(self):
         net = NetworkSelector()
         def task():
             yield
         assert len(net._scheduled) == 0
-        net._unschedule(Task(task))
+        with pytest.raises(AssertionError):
+            net._unschedule(Task(task))
         assert len(net._scheduled) == 0
 
     def test_reschedule(self):
@@ -508,8 +509,6 @@ class TestNetworkSelector:
         assert results == [('a', 'b')]
 
     def test_cancel_closes_ready_task(self):
-        """Regression: a timer that has already fired -- popped from the heap
-        into _ready must survive cancel(). """
         net = NetworkSelector()
         fired = []
         timer = net.call_at(time.monotonic() - 1, lambda: fired.append(True))
@@ -519,9 +518,10 @@ class TestNetworkSelector:
 
         net.cancel(timer)
 
-        assert not timer.is_done, \
-            'unschedule() closed a task already queued in _ready'
-        net.drain()  # must drive the queued timer without raising
+        assert timer in net._ready  # timer still in ready queue
+        assert timer.is_done, \
+            'unschedule() did not close task queued in _ready'
+        net.drain()  # skips the queued timer without running
         assert fired == []
 
 
