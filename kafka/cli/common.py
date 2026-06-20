@@ -37,9 +37,13 @@ def build_kwargs(props):
 def build_connect_kwargs(config):
     if not config.bootstrap_servers:
         raise ValueError('python -m kafka: error: the following arguments are required: -b/--bootstrap-servers')
+    # Accept both repeated -b flags and comma-separated lists within a single flag
+    bootstrap_servers = []
+    for entry in config.bootstrap_servers:
+        bootstrap_servers.extend(s.strip() for s in entry.split(',') if s.strip())
     kwargs = build_kwargs(config.extra_config)
     kwargs.update({
-        'bootstrap_servers': config.bootstrap_servers,
+        'bootstrap_servers': bootstrap_servers,
         'security_protocol': config.security_protocol,
         'sasl_mechanism': config.sasl_mechanism,
         'sasl_plain_username': config.sasl_user,
