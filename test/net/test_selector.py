@@ -4,6 +4,7 @@ import time
 
 import pytest
 
+from kafka.errors import KafkaTimeoutError
 from kafka.future import Future
 from kafka.net.selector import (
     KernelEvent,
@@ -310,6 +311,34 @@ class TestNetworkSelector:
         try:
             # Should not raise
             net.unregister_event(rsock, 1)
+        finally:
+            rsock.close()
+            wsock.close()
+
+    def test_wait_io_timeout_raises(self):
+        # A timed-out I/O wait must raise KafkaTimeoutError into the awaiting
+        # coroutine. Regression: the injected exception was dropped because
+        # _poll_once cleared self._exc before __call__ could consume it.
+        net = NetworkSelector()
+        rsock, wsock = socket.socketpair()
+        rsock.setblocking(False)
+        wsock.setblocking(False)
+        outcome = []
+
+        async def reader():
+            try:
+                await net.wait_read(rsock, timeout_at=time.monotonic() + 0.02)
+                outcome.append(('resumed', rsock.recv(1024)))
+            except KafkaTimeoutError:
+                outcome.append(('timeout',))
+
+        net.call_soon(reader)
+        try:
+            net.drain(scheduled=True)
+            assert outcome == [('timeout',)], outcome
+            with pytest.raises(KeyError):
+                net._selector.get_key(rsock)
+            assert len(net._scheduled) == 0
         finally:
             rsock.close()
             wsock.close()

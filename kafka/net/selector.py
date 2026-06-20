@@ -597,12 +597,9 @@ class NetworkSelector:
                 step_start = time.monotonic() if threshold else None
                 try:
                     log_trace('Calling task %s', self._current)
-                    inject = self._current._exc
-                    if inject is not None:
-                        self._current._exc = None
-                        event = self._current(inject)
-                    else:
-                        event = self._current()
+                    # __call__ consumes self._exc (set via inject_exc) itself;
+                    # don't clear it here or the injected exception is dropped.
+                    event = self._current()
 
                 except StopIteration:
                     self._task_done(self._current)
