@@ -54,10 +54,7 @@ class WakeupNotifier:
         finally:
             self._fut = None
             if timer is not None and not timer.is_done:
-                try:
-                    self._net.unschedule(timer)
-                except (ValueError, RuntimeError, ReferenceError):
-                    pass
+                self._net.cancel(timer)
 
     def notify(self):
         # Always queue _wakeup on the IO thread. Skipping the queue when

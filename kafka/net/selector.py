@@ -1,5 +1,6 @@
 import collections
 import copy
+import enum
 import inspect
 import logging
 import heapq
@@ -48,12 +49,23 @@ class KernelEvent:
         return (yield self)
 
 
+class TaskState(enum.Enum):
+    CREATED   = 'created'
+    SCHEDULED = 'scheduled'   # in _scheduled heap
+    READY     = 'ready'       # in _ready deque
+    RUNNING   = 'running'     # is _current
+    SUSPENDED = 'suspended'   # parked on I/O or a Future
+    DONE      = 'done'        # completed (exception is None or not)
+    CANCELLED = 'cancelled'
+
+
 class Task:
     def __init__(self, coro):
         self._stack = (_initialize_coro(coro), None)
         self._res = None
         self._exc = None
         self.scheduled_at = None
+        self.state = TaskState.CREATED
 
     def __lt__(self, other):
         # heapq requires the heap entries to be orderable. When two tasks
@@ -83,6 +95,7 @@ class Task:
 
                 if isinstance(ret, (KernelEvent, Future)):
                     # handle in event loop
+                    self.state = TaskState.SUSPENDED
                     return ret
 
                 elif inspect.isgenerator(ret) or inspect.iscoroutine(ret) or inspect.isfunction(ret):
@@ -93,6 +106,7 @@ class Task:
                 self._stack = self._stack[1]
                 if not self._stack:
                     # we're done, back to event loop
+                    self.state = TaskState.DONE
                     self._res = final.value
                     raise
                 else:
@@ -102,6 +116,7 @@ class Task:
             except BaseException as e:
                 self._stack = self._stack[1]
                 if not self._stack:
+                    self.state = TaskState.DONE
                     self._exc = e
                     raise
                 else:
@@ -123,6 +138,8 @@ class Task:
         self._exc = exc
 
     def close(self):
+        if self.state in (TaskState.DONE, TaskState.CANCELLED):
+            return
         stack = self._stack
         while stack:
             coro, stack = stack
@@ -136,6 +153,7 @@ class Task:
                 except Exception:
                     log.exception('Error closing coroutine for cancelled task')
         self._stack = None
+        self.state = TaskState.CANCELLED
 
     @property
     def is_done(self):
@@ -321,6 +339,7 @@ class NetworkSelector:
         if not isinstance(task, Task):
             task = Task(task)
         task.scheduled_at = when
+        task.state = TaskState.SCHEDULED
         heapq.heappush(self._scheduled, (when, task))
         self._pending_tasks.add(task)
         return task
@@ -331,10 +350,15 @@ class NetworkSelector:
         self.call_at(time.monotonic() + delay, task)
         return task
 
+    def _add_ready_task(self, task):
+        self._ready.append(task)
+        task.state = TaskState.READY
+
     def call_soon(self, task):
         if not isinstance(task, Task):
             task = Task(task)
-        self._ready.append(task)
+        task.state = TaskState.READY
+        self._add_ready_task(task)
         self._pending_tasks.add(task)
         return task
 
@@ -378,7 +402,7 @@ class NetworkSelector:
             result = await result
         return result
 
-    def _remove_scheduled(self, task):
+    def _unschedule(self, task):
         if task.scheduled_at is not None:
             try:
                 self._scheduled.remove((task.scheduled_at, task))
@@ -389,20 +413,26 @@ class NetworkSelector:
                 heapq.heapify(self._scheduled)
             task.scheduled_at = None
 
-    def _retire_task(self, task):
-        if task is self._current:
+    def cancel(self, task):
+        if task.state is TaskState.DONE:
             return
+        elif task.state is TaskState.RUNNING:
+            assert task is self._current
+            log.warning('Cannot cancel running task!')
+            return
+        elif task.state is TaskState.READY:
+            task.state = TaskState.CANCELLED
+            return
+        elif task.state is TaskState.SCHEDULED:
+            self._unschedule(task)
+        elif task.state is TaskState.SUSPENDED:
+            # unregister_event?
+            pass
         self._pending_tasks.discard(task)
         task.close()
 
-    def unschedule(self, task):
-        was_scheduled = task.scheduled_at is not None
-        self._remove_scheduled(task)
-        if was_scheduled:
-            self._retire_task(task)
-
     def reschedule(self, when, task):
-        self._remove_scheduled(task)
+        self._unschedule(task)
         self.call_at(when, task)
         return task
 
@@ -437,7 +467,7 @@ class NetworkSelector:
             state['fired'] = True
             if state['timer'] is not None:
                 try:
-                    self.unschedule(state['timer'])
+                    self.cancel(state['timer'])
                 except ValueError:
                     pass
             self.unregister_event(fileobj, event)
@@ -448,7 +478,7 @@ class NetworkSelector:
             state['fired'] = True
             self.unregister_event(fileobj, event)
             suspended.inject_exc(Errors.KafkaTimeoutError('I/O wait timed out'))
-            self._ready.append(suspended)
+            self._add_ready_task(suspended)
 
         suspended.push_stack(on_resume)
         state['timer'] = self.call_at(timeout_at, on_timeout)
@@ -457,7 +487,7 @@ class NetworkSelector:
         while self._scheduled and self._scheduled[0][0] <= time.monotonic():
             _, task = heapq.heappop(self._scheduled)
             task.scheduled_at = None
-            self._ready.append(task)
+            self._add_ready_task(task)
 
     def _next_scheduled_timeout(self, now):
         try:
@@ -557,6 +587,11 @@ class NetworkSelector:
             n = len(self._ready)
             for i in range(n):
                 self._current = self._ready.popleft()
+                # Silently skip tasks that are done or cancelled
+                if self._current.state in (TaskState.DONE, TaskState.CANCELLED):
+                    self._pending_tasks.discard(self._current)
+                    continue
+                self._current.state = TaskState.RUNNING
                 step_start = time.monotonic() if threshold else None
                 try:
                     log_trace('Calling task %s', self._current)
@@ -666,12 +701,12 @@ class NetworkSelector:
 
             if events & selectors.EVENT_WRITE:
                 if writer is not None:
-                    self._ready.append(writer)
+                    self._add_ready_task(writer)
                 else:
                     log.warning("Selector got WRITE event without writer...")
 
             if events & selectors.EVENT_READ:
                 if reader is not None:
-                    self._ready.append(reader)
+                    self._add_ready_task(reader)
                 else:
                     log.warning("Selector got READ event without reader...")

@@ -320,7 +320,7 @@ class TestNetworkSelector:
             yield
         t = net.call_later(10, task)
         assert len(net._scheduled) == 1
-        net.unschedule(t)
+        net._unschedule(t)
         assert len(net._scheduled) == 0
         assert t.scheduled_at is None
 
@@ -329,7 +329,7 @@ class TestNetworkSelector:
         def task():
             yield
         assert len(net._scheduled) == 0
-        net.unschedule(Task(task))
+        net._unschedule(Task(task))
         assert len(net._scheduled) == 0
 
     def test_reschedule(self):
@@ -507,9 +507,9 @@ class TestNetworkSelector:
         net.poll(timeout_ms=1000, future=done)
         assert results == [('a', 'b')]
 
-    def test_unschedule_does_not_close_task_in_ready(self):
+    def test_cancel_closes_ready_task(self):
         """Regression: a timer that has already fired -- popped from the heap
-        into _ready must survive unschedule(). """
+        into _ready must survive cancel(). """
         net = NetworkSelector()
         fired = []
         timer = net.call_at(time.monotonic() - 1, lambda: fired.append(True))
@@ -517,12 +517,12 @@ class TestNetworkSelector:
         assert timer in net._ready
         assert timer.scheduled_at is None
 
-        net.unschedule(timer)
+        net.cancel(timer)
 
         assert not timer.is_done, \
             'unschedule() closed a task already queued in _ready'
         net.drain()  # must drive the queued timer without raising
-        assert fired == [True]
+        assert fired == []
 
 
 class TestSlowTaskMonitor:
