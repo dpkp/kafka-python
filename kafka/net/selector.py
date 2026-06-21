@@ -427,7 +427,8 @@ class NetworkSelector:
             return
         elif task.state is TaskState.RUNNING:
             assert task is self._current
-            raise RuntimeError('Cannot cancel running task!')
+            self._current.state = TaskState.CANCELLED
+            return
         elif task.state is TaskState.SCHEDULED:
             self._unschedule(task)
         elif task.state is TaskState.WAIT_IO:
@@ -622,7 +623,11 @@ class NetworkSelector:
                     self._task_done(self._current)
 
                 else:
-                    if isinstance(event, KernelEvent):
+                    if self._current.state is TaskState.CANCELLED:
+                        # ignores any returned KernelEvent/Future
+                        self._pending_tasks.discard(self._current)
+                        self._current.close()
+                    elif isinstance(event, KernelEvent):
                         log_trace('kernel event %s', event.method)
                         getattr(self, event.method)(*event.args)
                         assert self._current.state is not TaskState.RUNNING
