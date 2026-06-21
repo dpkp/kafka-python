@@ -2459,6 +2459,95 @@ class TestOnCloseRevokesPartitions:
 
 
 # ---------------------------------------------------------------------------
+# Heartbeat error responses must not route through _failed_request.
+#
+# Regression: _handle_heartbeat_response used to be called *inside* the
+# `_send_heartbeat_request` send try/except, so any error it raised -- even a
+# normal RebalanceInProgress -- was caught by `except KafkaError`, logged at
+# error level, and marked the coordinator dead via _failed_request(). The fix
+# moves response handling into an `else` clause so only genuine transport-level
+# send failures reach _failed_request.
+# ---------------------------------------------------------------------------
+
+
+def _dispatch_heartbeat(coord):
+    """Dispatch a single _send_heartbeat_request and pump the network until
+    the resulting future resolves."""
+    future = coord._manager.call_soon(coord._send_heartbeat_request)
+    coord._client.poll(future=future, timeout_ms=5000)
+    return future
+
+
+def test_send_heartbeat_rebalance_in_progress_does_not_fail_request(
+        mocker, broker, seeded_coord):
+    """A normal rebalance (RebalanceInProgress heartbeat response) must request
+    a rejoin without marking the coordinator dead or calling _failed_request."""
+    failed_spy = mocker.spy(seeded_coord, '_failed_request')
+    dead_spy = mocker.spy(seeded_coord, 'coordinator_dead')
+    broker.respond(HeartbeatRequest, HeartbeatResponse(
+        throttle_time_ms=0,
+        error_code=Errors.RebalanceInProgressError.errno))
+
+    future = _dispatch_heartbeat(seeded_coord)
+
+    assert future.failed()
+    assert isinstance(future.exception, Errors.RebalanceInProgressError)
+    # The regression routed in-band error responses through _failed_request,
+    # which logs an error and marks the coordinator dead.
+    assert failed_spy.call_count == 0
+    assert dead_spy.call_count == 0
+    # In-band rebalance signal triggers a rejoin, not a dead coordinator.
+    assert seeded_coord.rejoin_needed is True
+    assert seeded_coord.coordinator_id == 0
+
+
+@pytest.mark.parametrize('error_type', [
+    Errors.RebalanceInProgressError,
+    Errors.IllegalGenerationError,
+    Errors.UnknownMemberIdError,
+])
+def test_send_heartbeat_membership_errors_do_not_mark_coordinator_dead(
+        mocker, broker, seeded_coord, error_type):
+    """Membership/rebalance heartbeat errors are handled in-band: they raise
+    the matching error to the caller but never invoke _failed_request and
+    never mark the coordinator dead."""
+    failed_spy = mocker.spy(seeded_coord, '_failed_request')
+    dead_spy = mocker.spy(seeded_coord, 'coordinator_dead')
+    broker.respond(HeartbeatRequest, HeartbeatResponse(
+        throttle_time_ms=0, error_code=error_type.errno))
+
+    future = _dispatch_heartbeat(seeded_coord)
+
+    assert future.failed()
+    assert isinstance(future.exception, error_type)
+    assert failed_spy.call_count == 0
+    assert dead_spy.call_count == 0
+    assert seeded_coord.coordinator_id == 0
+
+
+def test_send_heartbeat_transport_failure_marks_coordinator_dead(
+        mocker, broker, seeded_coord):
+    """A transport-level send failure (not an in-band error response) still
+    routes through _failed_request so the coordinator is marked dead."""
+    failed_spy = mocker.spy(seeded_coord, '_failed_request')
+    error = Errors.KafkaConnectionError('simulated transport failure')
+    broker.fail_next(HeartbeatRequest, error=error)
+
+    future = _dispatch_heartbeat(seeded_coord)
+
+    assert future.failed()
+    assert future.exception is error
+    assert failed_spy.call_count == 1
+    # node 0 is captured by the spy; _failed_request -> coordinator_dead has
+    # since reset seeded_coord.coordinator_id to None.
+    node_id, request, call_error = failed_spy.call_args[0]
+    assert node_id == 0
+    assert isinstance(request, HeartbeatRequest)
+    assert call_error is error
+    assert seeded_coord.coordinator_id is None
+
+
+# ---------------------------------------------------------------------------
 # Heartbeat coordinator failover
 # (https://github.com/dpkp/kafka-python/issues/1134)
 # ---------------------------------------------------------------------------
