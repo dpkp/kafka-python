@@ -318,7 +318,11 @@ class NetworkSelector:
             try:
                 state['value'] = await self._invoke(coro, *args)
             except BaseException as exc:
-                state['exception'] = exc
+                # fail_pending_waiters sets 'exception'; dont overwrite
+                if state['exception'] is None:
+                    state['exception'] = exc
+                elif not isinstance(exc, GeneratorExit):
+                    log.warning("During exception %s, caught additional error %s (ignoring)", state['exception'], exc)
             finally:
                 with self._pending_waiters_lock:
                     self._pending_waiters.pop(event, None)
