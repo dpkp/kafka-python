@@ -141,16 +141,13 @@ class Task:
     def close(self):
         if self.is_done:
             return
+        assert self.state is not TaskState.RUNNING
         stack = self._stack
         while stack:
             coro, stack = stack
             if inspect.isgenerator(coro) or inspect.iscoroutine(coro):
                 try:
                     coro.close()
-                except ValueError:
-                    # currently-executing coroutine -- can't close it from
-                    # within itself; bail without corrupting _stack.
-                    return
                 except Exception:
                     log.exception('Error closing coroutine for cancelled task')
         self._stack = None
