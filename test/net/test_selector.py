@@ -399,6 +399,36 @@ class TestNetworkSelector:
             rsock.close()
             wsock.close()
 
+    def test_cancel_running_task(self):
+        # A task may cancel itself while running. Task.close() cannot close the
+        # currently-executing coroutine from within it (ValueError: coroutine
+        # already executing); Task.close()'s guard must absorb that. The task is
+        # then torn down when it next suspends, and the kernel event it yielded
+        # after cancelling is short-circuited -- so no I/O registration happens.
+        net = NetworkSelector()
+        rsock, wsock = socket.socketpair()
+        rsock.setblocking(False)
+        wsock.setblocking(False)
+        holder = {}
+
+        async def self_cancel():
+            net.cancel(holder['task'])      # cancel self while RUNNING
+            await net.wait_read(rsock)      # short-circuited; must not register
+            raise AssertionError('cancelled task must not run past the await')
+
+        task = net.call_soon(self_cancel)
+        holder['task'] = task
+        try:
+            net.drain()
+            assert task.state is TaskState.CANCELLED, task.state
+            assert task.is_done
+            assert task not in net._pending_tasks
+            with pytest.raises(KeyError):
+                net._selector.get_key(rsock)   # never registered after cancel
+        finally:
+            rsock.close()
+            wsock.close()
+
     def test_cancel_wait_io_after_socket_closed(self):
         # During shutdown a connection may unregister and close its socket
         # before the parked task is cancelled. The io_guard finally then runs
