@@ -483,6 +483,7 @@ class NetworkSelector:
         guard = io_guard()
         next(guard)  # prime: suspend at the yield so close() triggers finally
         suspended.push_stack(guard)
+        suspended.state = TaskState.WAIT_IO
 
         if timeout_at is None or self._closed:
             return
@@ -624,7 +625,7 @@ class NetworkSelector:
                     if isinstance(event, KernelEvent):
                         log_trace('kernel event %s', event.method)
                         getattr(self, event.method)(*event.args)
-                        self._current.state = TaskState.WAIT_IO
+                        assert self._current.state is not TaskState.RUNNING
                     elif isinstance(event, Future):
                         event.add_both(lambda _, task=self._current: self.call_soon(task))
                         self._current.state = TaskState.WAIT_FUTURE
