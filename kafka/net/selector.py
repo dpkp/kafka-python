@@ -541,7 +541,11 @@ class NetworkSelector:
                 self._selector.unregister(fileobj)
             else:
                 self._selector.modify(fileobj, events, (None, writer) if event == selectors.EVENT_READ else (reader, None))
-        except KeyError:
+        except (KeyError, ValueError):
+            # KeyError: fileobj was never registered.
+            # ValueError: fileobj is closed (fileno() == -1) and no longer in
+            # the selector map -- e.g. the socket was closed before the wait's
+            # io_guard ran during shutdown. Either way there is nothing to do.
             pass
 
     def add_reader(self, fileobj, task):

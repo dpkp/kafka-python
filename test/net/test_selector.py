@@ -1,4 +1,5 @@
 import socket
+import selectors
 import threading
 import time
 
@@ -396,6 +397,32 @@ class TestNetworkSelector:
             net.drain()                        # ensure it never runs
         finally:
             rsock.close()
+            wsock.close()
+
+    def test_cancel_wait_io_after_socket_closed(self):
+        # During shutdown a connection may unregister and close its socket
+        # before the parked task is cancelled. The io_guard finally then runs
+        # unregister_event on a closed fileobj (fileno() == -1) that is no
+        # longer in the selector map; this must be tolerated, not raise
+        # ValueError (which surfaced as an ignored-in-generator warning).
+        net = NetworkSelector()
+        rsock, wsock = socket.socketpair()
+        rsock.setblocking(False)
+        wsock.setblocking(False)
+
+        async def reader():
+            await net.wait_read(rsock)
+            raise AssertionError('cancelled task must not resume')
+
+        task = net.call_soon(reader)
+        try:
+            net.drain()                        # park on I/O
+            # simulate connection teardown: drop the registration, then close
+            net.unregister_event(rsock, selectors.EVENT_READ)
+            rsock.close()                      # fileno() -> -1
+            net.cancel(task)                   # io_guard unregisters a dead fd
+            assert task.state is TaskState.CANCELLED
+        finally:
             wsock.close()
 
     def test_cancel_wait_io_cancels_paired_timer(self):
