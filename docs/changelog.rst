@@ -1,6 +1,21 @@
 Changelog
 =========
 
+3.0.3 (Unreleased)
+####################
+
+Fixes
+-----
+* Fix: do not mark coordinator dead on all HeartbeatResponse errors (#3082)
+* Improve task cleanup with net.cancel(task), TaskState, and consolidated wait_io cleanup (#3081)
+* cli: fix comma-separated --bootstrap-servers parsing (#3080)
+* Fix/net selector task already done (#3078)
+
+CI
+--
+* Bump actions/checkout from 6 to 7 (#3079)
+
+
 3.0.2 (Jun 18, 2026)
 ####################
 
