@@ -431,7 +431,8 @@ class NetworkSelector:
         elif task.state is TaskState.SCHEDULED:
             self._unschedule(task)
         elif task.state is TaskState.WAIT_IO:
-            # unregister_event?
+            # close() below drives the io_guard finalizer, which unregisters
+            # the fileobj and cancels any paired timeout timer.
             pass
         self._pending_tasks.discard(task)
         task.close()
@@ -463,28 +464,38 @@ class NetworkSelector:
     def _wait_io(self, fileobj, event, timeout_at):
         suspended = self._current
         self.register_event(fileobj, event, suspended)
+
+        timer = None  # set below iff there is a timeout
+
+        def io_guard():
+            # Primed and parked on the stack just above the waiting coroutine.
+            # Its finally runs exactly once, whichever way the wait ends:
+            #   I/O ready -> driven past the yield
+            #   cancel()  -> Task.close() throws GeneratorExit in at the yield
+            #   timeout   -> on_timeout injects an exc that propagates through
+            try:
+                yield
+            finally:
+                if timer is not None and not timer.is_done:
+                    self.cancel(timer)
+                self.unregister_event(fileobj, event)
+
+        guard = io_guard()
+        next(guard)  # prime: suspend at the yield so close() triggers finally
+        suspended.push_stack(guard)
+
         if timeout_at is None or self._closed:
-            suspended.push_stack(lambda: self.unregister_event(fileobj, event))
             return
 
-        state = {'fired': False, 'timer': None}
-
-        def on_resume():
-            state['fired'] = True
-            if state['timer'] is not None:
-                self.cancel(state['timer'])
-            self.unregister_event(fileobj, event)
-
         def on_timeout():
-            if state['fired']:
+            nonlocal timer
+            timer = None  # we are the timer; don't try to cancel ourselves
+            if suspended.is_done:
                 return
-            state['fired'] = True
-            self.unregister_event(fileobj, event)
             suspended.inject_exc(Errors.KafkaTimeoutError('I/O wait timed out'))
             self._add_ready_task(suspended)
 
-        suspended.push_stack(on_resume)
-        state['timer'] = self.call_at(timeout_at, on_timeout)
+        timer = self.call_at(timeout_at, on_timeout)
 
     def _schedule_tasks(self):
         while self._scheduled and self._scheduled[0][0] <= time.monotonic():

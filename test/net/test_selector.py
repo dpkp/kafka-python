@@ -10,6 +10,7 @@ from kafka.net.selector import (
     KernelEvent,
     NetworkSelector,
     Task,
+    TaskState,
     _initialize_coro,
 )
 
@@ -338,6 +339,86 @@ class TestNetworkSelector:
             assert outcome == [('timeout',)], outcome
             with pytest.raises(KeyError):
                 net._selector.get_key(rsock)
+            assert len(net._scheduled) == 0
+        finally:
+            rsock.close()
+            wsock.close()
+
+    def test_wait_io_resume_unregisters_and_cancels_timer(self):
+        # Normal I/O readiness must unregister the fileobj and cancel the
+        # paired timeout timer; cleanup runs in the io_guard finally.
+        net = NetworkSelector()
+        rsock, wsock = socket.socketpair()
+        rsock.setblocking(False)
+        wsock.setblocking(False)
+        seen = []
+
+        async def reader():
+            await net.wait_read(rsock, timeout_at=time.monotonic() + 100)
+            seen.append(rsock.recv(1024))
+
+        net.call_soon(reader)
+        try:
+            net.drain()                        # park on I/O
+            assert net._selector.get_key(rsock) is not None
+            assert len(net._scheduled) == 1    # paired timer scheduled
+            wsock.send(b'hi')
+            net.poll(timeout_ms=200)           # resume on readability
+            assert seen == [b'hi'], seen
+            with pytest.raises(KeyError):
+                net._selector.get_key(rsock)
+            assert len(net._scheduled) == 0    # paired timer cancelled
+        finally:
+            rsock.close()
+            wsock.close()
+
+    def test_cancel_unregisters_wait_io_task(self):
+        # Cancelling a task parked on I/O must unregister its fileobj and must
+        # not let the task resume.
+        net = NetworkSelector()
+        rsock, wsock = socket.socketpair()
+        rsock.setblocking(False)
+        wsock.setblocking(False)
+
+        async def reader():
+            await net.wait_read(rsock)         # no timeout: bare-guard path
+            raise AssertionError('cancelled task must not resume')
+
+        task = net.call_soon(reader)
+        try:
+            net.drain()                        # park on I/O
+            assert task.state is TaskState.WAIT_IO
+            assert net._selector.get_key(rsock) is not None
+            net.cancel(task)
+            assert task.state is TaskState.CANCELLED
+            with pytest.raises(KeyError):
+                net._selector.get_key(rsock)
+            net.drain()                        # ensure it never runs
+        finally:
+            rsock.close()
+            wsock.close()
+
+    def test_cancel_wait_io_cancels_paired_timer(self):
+        # Cancelling a timed I/O wait tears down both the fileobj and the
+        # paired timeout timer.
+        net = NetworkSelector()
+        rsock, wsock = socket.socketpair()
+        rsock.setblocking(False)
+        wsock.setblocking(False)
+
+        async def reader():
+            await net.wait_read(rsock, timeout_at=time.monotonic() + 100)
+            raise AssertionError('cancelled task must not resume')
+
+        task = net.call_soon(reader)
+        try:
+            net.drain()
+            assert len(net._scheduled) == 1
+            timer = net._scheduled[0][1]
+            net.cancel(task)
+            with pytest.raises(KeyError):
+                net._selector.get_key(rsock)
+            assert timer.is_done               # paired timer cancelled/closed
             assert len(net._scheduled) == 0
         finally:
             rsock.close()
