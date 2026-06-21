@@ -680,6 +680,8 @@ class NetworkSelector:
         if self._io_thread is not None:
             self.stop()
         self.drain()
+        for task in list(self._pending_tasks):
+            self.cancel(task)
         for s in (self._wakeup_r, self._wakeup_w):
             try:
                 self._selector.unregister(s)
