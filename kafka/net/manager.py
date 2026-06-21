@@ -423,11 +423,7 @@ class KafkaConnectionManager:
         try:
             return await wrapper
         finally:
-            if not timer.is_done:
-                try:
-                    self._net.unschedule(timer)
-                except ValueError:
-                    pass
+            self._net.cancel(timer)
 
     def call_soon(self, coro, *args):
         """Accepts a coroutine / awaitable / function and schedules it on the event loop.

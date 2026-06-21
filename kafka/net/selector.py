@@ -1,5 +1,6 @@
 import collections
 import copy
+import enum
 import inspect
 import logging
 import heapq
@@ -48,12 +49,25 @@ class KernelEvent:
         return (yield self)
 
 
+class TaskState(enum.Enum):
+    CREATED     = 'created'
+    SCHEDULED   = 'scheduled'   # in _scheduled heap
+    UNSCHEDULED = 'unscheduled' # maybe lost
+    READY       = 'ready'       # in _ready deque
+    RUNNING     = 'running'     # is _current
+    WAIT_IO     = 'wait_io'     # parked on I/O
+    WAIT_FUTURE = 'wait_future' # waiting on Future to resolve
+    DONE        = 'done'        # completed (exception is None or not)
+    CANCELLED   = 'cancelled'
+
+
 class Task:
     def __init__(self, coro):
         self._stack = (_initialize_coro(coro), None)
         self._res = None
         self._exc = None
         self.scheduled_at = None
+        self.state = TaskState.CREATED
 
     def __lt__(self, other):
         # heapq requires the heap entries to be orderable. When two tasks
@@ -93,6 +107,7 @@ class Task:
                 self._stack = self._stack[1]
                 if not self._stack:
                     # we're done, back to event loop
+                    self.state = TaskState.DONE
                     self._res = final.value
                     raise
                 else:
@@ -102,6 +117,7 @@ class Task:
             except BaseException as e:
                 self._stack = self._stack[1]
                 if not self._stack:
+                    self.state = TaskState.DONE
                     self._exc = e
                     raise
                 else:
@@ -123,19 +139,20 @@ class Task:
         self._exc = exc
 
     def close(self):
+        if self.is_done:
+            return
+        assert self.state is not TaskState.RUNNING
         stack = self._stack
         while stack:
             coro, stack = stack
             if inspect.isgenerator(coro) or inspect.iscoroutine(coro):
                 try:
                     coro.close()
-                except ValueError:
-                    # currently-executing coroutine -- can't close it from
-                    # within itself; bail without corrupting _stack.
-                    return
                 except Exception:
                     log.exception('Error closing coroutine for cancelled task')
         self._stack = None
+        self.state = TaskState.CANCELLED
+        self._exc = Errors.Cancelled()
 
     @property
     def is_done(self):
@@ -298,7 +315,11 @@ class NetworkSelector:
             try:
                 state['value'] = await self._invoke(coro, *args)
             except BaseException as exc:
-                state['exception'] = exc
+                # fail_pending_waiters sets 'exception'; dont overwrite
+                if state['exception'] is None:
+                    state['exception'] = exc
+                elif not isinstance(exc, GeneratorExit):
+                    log.warning("During exception %s, caught additional error %s (ignoring)", state['exception'], exc)
             finally:
                 with self._pending_waiters_lock:
                     self._pending_waiters.pop(event, None)
@@ -321,6 +342,7 @@ class NetworkSelector:
         if not isinstance(task, Task):
             task = Task(task)
         task.scheduled_at = when
+        task.state = TaskState.SCHEDULED
         heapq.heappush(self._scheduled, (when, task))
         self._pending_tasks.add(task)
         return task
@@ -331,10 +353,20 @@ class NetworkSelector:
         self.call_at(time.monotonic() + delay, task)
         return task
 
+    def _add_ready_task(self, task):
+        self._ready.append(task)
+        task.state = TaskState.READY
+
+    def _task_done(self, task):
+        if not task.is_done:
+            raise RuntimeError('Task is not done yet!')
+        self._pending_tasks.discard(task)
+        task.state = TaskState.DONE
+
     def call_soon(self, task):
         if not isinstance(task, Task):
             task = Task(task)
-        self._ready.append(task)
+        self._add_ready_task(task)
         self._pending_tasks.add(task)
         return task
 
@@ -378,31 +410,38 @@ class NetworkSelector:
             result = await result
         return result
 
-    def _remove_scheduled(self, task):
-        if task.scheduled_at is not None:
-            try:
-                self._scheduled.remove((task.scheduled_at, task))
-            except ValueError:
-                pass
-            else:
-                # re-heapify to ensure heap structure is valid
-                heapq.heapify(self._scheduled)
-            task.scheduled_at = None
+    def _unschedule(self, task):
+        assert task.state is TaskState.SCHEDULED
+        assert task.scheduled_at is not None
+        try:
+            self._scheduled.remove((task.scheduled_at, task))
+        except ValueError:
+            pass
+        else:
+            # re-heapify to ensure heap structure is valid
+            heapq.heapify(self._scheduled)
+        task.scheduled_at = None
+        task.state = TaskState.UNSCHEDULED
 
-    def _retire_task(self, task):
-        if task is self._current:
+    def cancel(self, task):
+        if task.state in (TaskState.DONE, TaskState.CANCELLED):
             return
+        elif task.state is TaskState.RUNNING:
+            assert task is self._current
+            self._current.state = TaskState.CANCELLED
+            return
+        elif task.state is TaskState.SCHEDULED:
+            self._unschedule(task)
+        elif task.state is TaskState.WAIT_IO:
+            # close() below drives the io_guard finalizer, which unregisters
+            # the fileobj and cancels any paired timeout timer.
+            pass
         self._pending_tasks.discard(task)
         task.close()
 
-    def unschedule(self, task):
-        was_scheduled = task.scheduled_at is not None
-        self._remove_scheduled(task)
-        if was_scheduled:
-            self._retire_task(task)
-
     def reschedule(self, when, task):
-        self._remove_scheduled(task)
+        if task.state is TaskState.SCHEDULED:
+            self._unschedule(task)
         self.call_at(when, task)
         return task
 
@@ -427,37 +466,45 @@ class NetworkSelector:
     def _wait_io(self, fileobj, event, timeout_at):
         suspended = self._current
         self.register_event(fileobj, event, suspended)
+
+        timer = None  # set below iff there is a timeout
+
+        def io_guard():
+            # Primed and parked on the stack just above the waiting coroutine.
+            # Its finally runs exactly once, whichever way the wait ends:
+            #   I/O ready -> driven past the yield
+            #   cancel()  -> Task.close() throws GeneratorExit in at the yield
+            #   timeout   -> on_timeout injects an exc that propagates through
+            try:
+                yield
+            finally:
+                if timer is not None and not timer.is_done:
+                    self.cancel(timer)
+                self.unregister_event(fileobj, event)
+
+        guard = io_guard()
+        next(guard)  # prime: suspend at the yield so close() triggers finally
+        suspended.push_stack(guard)
+        suspended.state = TaskState.WAIT_IO
+
         if timeout_at is None or self._closed:
-            suspended.push_stack(lambda: self.unregister_event(fileobj, event))
             return
 
-        state = {'fired': False, 'timer': None}
-
-        def on_resume():
-            state['fired'] = True
-            if state['timer'] is not None:
-                try:
-                    self.unschedule(state['timer'])
-                except ValueError:
-                    pass
-            self.unregister_event(fileobj, event)
-
         def on_timeout():
-            if state['fired']:
+            nonlocal timer
+            timer = None  # we are the timer; don't try to cancel ourselves
+            if suspended.is_done:
                 return
-            state['fired'] = True
-            self.unregister_event(fileobj, event)
             suspended.inject_exc(Errors.KafkaTimeoutError('I/O wait timed out'))
-            self._ready.append(suspended)
+            self._add_ready_task(suspended)
 
-        suspended.push_stack(on_resume)
-        state['timer'] = self.call_at(timeout_at, on_timeout)
+        timer = self.call_at(timeout_at, on_timeout)
 
     def _schedule_tasks(self):
         while self._scheduled and self._scheduled[0][0] <= time.monotonic():
             _, task = heapq.heappop(self._scheduled)
             task.scheduled_at = None
-            self._ready.append(task)
+            self._add_ready_task(task)
 
     def _next_scheduled_timeout(self, now):
         try:
@@ -491,7 +538,11 @@ class NetworkSelector:
                 self._selector.unregister(fileobj)
             else:
                 self._selector.modify(fileobj, events, (None, writer) if event == selectors.EVENT_READ else (reader, None))
-        except KeyError:
+        except (KeyError, ValueError):
+            # KeyError: fileobj was never registered.
+            # ValueError: fileobj is closed (fileno() == -1) and no longer in
+            # the selector map -- e.g. the socket was closed before the wait's
+            # io_guard ran during shutdown. Either way there is nothing to do.
             pass
 
     def add_reader(self, fileobj, task):
@@ -557,32 +608,37 @@ class NetworkSelector:
             n = len(self._ready)
             for i in range(n):
                 self._current = self._ready.popleft()
+                # Silently skip tasks that are done or cancelled
+                if self._current.state in (TaskState.DONE, TaskState.CANCELLED):
+                    continue
+                self._current.state = TaskState.RUNNING
                 step_start = time.monotonic() if threshold else None
                 try:
                     log_trace('Calling task %s', self._current)
-                    inject = self._current._exc
-                    if inject is not None:
-                        self._current._exc = None
-                        event = self._current(inject)
-                    else:
-                        event = self._current()
+                    # __call__ consumes self._exc (set via inject_exc) itself;
+                    # don't clear it here or the injected exception is dropped.
+                    event = self._current()
 
                 except StopIteration:
-                    # Task ran to completion. Drop the strong ref so the Task
-                    # (and its coroutine, frames, locals) is now collectable.
-                    self._pending_tasks.discard(self._current)
+                    self._task_done(self._current)
 
                 except BaseException as e:
                     log.exception(e)
                     # Same as StopIteration -- task is done either way.
-                    self._pending_tasks.discard(self._current)
+                    self._task_done(self._current)
 
                 else:
-                    if isinstance(event, KernelEvent):
+                    if self._current.state is TaskState.CANCELLED:
+                        # ignores any returned KernelEvent/Future
+                        self._pending_tasks.discard(self._current)
+                        self._current.close()
+                    elif isinstance(event, KernelEvent):
                         log_trace('kernel event %s', event.method)
                         getattr(self, event.method)(*event.args)
+                        assert self._current.state is not TaskState.RUNNING
                     elif isinstance(event, Future):
                         event.add_both(lambda _, task=self._current: self.call_soon(task))
+                        self._current.state = TaskState.WAIT_FUTURE
                     else:
                         raise RuntimeError('Unhandled event type: %s' % event)
 
@@ -634,6 +690,8 @@ class NetworkSelector:
         if self._io_thread is not None:
             self.stop()
         self.drain()
+        for task in list(self._pending_tasks):
+            self.cancel(task)
         for s in (self._wakeup_r, self._wakeup_w):
             try:
                 self._selector.unregister(s)
@@ -666,12 +724,12 @@ class NetworkSelector:
 
             if events & selectors.EVENT_WRITE:
                 if writer is not None:
-                    self._ready.append(writer)
+                    self._add_ready_task(writer)
                 else:
                     log.warning("Selector got WRITE event without writer...")
 
             if events & selectors.EVENT_READ:
                 if reader is not None:
-                    self._ready.append(reader)
+                    self._add_ready_task(reader)
                 else:
                     log.warning("Selector got READ event without reader...")

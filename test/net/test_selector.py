@@ -1,14 +1,17 @@
 import socket
+import selectors
 import threading
 import time
 
 import pytest
 
+from kafka.errors import KafkaTimeoutError
 from kafka.future import Future
 from kafka.net.selector import (
     KernelEvent,
     NetworkSelector,
     Task,
+    TaskState,
     _initialize_coro,
 )
 
@@ -314,22 +317,187 @@ class TestNetworkSelector:
             rsock.close()
             wsock.close()
 
+    def test_wait_io_timeout_raises(self):
+        # A timed-out I/O wait must raise KafkaTimeoutError into the awaiting
+        # coroutine. Regression: the injected exception was dropped because
+        # _poll_once cleared self._exc before __call__ could consume it.
+        net = NetworkSelector()
+        rsock, wsock = socket.socketpair()
+        rsock.setblocking(False)
+        wsock.setblocking(False)
+        outcome = []
+
+        async def reader():
+            try:
+                await net.wait_read(rsock, timeout_at=time.monotonic() + 0.02)
+                outcome.append(('resumed', rsock.recv(1024)))
+            except KafkaTimeoutError:
+                outcome.append(('timeout',))
+
+        net.call_soon(reader)
+        try:
+            net.drain(scheduled=True)
+            assert outcome == [('timeout',)], outcome
+            with pytest.raises(KeyError):
+                net._selector.get_key(rsock)
+            assert len(net._scheduled) == 0
+        finally:
+            rsock.close()
+            wsock.close()
+
+    def test_wait_io_resume_unregisters_and_cancels_timer(self):
+        # Normal I/O readiness must unregister the fileobj and cancel the
+        # paired timeout timer; cleanup runs in the io_guard finally.
+        net = NetworkSelector()
+        rsock, wsock = socket.socketpair()
+        rsock.setblocking(False)
+        wsock.setblocking(False)
+        seen = []
+
+        async def reader():
+            await net.wait_read(rsock, timeout_at=time.monotonic() + 100)
+            seen.append(rsock.recv(1024))
+
+        net.call_soon(reader)
+        try:
+            net.drain()                        # park on I/O
+            assert net._selector.get_key(rsock) is not None
+            assert len(net._scheduled) == 1    # paired timer scheduled
+            wsock.send(b'hi')
+            net.poll(timeout_ms=200)           # resume on readability
+            assert seen == [b'hi'], seen
+            with pytest.raises(KeyError):
+                net._selector.get_key(rsock)
+            assert len(net._scheduled) == 0    # paired timer cancelled
+        finally:
+            rsock.close()
+            wsock.close()
+
+    def test_cancel_unregisters_wait_io_task(self):
+        # Cancelling a task parked on I/O must unregister its fileobj and must
+        # not let the task resume.
+        net = NetworkSelector()
+        rsock, wsock = socket.socketpair()
+        rsock.setblocking(False)
+        wsock.setblocking(False)
+
+        async def reader():
+            await net.wait_read(rsock)         # no timeout: bare-guard path
+            raise AssertionError('cancelled task must not resume')
+
+        task = net.call_soon(reader)
+        try:
+            net.drain()                        # park on I/O
+            assert task.state is TaskState.WAIT_IO
+            assert net._selector.get_key(rsock) is not None
+            net.cancel(task)
+            assert task.state is TaskState.CANCELLED
+            with pytest.raises(KeyError):
+                net._selector.get_key(rsock)
+            net.drain()                        # ensure it never runs
+        finally:
+            rsock.close()
+            wsock.close()
+
+    def test_cancel_running_task(self):
+        # A task may cancel itself while running. Task.close() cannot close the
+        # currently-executing coroutine from within it (ValueError: coroutine
+        # already executing); Task.close()'s guard must absorb that. The task is
+        # then torn down when it next suspends, and the kernel event it yielded
+        # after cancelling is short-circuited -- so no I/O registration happens.
+        net = NetworkSelector()
+        rsock, wsock = socket.socketpair()
+        rsock.setblocking(False)
+        wsock.setblocking(False)
+        holder = {}
+
+        async def self_cancel():
+            net.cancel(holder['task'])      # cancel self while RUNNING
+            await net.wait_read(rsock)      # short-circuited; must not register
+            raise AssertionError('cancelled task must not run past the await')
+
+        task = net.call_soon(self_cancel)
+        holder['task'] = task
+        try:
+            net.drain()
+            assert task.state is TaskState.CANCELLED, task.state
+            assert task.is_done
+            assert task not in net._pending_tasks
+            with pytest.raises(KeyError):
+                net._selector.get_key(rsock)   # never registered after cancel
+        finally:
+            rsock.close()
+            wsock.close()
+
+    def test_cancel_wait_io_after_socket_closed(self):
+        # During shutdown a connection may unregister and close its socket
+        # before the parked task is cancelled. The io_guard finally then runs
+        # unregister_event on a closed fileobj (fileno() == -1) that is no
+        # longer in the selector map; this must be tolerated, not raise
+        # ValueError (which surfaced as an ignored-in-generator warning).
+        net = NetworkSelector()
+        rsock, wsock = socket.socketpair()
+        rsock.setblocking(False)
+        wsock.setblocking(False)
+
+        async def reader():
+            await net.wait_read(rsock)
+            raise AssertionError('cancelled task must not resume')
+
+        task = net.call_soon(reader)
+        try:
+            net.drain()                        # park on I/O
+            # simulate connection teardown: drop the registration, then close
+            net.unregister_event(rsock, selectors.EVENT_READ)
+            rsock.close()                      # fileno() -> -1
+            net.cancel(task)                   # io_guard unregisters a dead fd
+            assert task.state is TaskState.CANCELLED
+        finally:
+            wsock.close()
+
+    def test_cancel_wait_io_cancels_paired_timer(self):
+        # Cancelling a timed I/O wait tears down both the fileobj and the
+        # paired timeout timer.
+        net = NetworkSelector()
+        rsock, wsock = socket.socketpair()
+        rsock.setblocking(False)
+        wsock.setblocking(False)
+
+        async def reader():
+            await net.wait_read(rsock, timeout_at=time.monotonic() + 100)
+            raise AssertionError('cancelled task must not resume')
+
+        task = net.call_soon(reader)
+        try:
+            net.drain()
+            assert len(net._scheduled) == 1
+            timer = net._scheduled[0][1]
+            net.cancel(task)
+            with pytest.raises(KeyError):
+                net._selector.get_key(rsock)
+            assert timer.is_done               # paired timer cancelled/closed
+            assert len(net._scheduled) == 0
+        finally:
+            rsock.close()
+            wsock.close()
+
     def test_unschedule(self):
         net = NetworkSelector()
         def task():
             yield
         t = net.call_later(10, task)
         assert len(net._scheduled) == 1
-        net.unschedule(t)
+        net._unschedule(t)
         assert len(net._scheduled) == 0
         assert t.scheduled_at is None
 
-    def test_unschedule_unscheduled(self):
+    def test_unschedule_unscheduled_raises(self):
         net = NetworkSelector()
         def task():
             yield
         assert len(net._scheduled) == 0
-        net.unschedule(Task(task))
+        with pytest.raises(AssertionError):
+            net._unschedule(Task(task))
         assert len(net._scheduled) == 0
 
     def test_reschedule(self):
@@ -507,9 +675,7 @@ class TestNetworkSelector:
         net.poll(timeout_ms=1000, future=done)
         assert results == [('a', 'b')]
 
-    def test_unschedule_does_not_close_task_in_ready(self):
-        """Regression: a timer that has already fired -- popped from the heap
-        into _ready must survive unschedule(). """
+    def test_cancel_closes_ready_task(self):
         net = NetworkSelector()
         fired = []
         timer = net.call_at(time.monotonic() - 1, lambda: fired.append(True))
@@ -517,12 +683,13 @@ class TestNetworkSelector:
         assert timer in net._ready
         assert timer.scheduled_at is None
 
-        net.unschedule(timer)
+        net.cancel(timer)
 
-        assert not timer.is_done, \
-            'unschedule() closed a task already queued in _ready'
-        net.drain()  # must drive the queued timer without raising
-        assert fired == [True]
+        assert timer in net._ready  # timer still in ready queue
+        assert timer.is_done, \
+            'unschedule() did not close task queued in _ready'
+        net.drain()  # skips the queued timer without running
+        assert fired == []
 
 
 class TestSlowTaskMonitor:
