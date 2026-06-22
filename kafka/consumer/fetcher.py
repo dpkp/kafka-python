@@ -232,9 +232,18 @@ class Fetcher:
         # No records yet. Block until either an in-flight fetch
         # completes (records may have arrived) or a pending offset-reset
         # task completes (positions become available, enabling a fetch
-        # on the next caller iteration). add_both fires synchronously on
-        # already-done futures, closing the race where a future resolves
-        # between scheduling and the wait setup.
+        # on the next caller iteration).
+        #
+        # add_both fires synchronously on an already-done future: if a fetch
+        # response lands between the drain above and this wait setup, _wake
+        # fires immediately so we re-drain instead of stalling for the full
+        # timeout.
+        #
+        # This relies on _fetch_futures holding only *recent* completions.
+        # otherwise a fetch that completed and was already drained iterations
+        # ago lingers behind a slow broker's in-flight fetch and re-fires
+        # _wake on every call, busy-looping the poll loop until that slow
+        # fetch finally returns.
         waited_on = list(self._fetch_futures)
         if self._reset_task is not None and not self._reset_task.is_done:
             waited_on.append(self._reset_task)
@@ -277,21 +286,66 @@ class Fetcher:
             future.add_both(self._clear_pending_fetch_request, node_id)
             futures.append(future)
         self._fetch_futures.extend(futures)
-        self._clean_done_fetch_futures()
+        await self._clean_done_fetch_futures()
         return futures
 
-    def _clean_done_fetch_futures(self):
-        while True:
-            if not self._fetch_futures:
-                break
-            if not self._fetch_futures[0].is_done:
-                break
-            self._fetch_futures.popleft()
+    async def _clean_done_fetch_futures(self):
+        # Drop every completed fetch future. With multiple brokers, fetches
+        # may complete out of order. fetch_records() relies on _fetch_futures
+        # holding only recent completions (it fires _wake synchronously on any
+        # done future to avoid stalling -- see the wait setup there); a
+        # lingering stale completion re-fires that wake on every call and busy-
+        # loops the poll loop until the slow broker's in-flight fetch returns.
+        #
+        # Threading: this REBINDS self._fetch_futures, which must happen on the
+        # IO thread so it never races the foreground's list(self._fetch_futures)
+        # read in fetch_records(). Defined async to enforce that -- the body
+        # can only run by being driven on the IO loop (awaited from another
+        # coroutine, or scheduled via manager.run/call_soon), so the rebind
+        # always executes on the IO thread regardless of who initiates it.
+        # The rebind is a single atomic attribute store, so a foreground reader
+        # always sees either the old or the new deque, never a half-cleaned one.
+        #
+        # Two alternate designs we considered (either would remove the need for
+        # this "evict every done future + rebind" dance):
+        #
+        #   1. Wakeup flag (Apache Kafka Java client, FetchBuffer). Instead of
+        #      waiting on the fetch-future objects, wait on a single consumable
+        #      signal: the IO thread sets a flag (wokenup) when it buffers a
+        #      completed fetch; the foreground's wait loops `while not woken:
+        #      await` and consumes the flag (compareAndSet true->false) on each
+        #      pass. Because the signal is cleared on consumption and is not
+        #      re-derived from lingering future objects, a stale/drained
+        #      completion cannot re-trigger it -- so no busy-loop and no
+        #      per-call cleanup of a future list at all. This is the most
+        #      faithful port of the threaded Java consumer's design.
+        #
+        #   2. Per-node fetch tracking. Key fetches by broker: dict[node_id,
+        #      deque] (or just dict[node_id, Future], since _create_fetch_-
+        #      requests keeps at most one in-flight fetch per node). Within a
+        #      single connection responses return in request order, so each
+        #      per-node deque completes in order and the simple head-only
+        #      popleft cleanup is correct again -- no out-of-order stranding,
+        #      and cleanup is an in-place popleft (atomic, no rebind, so the
+        #      threading note above goes away). This structure could also
+        #      subsume _nodes_with_pending_fetch_requests entirely ("pending"
+        #      == the node's last future is not done), collapsing two
+        #      structures into one source of truth.
+        if not self._fetch_futures:
+            return
+        self._fetch_futures = collections.deque(
+            fut for fut in self._fetch_futures if not fut.is_done)
 
     def in_flight_fetches(self):
-        """Return True if there are any unprocessed FetchRequests in flight."""
-        self._clean_done_fetch_futures()
-        return bool(self._fetch_futures)
+        """Return True if there are any unprocessed (incomplete) FetchRequests
+        in flight."""
+
+        # Read-only on purpose: this may be called from the foreground thread,
+        # which must not mutate _fetch_futures (see _clean_done_fetch_futures --
+        # cleanup is IO-thread-only). Snapshot first so we never iterate the
+        # deque while the IO thread extends it, and check is_done directly
+        # rather than relying on a prior cleanup pass.
+        return any(not fut.is_done for fut in list(self._fetch_futures))
 
     def reset_offsets_if_needed(self, timeout_ms=None):
         """Schedule pending offset resets and return the in-flight Task.

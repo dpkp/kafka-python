@@ -574,6 +574,156 @@ def test_fetch_records_not_idle_when_reset_task_pending(fetcher, mocker):
     assert idle is False
 
 
+def test_clean_done_fetch_futures_removes_out_of_order_done(fetcher):
+    """Completed fetch futures must be dropped regardless of position, not
+    just a contiguous run from the head. With multiple brokers, fetches
+    complete out of order, so a head-only cleanup would strand an
+    already-drained completion behind an in-flight one -- the source of the
+    multi-broker busy-loop."""
+    done_head = Future()
+    done_head.success(None)
+    pending = Future()
+    done_tail = Future()
+    done_tail.success(None)
+    fetcher._fetch_futures.extend([done_head, pending, done_tail])
+
+    # async def: must be driven on the IO loop (it rebinds _fetch_futures).
+    fetcher._manager.run(fetcher._clean_done_fetch_futures)
+
+    # Only the still-in-flight future survives.
+    assert list(fetcher._fetch_futures) == [pending]
+    assert fetcher.in_flight_fetches() is True
+
+
+def test_in_flight_fetches_is_read_only(fetcher):
+    """in_flight_fetches() may run on the foreground thread, so it must not
+    mutate _fetch_futures -- cleanup (which rebinds the deque) is IO-thread-
+    only. It reports whether any incomplete fetch remains without evicting
+    completed ones."""
+    done = Future()
+    done.success(None)
+    pending = Future()
+    fetcher._fetch_futures.extend([done, pending])
+
+    assert fetcher.in_flight_fetches() is True
+    # No mutation: the completed future is still present (not cleaned).
+    assert list(fetcher._fetch_futures) == [done, pending]
+
+    # With only completed futures it reports False -- still without mutating.
+    fetcher._fetch_futures.clear()
+    fetcher._fetch_futures.append(done)
+    assert fetcher.in_flight_fetches() is False
+    assert list(fetcher._fetch_futures) == [done]
+
+
+def test_clean_done_fetch_futures_only_mutates_when_driven_on_loop(fetcher):
+    """_clean_done_fetch_futures is async so its rebind of _fetch_futures can
+    only run when driven on the IO loop. A stray *synchronous* call from the
+    foreground yields an inert coroutine (no mutation) rather than a silent
+    cross-thread rebind; driving it on the loop performs the cleanup."""
+    done = Future()
+    done.success(None)
+    pending = Future()
+    fetcher._fetch_futures.extend([done, pending])
+
+    coro = fetcher._clean_done_fetch_futures()  # not awaited -> body never runs
+    try:
+        assert list(fetcher._fetch_futures) == [done, pending]  # untouched
+    finally:
+        coro.close()  # avoid "coroutine was never awaited" warning
+
+    # Driven on the IO loop, it actually evicts the completed future.
+    fetcher._manager.run(fetcher._clean_done_fetch_futures)
+    assert list(fetcher._fetch_futures) == [pending]
+
+
+def _capture_wakeup(fetcher, mocker):
+    """Patch net.run to capture the wakeup Future (arg after wait_for)
+    without blocking, mirroring net.run(manager.wait_for, wakeup, timeout)."""
+    captured = {}
+
+    def fake_run(coro, *args):
+        captured['wakeup'] = args[0]
+        return None
+
+    mocker.patch.object(fetcher._net, 'run', side_effect=fake_run)
+    return captured
+
+
+def test_fetch_records_no_stall_when_response_arrives_before_wait(fetcher, topic, mocker):
+    """Original fetch race (commit b2ada174). A fetch response can complete
+    between draining buffered records and setting up the wait. The fetch
+    future is already done when we attach _wake, so add_both fires it
+    synchronously, the wait returns at once, and the just-arrived records are
+    returned -- instead of stalling for the full timeout despite ready data.
+    Still required under the IO thread, where a fetch future can resolve at
+    any moment.
+
+    This is faithful to the real wait: ``realistic_run`` returns immediately
+    only if the wakeup was already resolved (the synchronous fire), and
+    otherwise behaves like a wait that blocks and times out. Drop the
+    synchronous fire (e.g. by filtering already-done futures out of
+    ``waited_on``) and this stalls -> the assertions fail.
+    """
+    fetcher.config['check_crcs'] = False
+    tp = TopicPartition(topic, 0)
+    done = Future()
+    done.success(None)  # fetch already completed inside the race window
+    fetcher._fetch_futures.append(done)
+    mocker.patch.object(fetcher, 'send_fetches', return_value=None)
+
+    outcome = {'stalled': None}
+
+    def realistic_run(coro, wakeup, timeout_ms):
+        # Stand-in for net.run(manager.wait_for, wakeup, timeout_ms).
+        if wakeup.is_done:
+            outcome['stalled'] = False
+            # Emulate the IO thread having buffered the response that
+            # completed `done`; it is drainable on the post-wait re-drain.
+            fetcher._completed_fetches.append(
+                _build_completed_fetch(tp, [(None, b'foo', None)]))
+            return None
+        # Not resolved -> a real wait would block until timeout and raise.
+        outcome['stalled'] = True
+        raise Errors.KafkaTimeoutError()
+
+    mocker.patch.object(fetcher._net, 'run', side_effect=realistic_run)
+
+    records, idle = fetcher.fetch_records(timeout_ms=10000)
+
+    assert outcome['stalled'] is False  # synchronous fire avoided the stall
+    assert idle is False
+    assert tp in records
+    assert len(records[tp]) == 1
+
+
+def test_fetch_records_blocks_once_stale_fetch_is_cleaned(fetcher, mocker):
+    """Multi-broker busy-loop regression. A stale (already-drained) completion
+    stranded behind an in-flight fetch must be evicted by the cleanup so the
+    wait actually blocks on the in-flight future instead of returning
+    instantly every call via the synchronous _wake fire."""
+    inflight = Future()       # slow broker, still long-polling
+    stale_done = Future()     # other broker completed and was drained already
+    stale_done.success(None)
+    # Order matters: the in-flight fetch is ahead, so a head-only cleanup
+    # could never reach the stale completion behind it.
+    fetcher._fetch_futures.extend([inflight, stale_done])
+
+    fetcher._manager.run(fetcher._clean_done_fetch_futures)
+    assert list(fetcher._fetch_futures) == [inflight]
+
+    mocker.patch.object(fetcher, 'send_fetches', return_value=None)
+    captured = _capture_wakeup(fetcher, mocker)
+
+    records, idle = fetcher.fetch_records(timeout_ms=10000)
+
+    assert records == {}
+    assert idle is False
+    # Only the in-flight future remains, so the wakeup is still pending: the
+    # wait blocks instead of busy-returning on the stale completion.
+    assert not captured['wakeup'].is_done
+
+
 @pytest.mark.parametrize(("fetch_offsets", "fetch_response", "num_partitions"), [
     (
         {TopicPartition('foo', 0): 0},
