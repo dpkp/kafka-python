@@ -103,7 +103,7 @@ class KafkaNetSocket:
 
             # Connection succeeded
             if not ret or ret == errno.EISCONN:
-                log.info('Connected: %s', sock)
+                log.debug('Connected: %s', sock)
                 return sock
 
             # Needs retry
