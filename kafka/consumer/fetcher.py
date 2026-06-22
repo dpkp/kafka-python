@@ -305,6 +305,32 @@ class Fetcher:
         # always executes on the IO thread regardless of who initiates it.
         # The rebind is a single atomic attribute store, so a foreground reader
         # always sees either the old or the new deque, never a half-cleaned one.
+        #
+        # Two alternate designs we considered (either would remove the need for
+        # this "evict every done future + rebind" dance):
+        #
+        #   1. Wakeup flag (Apache Kafka Java client, FetchBuffer). Instead of
+        #      waiting on the fetch-future objects, wait on a single consumable
+        #      signal: the IO thread sets a flag (wokenup) when it buffers a
+        #      completed fetch; the foreground's wait loops `while not woken:
+        #      await` and consumes the flag (compareAndSet true->false) on each
+        #      pass. Because the signal is cleared on consumption and is not
+        #      re-derived from lingering future objects, a stale/drained
+        #      completion cannot re-trigger it -- so no busy-loop and no
+        #      per-call cleanup of a future list at all. This is the most
+        #      faithful port of the threaded Java consumer's design.
+        #
+        #   2. Per-node fetch tracking. Key fetches by broker: dict[node_id,
+        #      deque] (or just dict[node_id, Future], since _create_fetch_-
+        #      requests keeps at most one in-flight fetch per node). Within a
+        #      single connection responses return in request order, so each
+        #      per-node deque completes in order and the simple head-only
+        #      popleft cleanup is correct again -- no out-of-order stranding,
+        #      and cleanup is an in-place popleft (atomic, no rebind, so the
+        #      threading note above goes away). This structure could also
+        #      subsume _nodes_with_pending_fetch_requests entirely ("pending"
+        #      == the node's last future is not done), collapsing two
+        #      structures into one source of truth.
         if not self._fetch_futures:
             return
         self._fetch_futures = collections.deque(
