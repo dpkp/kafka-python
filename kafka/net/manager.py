@@ -158,6 +158,7 @@ class KafkaConnectionManager:
                 log.info('Bootstrap complete: %s', self.cluster)
                 return True
             finally:
+                log.info('Closing bootstrap connection %s', bootstrap_broker.node_id)
                 self._conns.pop(bootstrap_broker.node_id, conn).close()
         else:
             raise Errors.KafkaTimeoutError(
