@@ -1139,8 +1139,7 @@ class BaseCoordinator(ABC):
                         self.coordinator_id)
             self.coordinator_dead(error)
         elif error_type is Errors.RebalanceInProgressError:
-            heartbeat_log.warning("Heartbeat failed for group %s because it is"
-                                  " rebalancing", self.group_id)
+            heartbeat_log.info("Group %s is rebalancing; rejoining.", self.group_id)
             self.request_rejoin()
         elif error_type is Errors.IllegalGenerationError:
             heartbeat_log.warning("Heartbeat failed for group %s: generation id is not "
