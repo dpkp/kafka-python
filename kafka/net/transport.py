@@ -333,7 +333,7 @@ class KafkaTCPTransport:
         return self.writelines(data)
 
     async def handshake(self):
-        pass
+        log.info('%s: connected to %s', self, self._sock)
 
     def host_port(self):
         if self._sock is None:
@@ -365,6 +365,7 @@ class KafkaSSLTransport(KafkaTCPTransport):
         while True:
             try:
                 self._sock.do_handshake()
+                log.info('%s: connected to %s', self, self._sock)
                 return
             except ssl.SSLWantReadError:
                 await self._net.wait_read(self._sock)
