@@ -400,11 +400,15 @@ class KafkaConnection:
         api_versions = {api_version.api_key: (api_version.min_version, api_version.max_version)
                         for api_version in response.api_keys}
         bvd = BrokerVersionData(api_versions=api_versions)
-        log.info('%s: Broker version identified as %s', self, '.'.join(map(str, bvd.broker_version)))
-        if self.broker_version_data is None or self.broker_version_data > bvd:
+        if self.broker_version_data is None:
+            log.info('%s: Broker version identified as %s', self, bvd.broker_version_str)
             self.broker_version_data = bvd
-        else:
-            log.info('%s: Clamping client to user-supplied broker version %s', self, '.'.join(map(str, self.broker_version)))
+        elif self.broker_version_data > bvd:
+            log.info('%s: Broker version identified as %s (lower than user-supplied %s)', self, bvd.broker_version_str, self.broker_version_data.broker_version_str)
+            self.broker_version_data = bvd
+        elif self.broker_version_data is not None and self.broker_version_data < bvd:
+            log.info('%s: Broker version identified as %s; clamping to user-supplied %s', self, bvd.broker_version_str, self.broker_version_data.broker_version_str)
+        # No log if user-supplied api_version is the same as broker-identified version
 
     @property
     def sasl_enabled(self):

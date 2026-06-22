@@ -100,8 +100,12 @@ class BrokerVersionData:
                 f" and broker [{broker_min_version}-{broker_max_version}].")
         return min(max_version, broker_max_version)
 
+    @property
+    def broker_version_str(self):
+        return '.'.join(map(str, self.broker_version))
+
     def __str__(self):
-        return '<BrokerVersionData %s>' % '.'.join(map(str, self.broker_version))
+        return '<BrokerVersionData %s>' % self.broker_version_str
 
     def __eq__(self, other):
         return self.broker_version == other.broker_version and self.api_versions == other.api_versions
