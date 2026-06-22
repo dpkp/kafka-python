@@ -634,13 +634,25 @@ class NetworkSelector:
                         self._current.close()
                     elif isinstance(event, KernelEvent):
                         log_trace('kernel event %s', event.method)
-                        getattr(self, event.method)(*event.args)
-                        assert self._current.state is not TaskState.RUNNING
+                        try:
+                            getattr(self, event.method)(*event.args)
+                        except BaseException as e:
+                            log_trace('kernel event %s raised %r; injecting into %s',
+                                      event.method, e, self._current)
+                            self._current.inject_exc(e)
+                            self._add_ready_task(self._current)
                     elif isinstance(event, Future):
                         event.add_both(lambda _, task=self._current: self.call_soon(task))
                         self._current.state = TaskState.WAIT_FUTURE
                     else:
                         raise RuntimeError('Unhandled event type: %s' % event)
+
+                finally:
+                    # No Task should leave io_loop in RUNNING state.
+                    if self._current is not None and self._current.state is TaskState.RUNNING:
+                        log.warning('Task %s left RUNNING after step; demoting to '
+                                    'UNSCHEDULED', self._current)
+                        self._current.state = TaskState.UNSCHEDULED
 
                 if threshold:
                     elapsed = time.monotonic() - step_start
