@@ -455,6 +455,56 @@ class TestNetworkSelector:
         finally:
             wsock.close()
 
+    def test_wait_on_closed_socket_injects_into_coro(self):
+        # Arming an I/O wait on a socket whose fd is already closed (fileno()
+        # == -1) makes register_event raise.
+        # That failure must not crash the whole IO loop; it
+        # must be injected back into the awaiting coro at its await site.
+        net = NetworkSelector()
+        rsock, wsock = socket.socketpair()
+        rsock.setblocking(False)
+        wsock.setblocking(False)
+        rsock.close()                              # fileno() -> -1 up front
+        outcome = []
+
+        async def reader():
+            try:
+                await net.wait_read(rsock)
+            except BaseException as e:              # pylint: disable=broad-except
+                outcome.append(type(e).__name__)
+
+        task = net.call_soon(reader)
+        try:
+            net.drain()                            # must not raise / crash loop
+            assert outcome and outcome[0] == 'ValueError', outcome
+            assert task.is_done
+            assert task not in net._pending_tasks
+            assert net._current is None
+        finally:
+            wsock.close()
+
+    def test_running_task_demoted_when_left_running(self):
+        # Defensive backstop: a kernel-event handler that returns without
+        # parking the task leaves it stranded in RUNNING. _poll_once's finally
+        # must demote it to UNSCHEDULED (with a warning) -- not crash the loop
+        # -- so a later cancel()/close() can reclaim it instead of tripping
+        # cancel()'s `task is self._current` assert. Simulate a buggy handler
+        # with a no-op method that parks nothing.
+        net = NetworkSelector()
+        net._buggy_noop = lambda: None             # handler that parks nothing
+
+        def coro():
+            yield KernelEvent('_buggy_noop')
+
+        task = net.call_soon(coro)
+        net.drain()                                # demotes + warns, no crash
+        assert task.state is TaskState.UNSCHEDULED, task.state
+        assert net._current is None
+        # cancel() must reclaim the demoted task without asserting.
+        net.cancel(task)
+        assert task.state is TaskState.CANCELLED
+        assert task not in net._pending_tasks
+
     def test_cancel_wait_io_cancels_paired_timer(self):
         # Cancelling a timed I/O wait tears down both the fileobj and the
         # paired timeout timer.
