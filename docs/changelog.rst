@@ -1,15 +1,27 @@
 Changelog
 =========
 
-3.0.3 (Unreleased)
+3.0.3 (Jun 22, 2026)
 ####################
 
 Fixes
 -----
+* Consumer: fix multi-broker fetch busy wait loop (#3084)
+* net: inject KernelEvent handler exceptions into coro; warn dont crash if task state is still RUNNING (#3083)
 * Fix: do not mark coordinator dead on all HeartbeatResponse errors (#3082)
 * Improve task cleanup with net.cancel(task), TaskState, and consolidated wait_io cleanup (#3081)
-* cli: fix comma-separated --bootstrap-servers parsing (#3080)
 * Fix/net selector task already done (#3078)
+
+Logging
+-------
+* Fixup socks5_proxy deprecation warning (#3088)
+* log metadata refresh failure stacktraces as DEBUG not ERROR (#3087)
+* log heartbeat rebalance response as INFO, not WARNING (#3085)
+
+CLI
+---
+* add --log-format, --log-date-format, --log-file, --log-config (#3086)
+* fix comma-separated --bootstrap-servers parsing (#3080)
 
 CI
 --
@@ -21,7 +33,6 @@ CI
 
 Fixes
 -----
-
 * fix memory leak of cancelled timeout tasks ([azdobylak](https://github.com/azdobylak) / #3077)
 
 
