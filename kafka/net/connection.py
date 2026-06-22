@@ -242,6 +242,10 @@ class KafkaConnection:
                 self._close_future.success(None)
             else:
                 self._close_future.failure(exc)
+        if exc:
+            log.error('%s: Connection lost: %s', self, exc)
+        else:
+            log.info('%s: Connection closed', self)
 
     def fail_in_flight_requests(self, error):
         if not self.closed:
@@ -276,6 +280,7 @@ class KafkaConnection:
             client_id=self.config['client_id'],
             receive_message_max_bytes=self.config['receive_message_max_bytes'],
             ident=log_prefix)
+        log.info('%s: Connected', self)
 
     def pause(self, v):
         self.paused.add(v)
