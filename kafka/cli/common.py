@@ -1,4 +1,5 @@
 import logging
+import logging.config
 
 
 def add_connect_cli_args(parser, bootstrap_required=True):
@@ -63,10 +64,58 @@ def add_logging_cli_args(parser):
     logging_group.add_argument(
         '-D', '--disable-logger', type=str, action='append',
         help='disable a specific logger. Can be provided multiple times.')
+    logging_group.add_argument(
+        '--log-format', type=str, default=None,
+        help='log message format string, passed to logging.Formatter')
+    logging_group.add_argument(
+        '--log-date-format', type=str, default=None,
+        help='log date format string, passed to logging.Formatter')
+    logging_group.add_argument(
+        '--log-file', type=str, default=None,
+        help='write logs to this file instead of stderr')
+    logging_group.add_argument(
+        '--log-config', type=str, default=None,
+        help='path to a logging configuration file for full control over handlers, '
+             'formatters, etc. A .json (or .yaml/.yml, if PyYAML is installed) file is '
+             'loaded as a logging.config.dictConfig; any other extension is loaded as a '
+             'logging.config.fileConfig. The file owns handlers/formatters, so --log-format, '
+             '--log-date-format and --log-file are ignored, but --enable-logger and '
+             '--disable-logger still apply as logger level adjustments.')
+
+
+def add_extended_cli_args(parser):
     extended_group = parser.add_argument_group('extended')
     extended_group.add_argument(
         '-C', '--extra-config', type=str, action='append',
         help='additional configuration properties for client in "key=val" format. Can be provided multiple times.')
+
+
+def _load_log_config(path):
+    """Configure logging from a dictConfig (.json/.yaml) or fileConfig (.ini) file."""
+    if path.endswith(('.yaml', '.yml')):
+        try:
+            import yaml
+        except ImportError:
+            raise ValueError('PyYAML is required to load a YAML logging config: %s' % (path,))
+        with open(path) as f:
+            _dict_config(yaml.safe_load(f))
+    elif path.endswith('.json'):
+        import json
+        with open(path) as f:
+            _dict_config(json.load(f))
+    else:
+        # disable_existing_loggers defaults to True, which would silence loggers
+        # configured before this call (e.g. the loggers we are about to enable);
+        # keep them around so --enable-logger still works.
+        logging.config.fileConfig(path, disable_existing_loggers=False)
+
+
+def _dict_config(cfg):
+    # Default disable_existing_loggers to False (dictConfig defaults to True), so a
+    # config that does not mention an already-created logger does not silence it.
+    # A config may still set it explicitly to opt into the stdlib default.
+    cfg.setdefault('disable_existing_loggers', False)
+    logging.config.dictConfig(cfg)
 
 
 def configure_logging(config):
@@ -78,22 +127,43 @@ def configure_logging(config):
         'ERROR': 40,
         'CRITICAL': 50,
     }
-    if config.enable_logger is not None:
-        log_level = _LOGGING_LEVELS[config.log_level.upper()]
-        handler = logging.StreamHandler()
-        handler.setLevel(log_level)
-        handler.setFormatter(logging.Formatter(logging.BASIC_FORMAT))
-        for name in config.enable_logger:
-            logger = logging.getLogger(name)
-            logger.setLevel(log_level)
-            logger.addHandler(handler)
+    log_level = _LOGGING_LEVELS[config.log_level.upper()]
+    if getattr(config, 'log_config', None):
+        _load_log_config(config.log_config)
+        if config.enable_logger is not None:
+            # Preserve the no-config behavior of --enable-logger: ONLY the named
+            # loggers emit. The config file owns the handlers/formatters, so rather
+            # than attach our own we reuse them: silence everything else by raising
+            # the root level, then let each enabled logger opt back in and propagate
+            # its records up to the config's handlers.
+            logging.getLogger().setLevel(logging.CRITICAL + 1)
+            for name in config.enable_logger:
+                logger = logging.getLogger(name)
+                logger.disabled = False
+                logger.setLevel(log_level)
     else:
-        logging.basicConfig(level=_LOGGING_LEVELS[config.log_level.upper()])
-    if config.disable_logger is not None:
-        for name in config.disable_logger:
-            logging.getLogger(name).setLevel(logging.CRITICAL + 1)
+        log_format = config.log_format or logging.BASIC_FORMAT
+        if config.enable_logger is not None:
+            if config.log_file:
+                handler = logging.FileHandler(config.log_file)
+            else:
+                handler = logging.StreamHandler()
+            handler.setLevel(log_level)
+            handler.setFormatter(logging.Formatter(log_format, datefmt=config.log_date_format))
+            for name in config.enable_logger:
+                logger = logging.getLogger(name)
+                logger.setLevel(log_level)
+                logger.addHandler(handler)
+        else:
+            logging.basicConfig(
+                level=log_level, format=log_format,
+                datefmt=config.log_date_format, filename=config.log_file)
+    # --disable-logger silences a named logger in either mode by raising its level.
+    for name in config.disable_logger or []:
+        logging.getLogger(name).setLevel(logging.CRITICAL + 1)
 
 
 def add_common_cli_args(parser, bootstrap_required=True):
     add_connect_cli_args(parser, bootstrap_required)
     add_logging_cli_args(parser)
+    add_extended_cli_args(parser)
