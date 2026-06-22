@@ -280,7 +280,7 @@ class KafkaConnection:
             client_id=self.config['client_id'],
             receive_message_max_bytes=self.config['receive_message_max_bytes'],
             ident=log_prefix)
-        log.info('%s: Connected', self)
+        log.debug('%s: Connection made', self)
 
     def pause(self, v):
         self.paused.add(v)
@@ -367,6 +367,7 @@ class KafkaConnection:
             self.close(error)
         else:
             self._init_complete()
+            log.info('%s: Connected', self)
 
     async def _get_api_versions(self, timeout_at=None):
         if timeout_at is None:
