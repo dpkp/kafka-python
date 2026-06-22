@@ -24,6 +24,7 @@ class KafkaTCPTransport:
         self._write = True
         self.last_write = time.monotonic()
         self.last_read = time.monotonic()
+        log.info('%s: transport initialized', self)
 
     @property
     def last_activity(self):
