@@ -275,6 +275,7 @@ class KafkaConnectionManager:
         node = self.cluster.broker_metadata(node_id)
         if node is None:
             raise Errors.UnknownBrokerIdError(node_id)
+        log.info('Initializing connection for node_id %s at %s:%s (rack=%s)', node_id, node.host, node.port, node.rack)
         conn = KafkaConnection(self._net, node_id=node_id, broker_version_data=self.broker_version_data, **self.config)
         if pop_on_close:
             conn.close_future.add_both(lambda _: self._conns.pop(node.node_id, None))
