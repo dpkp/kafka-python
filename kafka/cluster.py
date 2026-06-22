@@ -125,9 +125,8 @@ class ClusterMetadata:
             if ttl_ms == 0:
                 try:
                     await self.refresh_metadata()
-                except Errors.KafkaError as exc:
-                    log.debug('Metadata refresh failed: %s', exc)
-                    log.exception(exc)
+                except Errors.KafkaError:
+                    log.debug('Metadata refresh failed', exc_info=True)
                 continue
             try:
                 log.debug('Sleeping %s for next Metadata refresh', ttl_ms / 1000)

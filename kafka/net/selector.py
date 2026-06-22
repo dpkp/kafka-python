@@ -622,8 +622,8 @@ class NetworkSelector:
                 except StopIteration:
                     self._task_done(self._current)
 
-                except BaseException as e:
-                    log.exception(e)
+                except BaseException:
+                    log.exception('Unhandled exception in task %s:', self._current)
                     # Same as StopIteration -- task is done either way.
                     self._task_done(self._current)
 
