@@ -239,13 +239,11 @@ class KafkaConnection:
             self._init_future.failure(error)
         if not self._close_future.is_done:
             if exc is None:
+                log.info('%s: Connection closed', self)
                 self._close_future.success(None)
             else:
+                log.error('%s: Connection lost: %s', self, exc)
                 self._close_future.failure(exc)
-        if exc:
-            log.error('%s: Connection lost: %s', self, exc)
-        else:
-            log.info('%s: Connection closed', self)
 
     def fail_in_flight_requests(self, error):
         if not self.closed:

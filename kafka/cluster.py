@@ -167,7 +167,6 @@ class ClusterMetadata:
             raise Errors.NodeNotReadyError('metadata')
         else:
             self._manager.reset_backoff('metadata')
-        log.info(f'Metadata refresh (node_id={node_id})')
         try:
             request = self.metadata_request()
             log.debug("Sending metadata request %s to node %s", request, node_id)
@@ -176,7 +175,7 @@ class ClusterMetadata:
             log.error('Metadata refresh: failed %s', exc)
             self.failed_update(exc)
             raise
-        log.debug('Metadata refresh: success')
+        log.info(f'Metadata refresh: success (node_id={node_id})')
         self.update_metadata(response)
 
     def _generate_bootstrap_brokers(self):
