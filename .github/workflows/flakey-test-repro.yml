@@ -84,7 +84,7 @@ jobs:
 
       - name: Restore cached kafka releases
         id: cache-servers-dist-restore
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v6
         with:
           path: servers/dist
           key: servers-dist-${{ github.event.inputs.kafka_version }}
@@ -93,7 +93,7 @@ jobs:
         run: make servers/${{ github.event.inputs.kafka_version }}/kafka-bin
 
       - name: Update kafka release cache
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v6
         with:
           path: servers/dist
           key: ${{ steps.cache-servers-dist-restore.outputs.cache-primary-key }}
