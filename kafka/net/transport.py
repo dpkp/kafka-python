@@ -186,7 +186,7 @@ class KafkaTCPTransport:
 
     async def _write_to_sock(self):
         try:
-            while self._write and not self._closed and self._write_buffer:
+            while self._write_buffer:
                 await self._net.wait_write(self._sock)
                 total_bytes, err = self._sock_send()
                 if err:
@@ -197,11 +197,18 @@ class KafkaTCPTransport:
                     self._protocol._sensors.bytes_sent.record(total_bytes)
         finally:
             self._writing = False
-        if not self._write:
-            self._sock.shutdown(socket.SHUT_WR)
+        if self._closed:
+            self._close()
+        elif not self._write:
+            try:
+                self._sock.shutdown(socket.SHUT_WR)
+            except OSError:
+                pass
 
     def _sock_send(self):
         total_bytes = 0
+        if self._sock is None:
+            return total_bytes, Errors.KafkaConnectionError('Connection closed during send')
         while self._write_buffer:
             next_chunk = self._write_buffer.popleft()
             # Wrap in memoryview so partial-send slicing is O(1) instead of
@@ -259,6 +266,10 @@ class KafkaTCPTransport:
             try:
                 self._net.unregister_event(sock, selectors.EVENT_READ | selectors.EVENT_WRITE)
             except (KeyError, ValueError):
+                pass
+            try:
+                sock.shutdown(socket.SHUT_RDWR)
+            except OSError:
                 pass
             sock.close()
         proto = self._protocol
@@ -398,6 +409,8 @@ class KafkaSSLTransport(KafkaTCPTransport):
     def _sock_send(self):
         total_bytes = 0
         err = None
+        if self._sock is None:
+            return total_bytes, Errors.KafkaConnectionError('Connection closed during send')
         while self._write_buffer:
             next_chunk = self._write_buffer.popleft()
             while next_chunk:
