@@ -96,7 +96,7 @@ class KafkaConnection:
         return self._init_future
 
     def __await__(self):
-        yield self.init_future
+        yield from self.init_future.__await__()   # == await self.init_future; raises on failure
         return self
 
     @property
