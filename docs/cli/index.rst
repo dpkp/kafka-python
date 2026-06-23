@@ -65,6 +65,28 @@ Logging
     Selectively turn on or off a single logger by name. Both flags may
     be supplied multiple times.
 
+``--log-format``
+    Provide customized log message format string (passed to `logging.Formatter <https://docs.python.org/3/library/logging.html#logging.Formatter>`_).
+
+``--log-date-format``
+    Provide customized log date format string (passed to `logging.Formatter <https://docs.python.org/3/library/logging.html#logging.Formatter>`_).
+
+``--log-file``
+    Specify file for logging output. If not provided, log output is written to
+    stderr.
+
+``--log-config``
+    Path to logging configuration file for full control over handlers,
+    formatters, etc. Supports ``.json`` and ``.ini`` formats; ``.yaml``
+    requires installing ``PyYAML`` separately. If provided, the file is loaded
+    as a ``logging.config.dictConfig`` for ``.json``/``.yaml`` files, or
+    ``logging.config.fileConfig`` for all others. Any values provided for
+    ``--log-format``, ``--log-date-format`` and/or ``--log-file`` will
+    be ignored (``--enable-logger`` and ``--disable-logger`` still apply as
+    logger level adjustments).
+    See `logging.config <https://docs.python.org/3/library/logging.config.html>`_
+    for details.
+
 Extended Configuration
 ----------------------
 
