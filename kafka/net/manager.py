@@ -142,6 +142,9 @@ class KafkaConnectionManager:
                 raise
             except Exception as exc:
                 self._conns.pop(bootstrap_broker.node_id, conn).close(exc)
+                backoff_ms = self.update_backoff(bootstrap_broker.node_id)
+                log.warning('Bootstrap connection to %s failed: %s (backoff %.2f secs)',
+                            bootstrap_broker.node_id, exc, backoff_ms / 1000)
                 continue
 
             try:
@@ -258,6 +261,8 @@ class KafkaConnectionManager:
                 return
             conn.connection_made(transport)
             transport = None  # conn owns cleanup now; skip finally: transport.close()
+            # Note: conn.initialize does not currently raise on error;
+            # errors are pushed to conn.init_future and raised on await conn
             await conn.initialize(timeout_at=timeout_at)
         except Exception as exc:
             log.error('Connection failed: %s', exc)

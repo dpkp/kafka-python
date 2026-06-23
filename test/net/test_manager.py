@@ -256,6 +256,53 @@ class TestKafkaConnectionManagerBootstrap:
         failures, _, _ = manager._backoff['bootstrap-0']
         assert failures > 1
 
+    def test_bootstrap_handshake_failure_backs_off(self, net):
+        """A broker that accepts the TCP connection but drops it during the
+        version handshake must not cause the bootstrap loop to spin. Each such
+        failure has to record backoff so retries are spaced out (otherwise the
+        loop burns the entire bootstrap timeout retrying thousands of times)."""
+        accepts = []
+        stop = threading.Event()
+
+        listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        listener.bind(('127.0.0.1', 0))
+        listener.listen(128)
+        listener.settimeout(0.1)
+        _, port = listener.getsockname()
+
+        def serve():
+            while not stop.is_set():
+                try:
+                    sock, _ = listener.accept()
+                except socket.timeout:
+                    continue
+                except OSError:
+                    break
+                accepts.append(1)
+                sock.close()  # drop the connection mid-handshake
+
+        server = threading.Thread(target=serve)
+        server.start()
+        try:
+            manager = KafkaConnectionManager(net,
+                                             bootstrap_servers=['127.0.0.1:%d' % port],
+                                             reconnect_backoff_ms=50,
+                                             reconnect_backoff_max_ms=200)
+            with pytest.raises(Errors.KafkaTimeoutError):
+                manager.bootstrap(timeout_ms=1000)
+        finally:
+            stop.set()
+            server.join()
+            listener.close()
+
+        # Backoff must have been recorded for the repeatedly-dropped bootstrap node.
+        failures, _, _ = manager._backoff['bootstrap-0']
+        assert failures > 1
+        # With backoff applied, a 1s window allows only a handful of attempts.
+        # Without it the loop spins (hundreds/thousands of connects).
+        assert len(accepts) < 50, 'bootstrap spun without backoff: %d attempts' % len(accepts)
+
     def test_bootstrapped_property(self, manager):
         assert not manager.bootstrapped
         manager._bootstrap_future = Future()
