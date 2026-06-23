@@ -356,6 +356,43 @@ class TestKafkaConnectionManagerClose:
         manager.close()
 
 
+class TestKafkaConnectionManagerConnectRace:
+    """A connection can be closed (by manager.close() / bootstrap teardown)
+    while its _connect() coroutine is still awaiting _build_transport. When
+    the transport finally arrives, _connect must not resurrect the dead
+    connection via connection_made() -- doing so flips it back to
+    `initializing`."""
+
+    def test_connect_discards_transport_when_closed_during_build(self, net):
+        manager = KafkaConnectionManager(net)
+        node = MagicMock(host='broker', port=9092, node_id='bootstrap-0')
+        conn = KafkaConnection(net, node_id='bootstrap-0', **manager.config)
+        transport = MagicMock()
+
+        async def fake_build_transport(n, timeout_at=None):
+            # Simulate a concurrent close landing mid-connect.
+            conn.close()
+            return transport
+
+        with patch.object(manager, '_build_transport',
+                          side_effect=fake_build_transport):
+            net.run(manager._connect(node, conn))
+
+        # Dead connection stays dead -- not resurrected to `initializing`.
+        assert conn.closed
+        assert conn.initializing is False
+        assert conn.transport is None
+        # And the orphaned transport is cleaned up rather than leaked.
+        transport.close.assert_called_once()
+
+    def test_connection_made_refuses_closed_connection(self, net):
+        conn = KafkaConnection(net, node_id='bootstrap-0')
+        conn.close()
+        assert conn.closed
+        with pytest.raises(Errors.KafkaConnectionError):
+            conn.connection_made(MagicMock())
+
+
 class TestKafkaConnectionManagerRun:
     def test_run_function(self, manager):
         def test_coro():

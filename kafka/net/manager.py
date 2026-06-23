@@ -240,9 +240,22 @@ class KafkaConnectionManager:
             return transport
 
     async def _connect(self, node, conn, reset_backoff_on_connect=True, timeout_at=None):
+        # Tracks ownership of the freshly built transport: while non-None it is
+        # ours to clean up (the connection hasn't taken it over yet), so the
+        # finally clause closes it. Cleared once connection_made() succeeds.
+        transport = None
         try:
             transport = await self._build_transport(node, timeout_at=timeout_at)
+            # The connection (or the whole manager) may have been closed while
+            # we were building the transport. Handing it to connection_made()
+            # would flip the conn back to `initializing` and resurrect a
+            # connection that is already being torn down. Discard
+            # the new transport instead of reviving a dead connection.
+            if conn.closed or self.closed:
+                log.debug('%s: closed during connect; discarding new transport', conn)
+                return
             conn.connection_made(transport)
+            transport = None  # conn owns cleanup now; skip finally: transport.close()
             await conn.initialize(timeout_at=timeout_at)
         except Exception as exc:
             log.error('Connection failed: %s', exc)
@@ -252,6 +265,9 @@ class KafkaConnectionManager:
                                 Errors.AuthorizationError)):
                 self._auth_failures[node.node_id] = exc
             return
+        finally:
+            if transport is not None:
+                transport.close()
 
         if self._sensors:
             self._sensors.connection_created.record()
