@@ -479,6 +479,8 @@ class KafkaFixture(Fixture):
     def out(self, message):
         if len(log.handlers) > 0:
             log.info("*** Kafka [%s:%s]: %s", self.host, self.port or '(auto)', message)
+        else:
+            print(message)
 
     def _create_zk_chroot(self):
         self.out("Creating Zookeeper chroot node...")
