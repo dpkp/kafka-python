@@ -84,6 +84,7 @@ jobs:
       - name: Install Kafka release
         run: make servers/${{ matrix.kafka }}/kafka-bin
       - name: Update kafka release cache
+        if: github.ref == 'refs/heads/master'
         id: cache-servers-dist-save
         uses: actions/cache/save@v5
         with:
