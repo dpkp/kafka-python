@@ -638,7 +638,7 @@ class ClusterMetadata:
 
         if self._last_response is None or self._last_response != metadata:
             self._last_response = metadata
-            log.info("Updated metadata: %s", self)
+            log.info("Updated metadata: %s: %s", self, metadata)
         else:
             # else same as last response...
             log.debug("Updated metadata (no change): %s", self)
