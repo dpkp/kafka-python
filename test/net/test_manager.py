@@ -197,8 +197,9 @@ class TestKafkaConnectionManagerGetConnection:
 
 class TestKafkaConnectionManagerSend:
     def test_send_during_backoff(self, manager):
-        manager.update_backoff('bootstrap-0')
-        f = manager.send(MagicMock(), node_id='bootstrap-0')
+        with patch("time.monotonic", return_value=100.0):
+            manager.update_backoff('bootstrap-0')
+            f = manager.send(MagicMock(), node_id='bootstrap-0')
         assert f.failed()
         assert isinstance(f.exception, Errors.NodeNotReadyError)
 
