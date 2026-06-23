@@ -59,6 +59,7 @@ class ClusterMetadata:
         self._coordinators = {}  # (key_type, key) -> node_id
         self._last_refresh_ms = 0
         self._last_successful_refresh_ms = 0
+        self._last_response = None
         self._need_update = True
         self._future = None
         self._listeners = set()
@@ -175,7 +176,7 @@ class ClusterMetadata:
             log.error('Metadata refresh: failed %s', exc)
             self.failed_update(exc)
             raise
-        log.info(f'Metadata refresh: success (node_id={node_id})')
+        log.debug(f'Metadata refresh: success (node_id={node_id})')
         self.update_metadata(response)
 
     def _generate_bootstrap_brokers(self):
@@ -635,7 +636,12 @@ class ClusterMetadata:
             else:
                 f.success(self)
 
-        log.info("Updated metadata: %s", self)
+        if self._last_response is None or self._last_response != metadata:
+            self._last_response = metadata
+            log.info("Updated metadata: %s", self)
+        else:
+            # else same as last response...
+            log.debug("Updated metadata (no change): %s", self)
 
         for listener in self._listeners:
             listener(self)
