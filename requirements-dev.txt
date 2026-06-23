@@ -12,6 +12,7 @@ pytest-mock
 pytest-timeout
 python-snappy
 Sphinx
+sphinx-argparse
 sphinx-rtd-theme
 xxhash
 zstandard
