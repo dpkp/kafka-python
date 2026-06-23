@@ -1,3 +1,18 @@
+# 3.0.4 (Jun 23, 2026)
+
+### Fixes
+* Fix `_build_transport` / `conn.close` race (#3097)
+* net.transport: Fix closed/write_eof handling in `_write_to_sock` (#3095)
+* Fix kafka.net.connection await: raise connection failures (#3091)
+
+### Logging
+* bootstrap connection log changes (#3092)
+* Improve connection logging; dont log version check if matches expected (#3089)
+* tests: print integration fixture output to console if no log handlers
+
+### Documentation
+* docs: Add title headings for KafkaConsumer/KafkaProducer; add sphinx-argparse to requirements-dev.txt (#3096)
+
 # 3.0.3 (Jun 22, 2026)
 
 ### Fixes
