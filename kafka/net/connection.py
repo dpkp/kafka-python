@@ -266,6 +266,13 @@ class KafkaConnection:
         To receive data, wait for data_received() calls.
         When the connection is closed, connection_lost() is called.
         """
+        if self.closed:
+            # A concurrent close() may have torn the connection down while the
+            # transport was still being built. Setting initializing=True below
+            # would resurrect an already-closed connection mid-teardown and
+            # break the fail_in_flight_requests invariant; refuse instead. The
+            # caller (manager._connect) closes the orphaned transport.
+            raise Errors.KafkaConnectionError('Connection closed during connect')
         self.transport = transport
         if self.transport.get_protocol() != self:
             self.transport.set_protocol(self)
