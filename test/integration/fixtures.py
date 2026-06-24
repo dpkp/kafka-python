@@ -38,7 +38,7 @@ def create_topics(broker, topic_names, num_partitions=None, replication_factor=N
 
 
 def _create_topics_via_admin(broker, topic_names, num_partitions, replication_factor):
-    params = broker._enrich_client_params({}, client_id='topic_creator')
+    params = broker._enrich_client_params({'api_version': env_kafka_version(), 'client_id': 'topic_creator'})
     with KafkaAdminClient(**params) as admin:
         try:
             topics = {name: {'num_partitions': num_partitions, 'replication_factor': replication_factor}
@@ -54,7 +54,7 @@ def _create_topics_via_admin(broker, topic_names, num_partitions, replication_fa
 
 
 def _wait_for_topics(broker, topics):
-    params = broker._enrich_client_params({}, client_id='topic_creator')
+    params = broker._enrich_client_params({'api_version': env_kafka_version(), 'client_id': 'topic_creator'})
     with KafkaAdminClient(**params) as admin:
         admin.wait_for_topics(topics)
 
