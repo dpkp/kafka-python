@@ -92,9 +92,10 @@ class StructArrayField(ArrayField):
         if compact:
             an = ctx.next_var('an')
             ctx.emit(indent, '%s = len(%s) + 1 if %s is not None else 0' % (an, val_expr, val_expr))
-            UnsignedVarInt32.emit_encode_into(ctx, an, indent)
+            UnsignedVarInt32.emit_encode_into(ctx, an, indent)  # reserves the length varint
             ctx.emit(indent, 'if %s is not None:' % val_expr)
         else:
+            ctx.emit_reserve(indent, 4)
             ctx.emit(indent, 'if %s is None:' % val_expr)
             ctx.emit(indent, "    pack_into('>i', buf, pos, -1)")
             ctx.emit(indent, '    pos += 4')
@@ -118,8 +119,12 @@ class StructArrayField(ArrayField):
                 ctx.emit(scalar_indent, 'out.pos = pos')
                 ctx.emit(scalar_indent, '# tagged fields for single-field struct')
                 ctx.emit(scalar_indent, '%s.encode_into(%s, out, version=%d)' % (tf_var, item_var, version))
+                # encode_into may reallocate out.buf - re-bind cached locals.
                 ctx.emit(scalar_indent, 'pos = out.pos')
+                ctx.emit(scalar_indent, 'buf = out.buf')
+                ctx.emit(scalar_indent, '_cap = len(buf)')
             elif tagged is None:
+                ctx.emit_reserve(scalar_indent, 1)
                 ctx.emit(scalar_indent, 'buf[pos] = 0')
                 ctx.emit(scalar_indent, 'pos += 1')
         else:

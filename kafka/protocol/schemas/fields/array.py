@@ -72,9 +72,10 @@ class ArrayField(BaseField):
         if compact:
             an = ctx.next_var('an')
             ctx.emit(indent, '%s = len(%s) + 1 if %s is not None else 0' % (an, val_expr, val_expr))
-            UnsignedVarInt32.emit_encode_into(ctx, an, indent)
+            UnsignedVarInt32.emit_encode_into(ctx, an, indent)  # reserves the length varint
             ctx.emit(indent, 'if %s is not None:' % val_expr)
         else:
+            ctx.emit_reserve(indent, 4)
             ctx.emit(indent, 'if %s is None:' % val_expr)
             ctx.emit(indent, "    pack_into('>i', buf, pos, -1)")
             ctx.emit(indent, '    pos += 4')
@@ -83,9 +84,23 @@ class ArrayField(BaseField):
             ctx.emit(indent, '    pos += 4')
         guard = indent + '    '
         item_var = ctx.next_var('ai')
-        ctx.emit(guard, 'for %s in %s:' % (item_var, val_expr))
-        self.array_of.emit_encode_into(ctx, item_var, guard + '    ',
-                                       version=version, compact=compact, tagged=tagged)
+        elem = self.array_of
+        if isinstance(elem, SimpleField) and elem.is_batchable():
+            # Fast path: array of fixed-size primitives (e.g. []int32). Reserve
+            # the whole run with a single ensure, then write each element inline
+            # without a per-element capacity check. The reserve sits inside the
+            # `is not None` branch (compact) / `else` branch (non-compact), so
+            # len() is always safe here.
+            be_fmt = elem._type._be_fmt
+            size = elem._type.size
+            ctx.emit_reserve(guard, '%d * len(%s)' % (size, val_expr))
+            ctx.emit(guard, 'for %s in %s:' % (item_var, val_expr))
+            ctx.emit(guard, "    pack_into('%s', buf, pos, %s)" % (be_fmt, item_var))
+            ctx.emit(guard, '    pos += %d' % size)
+        else:
+            ctx.emit(guard, 'for %s in %s:' % (item_var, val_expr))
+            elem.emit_encode_into(ctx, item_var, guard + '    ',
+                                  version=version, compact=compact, tagged=tagged)
 
     def emit_decode_from(self, ctx, var_name, indent, version=None, compact=False, tagged=False):
         n = ctx.next_var('n')
