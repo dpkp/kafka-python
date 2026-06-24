@@ -60,6 +60,7 @@ class TaggedFields:
             # Encode value into buffer after reserving space for size prefix.
             # Strategy: assume size fits in 1 byte (< 128), encode value,
             # then fix up if the size varint is larger.
+            out.ensure(1)  # reserve the assumed 1-byte size prefix
             size_pos = out.pos
             out.pos += 1  # reserve 1 byte for size
             val_start = out.pos

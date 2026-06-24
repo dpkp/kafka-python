@@ -26,6 +26,7 @@ class FixedCodec:
 
     @classmethod
     def encode_into(cls, out, value, compact=False):
+        out.ensure(cls.size)
         pack_into(cls._be_fmt, out.buf, out.pos, value)
         out.pos += cls.size
 
@@ -40,6 +41,7 @@ class FixedCodec:
 
     @classmethod
     def emit_encode_into(cls, ctx, val_expr, indent, compact=False):
+        ctx.emit_reserve(indent, cls.size)
         ctx.emit(indent, "pack_into('%s', buf, pos, %s)" % (cls._be_fmt, val_expr))
         ctx.emit(indent, 'pos += %d' % cls.size)
 
@@ -101,6 +103,7 @@ class UUID:
             b = value.bytes
         else:
             b = uuid.UUID(value).bytes
+        out.ensure(16)
         pos = out.pos
         out.buf[pos:pos+16] = b
         out.pos = pos + 16
@@ -111,6 +114,7 @@ class UUID:
         v = ctx.next_var('uv')
         ctx.emit(indent, '%s = %s' % (v, val_expr))
         ctx.emit(indent, 'if %s is None: %s = _ZERO_UUID' % (v, v))
+        ctx.emit_reserve(indent, 16)
         ctx.emit(indent, 'buf[pos:pos+16] = %s.bytes if hasattr(%s, "bytes") else __import__("uuid").UUID(%s).bytes' % (v, v, v))
         ctx.emit(indent, 'pos += 16')
 
@@ -151,43 +155,52 @@ class String:
     def encode_into(self, out, value, compact=False):
         if compact:
             if value is None:
-                UnsignedVarInt32.encode_into(out,0)
+                UnsignedVarInt32.encode_into(out, 0)  # ensures internally
                 return
             value = str(value).encode(self.encoding)
-            UnsignedVarInt32.encode_into(out,len(value) + 1)
+            UnsignedVarInt32.encode_into(out, len(value) + 1)  # ensures internally
         else:
             if value is None:
+                out.ensure(2)
                 pack_into('>h', out.buf, out.pos, -1)
                 out.pos += 2
                 return
             value = str(value).encode(self.encoding)
+            out.ensure(2)
             pack_into('>h', out.buf, out.pos, len(value))
             out.pos += 2
         n = len(value)
+        out.ensure(n)
         pos = out.pos
         out.buf[pos:pos+n] = value
         out.pos = pos + n
 
     def emit_encode_into(self, ctx, val_expr, indent, compact=False):
         sv = ctx.next_var('sv')
+        body = indent + '    '
         ctx.emit(indent, 'if %s is None:' % val_expr)
         if compact:
+            ctx.emit_reserve(body, 1)
             ctx.emit(indent, '    buf[pos] = 0')
             ctx.emit(indent, '    pos += 1')
             ctx.emit(indent, 'else:')
             sn = ctx.next_var('sn')
             ctx.emit(indent, '    %s = str(%s).encode("utf-8")' % (sv, val_expr))
             ctx.emit(indent, '    %s = len(%s) + 1' % (sn, sv))
-            UnsignedVarInt32.emit_encode_into(ctx, sn, indent + '    ')
+            UnsignedVarInt32.emit_encode_into(ctx, sn, body)  # reserves the length varint
+            ctx.emit_reserve(body, 'len(%s)' % sv)
             ctx.emit(indent, '    buf[pos:pos+len(%s)] = %s' % (sv, sv))
             ctx.emit(indent, '    pos += len(%s)' % sv)
         else:
+            ctx.emit_reserve(body, 2)
             ctx.emit(indent, "    pack_into('>h', buf, pos, -1)")
             ctx.emit(indent, '    pos += 2')
             ctx.emit(indent, 'else:')
             ctx.emit(indent, '    %s = str(%s).encode("utf-8")' % (sv, val_expr))
+            ctx.emit_reserve(body, 2)
             ctx.emit(indent, "    pack_into('>h', buf, pos, len(%s))" % sv)
             ctx.emit(indent, '    pos += 2')
+            ctx.emit_reserve(body, 'len(%s)' % sv)
             ctx.emit(indent, '    buf[pos:pos+len(%s)] = %s' % (sv, sv))
             ctx.emit(indent, '    pos += len(%s)' % sv)
 
@@ -240,14 +253,16 @@ class Bytes:
             value = value.encode()
         if compact:
             if value is None:
-                UnsignedVarInt32.encode_into(out, 0)
+                UnsignedVarInt32.encode_into(out, 0)  # ensures internally
                 return
-            UnsignedVarInt32.encode_into(out, len(value) + 1)
+            UnsignedVarInt32.encode_into(out, len(value) + 1)  # ensures internally
         else:
             if value is None:
+                out.ensure(4)
                 pack_into('>i', out.buf, out.pos, -1)
                 out.pos += 4
                 return
+            out.ensure(4)
             pack_into('>i', out.buf, out.pos, len(value))
             out.pos += 4
         n = len(value)
@@ -260,35 +275,35 @@ class Bytes:
     def emit_encode_into(cls, ctx, val_expr, indent, compact=False):
         bv = ctx.next_var('bv')
         bn = ctx.next_var('bn')
+        body = indent + '    '
         if compact:
             ctx.emit(indent, '%s = %s' % (bv, val_expr))
             ctx.emit(indent, 'if %s is not None and not isinstance(%s, (bytes, bytearray, memoryview)): %s = %s.encode()' % (bv, bv, bv, bv))
             ctx.emit(indent, 'if %s is None:' % bv)
+            ctx.emit_reserve(body, 1)
             ctx.emit(indent, '    buf[pos] = 0')
             ctx.emit(indent, '    pos += 1')
             ctx.emit(indent, 'else:')
             ctx.emit(indent, '    %s = len(%s)' % (bn, bv))
             sn = ctx.next_var('sn')
             ctx.emit(indent, '    %s = %s + 1' % (sn, bn))
-            UnsignedVarInt32.emit_encode_into(ctx, sn, indent + '    ')
-            ctx.emit(indent, '    out.pos = pos')
-            ctx.emit(indent, '    out.ensure(%s)' % bn)
-            ctx.emit(indent, '    buf = out.buf')
+            UnsignedVarInt32.emit_encode_into(ctx, sn, body)  # reserves the length varint
+            ctx.emit_reserve(body, bn)
             ctx.emit(indent, '    buf[pos:pos+%s] = %s' % (bn, bv))
             ctx.emit(indent, '    pos += %s' % bn)
         else:
             ctx.emit(indent, '%s = %s' % (bv, val_expr))
             ctx.emit(indent, 'if %s is not None and not isinstance(%s, (bytes, bytearray, memoryview)): %s = %s.encode()' % (bv, bv, bv, bv))
             ctx.emit(indent, 'if %s is None:' % bv)
+            ctx.emit_reserve(body, 4)
             ctx.emit(indent, "    pack_into('>i', buf, pos, -1)")
             ctx.emit(indent, '    pos += 4')
             ctx.emit(indent, 'else:')
             ctx.emit(indent, '    %s = len(%s)' % (bn, bv))
+            ctx.emit_reserve(body, 4)
             ctx.emit(indent, "    pack_into('>i', buf, pos, %s)" % bn)
             ctx.emit(indent, '    pos += 4')
-            ctx.emit(indent, '    out.pos = pos')
-            ctx.emit(indent, '    out.ensure(%s)' % bn)
-            ctx.emit(indent, '    buf = out.buf')
+            ctx.emit_reserve(body, bn)
             ctx.emit(indent, '    buf[pos:pos+%s] = %s' % (bn, bv))
             ctx.emit(indent, '    pos += %s' % bn)
 
@@ -341,6 +356,7 @@ class UnsignedVarInt32:
 
     @classmethod
     def encode_into(cls, out, value):
+        out.ensure(5)  # a varint32 is at most 5 bytes
         buf = out.buf
         pos = out.pos
         while (value & 0xffffff80) != 0:
@@ -352,6 +368,7 @@ class UnsignedVarInt32:
 
     @classmethod
     def emit_encode_into(cls, ctx, val_expr, indent, compact=False):
+        ctx.emit_reserve(indent, 5)  # a varint32 is at most 5 bytes
         ctx.emit(indent, 'while (%s & 0xffffff80) != 0:' % val_expr)
         ctx.emit(indent, '    buf[pos] = (%s & 0x7f) | 0x80' % val_expr)
         ctx.emit(indent, '    %s >>= 7' % val_expr)
@@ -462,6 +479,7 @@ class BitField:
     def encode_into(cls, out, vals, compact=False):
         if vals is None:
             vals = {31}
+        out.ensure(4)
         pack_into('>I', out.buf, out.pos, cls.to_32_bit_field(vals))
         out.pos += 4
 
@@ -473,6 +491,7 @@ class BitField:
         ctx.emit(indent, 'if %s is None: %s = {31}' % (bf, bf))
         ctx.emit(indent, '%s = 0' % bfi)
         ctx.emit(indent, 'for _b in %s: %s |= 1 << _b' % (bf, bfi))
+        ctx.emit_reserve(indent, 4)
         ctx.emit(indent, "pack_into('>I', buf, pos, %s)" % bfi)
         ctx.emit(indent, 'pos += 4')
 

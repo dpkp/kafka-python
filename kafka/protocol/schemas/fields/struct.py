@@ -116,6 +116,7 @@ class StructField(BaseField):
             and not tuple_access
         )
         if inline_nullable:
+            ctx.emit_reserve(indent, 1)
             ctx.emit(indent, 'if %s is None:' % item_expr)
             ctx.emit(indent, '    buf[pos] = 0xff')
             ctx.emit(indent, '    pos += 1')
@@ -136,8 +137,13 @@ class StructField(BaseField):
             ctx.globs[tf_var] = self.tagged_fields(version)
             ctx.emit(indent, 'out.pos = pos')
             ctx.emit(indent, '%s.encode_into(%s, out, version=%d)' % (tf_var, item_expr, version))
+            # TaggedFields.encode_into may grow (reallocate) out.buf, so re-bind
+            # the cached buf/_cap locals before any further inline writes.
             ctx.emit(indent, 'pos = out.pos')
+            ctx.emit(indent, 'buf = out.buf')
+            ctx.emit(indent, '_cap = len(buf)')
         elif tagged is None:
+            ctx.emit_reserve(indent, 1)
             ctx.emit(indent, 'buf[pos] = 0')
             ctx.emit(indent, 'pos += 1')
 
@@ -170,9 +176,13 @@ class StructField(BaseField):
     def encode_into__optimized_context(self, version, compact=False, tagged=False):
         ctx = CodegenContext()
         indent = '    '
+        # Preamble: declare the buf/pos/_cap locals that every emitted fragment
+        # relies on (see CodegenContext.emit_reserve). Fragments are spliced
+        # into this function body and are not valid outside it.
         ctx.lines.append('def _encode(item, out):')
         ctx.emit(indent, 'buf = out.buf')
         ctx.emit(indent, 'pos = out.pos')
+        ctx.emit(indent, '_cap = len(buf)  # cached len(buf); kept in sync by emit_reserve')
         self.emit_encode_into(ctx, 'item', indent, version=version, compact=compact, tagged=tagged)
         ctx.emit(indent, 'out.pos = pos')
         return ctx
