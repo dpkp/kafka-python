@@ -341,6 +341,7 @@ class UnsignedVarInt32:
 
     @classmethod
     def encode_into(cls, out, value):
+        out.ensure(5)
         buf = out.buf
         pos = out.pos
         while (value & 0xffffff80) != 0:
