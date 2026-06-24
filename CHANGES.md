@@ -1,3 +1,17 @@
+# 3.0.5 (Jun 24, 2026)
+
+### Fixes
+* Reserve buffer capacity before every encode_into write (#3103)
+* Fix backoff on bootstrap init failure after connection_made (#3098)
+
+### CI
+* Bump actions/cache from 5 to 6 (#3099)
+* only save kafka dist cache on master (#3100)
+* Fix flakey test: test_send_during_backoff
+
+### Documentation
+* Add new extended logging args to docs/cli
+
 # 3.0.4 (Jun 23, 2026)
 
 ### Fixes
