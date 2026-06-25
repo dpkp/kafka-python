@@ -564,6 +564,18 @@ class TopicPartitionState:
         # until OffsetForLeaderEpoch confirms the position is consistent with
         # the current leader's log; mutually exclusive with awaiting_reset.
         self._awaiting_validation = False
+        # Highest cluster leader epoch this position has already been reconciled
+        # against (a completed validation, or adoption of a position whose
+        # record epoch is unknown). This is deliberately distinct from the
+        # position's *record* epoch (``OffsetAndMetadata.leader_epoch``, which
+        # is sent as last_fetched_epoch for KIP-595 divergence detection): a
+        # leader election bumps the cluster epoch without changing the epoch of
+        # the record we're positioned on, and OffsetForLeaderEpoch reports the
+        # epoch of the requested (older) point, so the record epoch alone can't
+        # tell us whether we've validated against the current leader. Tracking
+        # it separately is what stops poll() from re-validating forever and
+        # stalling the consumer. See #3106.
+        self._current_leader_epoch = -1
         # KIP-392: preferred read replica chosen by the broker (rack-aware).
         # ``_preferred_read_replica_expiration`` is a monotonic deadline; after
         # it passes we fall back to the leader and re-learn. Cleared on
@@ -597,6 +609,7 @@ class TopicPartitionState:
         self._position = None
         self.next_allowed_retry_time = None
         self._awaiting_validation = False
+        self._current_leader_epoch = -1
         self.clear_preferred_read_replica()
 
     def is_reset_allowed(self):
@@ -625,6 +638,11 @@ class TopicPartitionState:
         self.drop_pending_record_batch = True
         self.next_allowed_retry_time = None
         self._awaiting_validation = False
+        # A freshly-seeked position has not been reconciled against any leader;
+        # force the next maybe_validate_position to validate it against the
+        # current leader (the prior position's validation says nothing about
+        # this offset).
+        self._current_leader_epoch = -1
         self.clear_preferred_read_replica()
 
     def pause(self):
@@ -686,7 +704,8 @@ class TopicPartitionState:
         return self._awaiting_validation
 
     def maybe_validate_position(self, current_leader_epoch):
-        """Mark for validation if current leader has advanced beyond our position's epoch.
+        """Mark for validation if the current leader has advanced beyond the
+        leader epoch this position was last reconciled against.
 
         Returns True if the partition is now awaiting validation.
         """
@@ -696,11 +715,26 @@ class TopicPartitionState:
             return False
         if current_leader_epoch is None or current_leader_epoch < 0:
             return False
-        # Positions without a known epoch (legacy data, post-seek to bare offset)
-        # can't be validated; treat as already-fetchable.
-        if self._position.leader_epoch < 0:
+        # Have we already reconciled this position against this leader epoch (or
+        # a newer one)? The floor is the max of:
+        #  - the record epoch of the position itself: a record we actually
+        #    fetched at this offset proves the position is valid through its
+        #    epoch (so a position fetched under the current leader needs no
+        #    validation), and
+        #  - the leader epoch a completed validation reconciled us against,
+        #    which can exceed the record epoch because OffsetForLeaderEpoch
+        #    reports the epoch of the requested (older) point, not the current
+        #    leader's. Without this second term the position is re-marked every
+        #    poll and the partition never becomes fetchable again (#3106).
+        reconciled_epoch = max(self._current_leader_epoch, self._position.leader_epoch)
+        if current_leader_epoch <= reconciled_epoch:
             return False
-        if self._position.leader_epoch >= current_leader_epoch:
+        # We are now tracking this leader epoch regardless of whether the
+        # position itself carries a record epoch we can validate against.
+        self._current_leader_epoch = current_leader_epoch
+        # Positions without a known record epoch (legacy data, post-seek to bare
+        # offset) can't be validated; treat as already-fetchable.
+        if self._position.leader_epoch < 0:
             return False
         self.clear_preferred_read_replica()
         self._awaiting_validation = True
