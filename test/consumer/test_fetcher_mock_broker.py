@@ -143,6 +143,92 @@ class TestKIP320OffsetValidation:
         assert fetcher._subscriptions.assignment[tp].position.leader_epoch == 5
         assert fetcher._subscriptions.assignment[tp].position.offset == 50
 
+    def test_validated_position_not_revalidated_forever(
+            self, broker, manager, fetcher):
+        """Regression for #3106: consumer stalls after one fetched batch.
+
+        After a leader election the cluster epoch advances (3 -> 5), but
+        OffsetForLeaderEpoch reports the epoch of the *requested* (older)
+        point - here 3, below the cluster epoch - because that's the epoch
+        the position's record actually belongs to. The position must be
+        reconciled against the current leader epoch (5) so the *next* poll
+        does not re-mark it for validation. Otherwise the partition is gated
+        out of fetching on every poll and the consumer stalls forever with a
+        frozen position and growing lag.
+        """
+        tp = TopicPartition(TOPIC, PARTITION)
+        # Position recorded under leader epoch 3 (e.g. last fetched batch).
+        fetcher._subscriptions.seek(tp, OffsetAndMetadata(50, '', 3))
+
+        # Cluster leader epoch advances to 5; refresh the consumer's cache.
+        _broker_metadata(broker, leader_epoch=5)
+        manager._net.run(manager.wait_for, manager.cluster.request_update(), 1000)
+
+        # No truncation (end_offset 100 >= position 50), and the broker
+        # reports the requested epoch (3), NOT the current cluster epoch (5).
+        ofle_requests = [0]
+
+        def handler(api_key, api_version, correlation_id, request_bytes):
+            ofle_requests[0] += 1
+            return _ofle_response(error_code=0, leader_epoch=3, end_offset=100)
+        broker.respond_fn(OffsetForLeaderEpochRequest, handler)
+        broker.respond_fn(OffsetForLeaderEpochRequest, handler)  # guard 2nd call
+
+        # Round 1: poll marks + drives validation to completion.
+        fetcher.maybe_validate_positions()
+        assert fetcher._subscriptions.assignment[tp].awaiting_validation
+        manager.run(fetcher._validate_offsets_async, 1000)
+
+        assert fetcher._cached_log_truncation is None
+        assert not fetcher._subscriptions.assignment[tp].awaiting_validation
+        assert ofle_requests[0] == 1
+
+        # Round 2: the next poll must NOT re-mark the partition - it has
+        # already been validated against cluster leader epoch 5 - and the
+        # partition must be fetchable again.
+        fetcher.maybe_validate_positions()
+        state = fetcher._subscriptions.assignment[tp]
+        assert not state.awaiting_validation, \
+            'position re-marked for validation -> consumer stalls (#3106)'
+        assert state.is_fetchable()
+
+        # And no further OffsetForLeaderEpoch request is issued.
+        manager.run(fetcher._validate_offsets_async, 1000)
+        assert ofle_requests[0] == 1
+
+    def test_seek_forces_revalidation_of_new_position(
+            self, broker, manager, fetcher):
+        """A seek must re-arm validation even after a prior validation.
+
+        Companion to #3106: the per-partition reconciled-leader-epoch must be
+        reset on seek. A position validated against leader epoch 5 says nothing
+        about a *different* offset the user then seeks to - that offset may sit
+        in a truncated region of an older epoch. If the stale reconciliation
+        leaked across the seek, the new position would be (wrongly) treated as
+        already validated and fetched without an OffsetForLeaderEpoch check.
+        """
+        tp = TopicPartition(TOPIC, PARTITION)
+        fetcher._subscriptions.seek(tp, OffsetAndMetadata(50, '', 3))
+
+        _broker_metadata(broker, leader_epoch=5)
+        manager._net.run(manager.wait_for, manager.cluster.request_update(), 1000)
+
+        broker.respond(OffsetForLeaderEpochRequest,
+                       _ofle_response(error_code=0, leader_epoch=3, end_offset=100))
+
+        # Validate the first position against the current leader (epoch 5).
+        fetcher.maybe_validate_positions()
+        manager.run(fetcher._validate_offsets_async, 1000)
+        assert not fetcher._subscriptions.assignment[tp].awaiting_validation
+
+        # User seeks to a different offset whose record epoch (4) is below the
+        # current cluster leader epoch (5). This new position has never been
+        # reconciled and must be re-marked for validation.
+        fetcher._subscriptions.seek(tp, OffsetAndMetadata(200, '', 4))
+        fetcher.maybe_validate_positions()
+        assert fetcher._subscriptions.assignment[tp].awaiting_validation, \
+            'seeked position not re-validated -> could consume past truncation'
+
     def test_diverged_seeks_to_endpoint_with_policy(
             self, broker, manager, fetcher):
         """end_offset < position.offset (valid epoch) on the wire triggers
