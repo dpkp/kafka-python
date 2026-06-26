@@ -12,66 +12,52 @@ import kafka.errors as Errors
 # same process. Observable behavior on the producer instance (enable_idempotence
 # flag, _transaction_manager presence, config['acks']) is what callers actually
 # depend on, and is what these tests verify.
+#
+# These producers point at the default localhost:9092 with no broker running, so
+# the `with KafkaProducer(...) as p` form relies on close() tearing down the
+# Sender thread even though it never connects (see Sender._maybe_send_pending_request).
 
 
 class TestDefaultsAreIdempotent:
     """KIP-679: defaults instantiate an idempotent producer with acks=all."""
 
     def test_bare_construct_is_idempotent(self):
-        p = KafkaProducer(api_version=(0, 11))
-        try:
+        with KafkaProducer(api_version=(0, 11)) as p:
             assert p.config['enable_idempotence'] is True
             assert p.config['acks'] == -1
             assert p._transaction_manager is not None
             assert p._transaction_manager.is_transactional() is False
-        finally:
-            p.close(timeout=0)
 
     def test_opt_out_disables_idempotence_but_keeps_acks_default(self):
-        p = KafkaProducer(enable_idempotence=False, api_version=(0, 11))
-        try:
+        with KafkaProducer(enable_idempotence=False, api_version=(0, 11)) as p:
             assert p.config['enable_idempotence'] is False
             assert p.config['acks'] == -1
             assert p._transaction_manager is None
-        finally:
-            p.close(timeout=0)
 
 
 class TestDefaultIdempotenceSilentDisable:
     """User-provided incompatible config + default idempotence -> silent disable."""
 
     def test_acks_1_silently_disables(self):
-        p = KafkaProducer(acks=1, api_version=(0, 11))
-        try:
+        with KafkaProducer(acks=1, api_version=(0, 11)) as p:
             assert p.config['enable_idempotence'] is False
             assert p.config['acks'] == 1
             assert p._transaction_manager is None
-        finally:
-            p.close(timeout=0)
 
     def test_acks_0_silently_disables(self):
-        p = KafkaProducer(acks=0, api_version=(0, 11))
-        try:
+        with KafkaProducer(acks=0, api_version=(0, 11)) as p:
             assert p.config['enable_idempotence'] is False
             assert p._transaction_manager is None
-        finally:
-            p.close(timeout=0)
 
     def test_retries_zero_silently_disables(self):
-        p = KafkaProducer(retries=0, api_version=(0, 11))
-        try:
+        with KafkaProducer(retries=0, api_version=(0, 11)) as p:
             assert p.config['enable_idempotence'] is False
             assert p._transaction_manager is None
-        finally:
-            p.close(timeout=0)
 
     def test_max_in_flight_too_high_silently_disables(self):
-        p = KafkaProducer(max_in_flight_requests_per_connection=10, api_version=(0, 11))
-        try:
+        with KafkaProducer(max_in_flight_requests_per_connection=10, api_version=(0, 11)) as p:
             assert p.config['enable_idempotence'] is False
             assert p._transaction_manager is None
-        finally:
-            p.close(timeout=0)
 
 
 class TestOldBrokerFallback:
@@ -79,14 +65,11 @@ class TestOldBrokerFallback:
     acks=-1 retained (acks=all is valid on any wire version)."""
 
     def test_old_broker_silently_disables(self):
-        p = KafkaProducer(api_version=(0, 10))
-        try:
+        with KafkaProducer(api_version=(0, 10)) as p:
             assert p.config['enable_idempotence'] is False
             # Per KIP-679 + project decision: acks stays at -1 even on old brokers.
             assert p.config['acks'] == -1
             assert p._transaction_manager is None
-        finally:
-            p.close(timeout=0)
 
 
 class TestExplicitIdempotenceConflicts:
@@ -139,16 +122,13 @@ class TestExplicitIdempotenceConflicts:
 
     def test_acks_all_string_accepted(self):
         """'all' normalizes to -1 before the conflict check fires."""
-        p = KafkaProducer(
+        with KafkaProducer(
             enable_idempotence=True,
             acks='all',
             api_version=(0, 11),
-        )
-        try:
+        ) as p:
             assert p.config['acks'] == -1
             assert p._transaction_manager is not None
-        finally:
-            p.close(timeout=0)
 
     def test_old_broker_with_explicit_idempotence_raises(self):
         with pytest.raises(Errors.KafkaConfigurationError, match="api_version"):
