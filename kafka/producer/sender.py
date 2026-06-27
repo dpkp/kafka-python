@@ -310,7 +310,7 @@ class Sender(threading.Thread):
             return False
 
         log.debug("%s: Sending transactional request %s", str(self), next_request_handler.request)
-        while not self._force_close:
+        while self._running and not self._force_close:
             target_node = None
             try:
                 if next_request_handler.needs_coordinator():
@@ -325,7 +325,8 @@ class Sender(threading.Thread):
                 else:
                     target_node = self._client.least_loaded_node()
                     if target_node is None:
-                        self._client.poll(future=self._metadata.request_update())
+                        self._client.poll(timeout_ms=self.config['retry_backoff_ms'],
+                                          future=self._metadata.request_update())
                     elif not self._client.await_ready(target_node, timeout_ms=self.config['request_timeout_ms']):
                         continue
 

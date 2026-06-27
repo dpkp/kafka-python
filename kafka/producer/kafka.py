@@ -646,7 +646,7 @@ class KafkaProducer:
         _self = weakref.proxy(self)
         def wrapper():
             try:
-                _self.close(timeout=0, null_logger=True)
+                _self.close(timeout=1, null_logger=True)
             except (ReferenceError, AttributeError):
                 pass
         return wrapper
