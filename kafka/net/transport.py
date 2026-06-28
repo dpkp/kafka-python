@@ -19,6 +19,8 @@ class KafkaTCPTransport:
         self._closed = False
         self._write_buffer = deque()
         self._writing = False
+        self._read_task = None
+        self._write_task = None
         self._protocol = None
         self._read = False
         self._write = True
@@ -80,7 +82,7 @@ class KafkaTCPTransport:
         data_received() method.
         """
         if not self._read:
-            self._net.call_soon(self._read_from_sock)
+            self._read_task = self._net.call_soon(self._read_from_sock)
         self._read = True
         log.debug('%s: Resumed reading', self)
 
@@ -173,7 +175,7 @@ class KafkaTCPTransport:
         self._write_buffer.append(data)
         if not self._writing:
             self._writing = True
-            self._net.call_soon(self._write_to_sock)
+            self._write_task =  self._net.call_soon(self._write_to_sock)
 
     def writelines(self, list_of_data):
         """Write a list (or any iterable) of data bytes to the transport."""
@@ -182,7 +184,7 @@ class KafkaTCPTransport:
         self._write_buffer.extend(list_of_data)
         if not self._writing:
             self._writing = True
-            self._net.call_soon(self._write_to_sock)
+            self._write_task = self._net.call_soon(self._write_to_sock)
 
     async def _write_to_sock(self):
         try:
@@ -272,6 +274,10 @@ class KafkaTCPTransport:
             except OSError:
                 pass
             sock.close()
+        for task in (self._read_task, self._write_task):
+            if task is not None:
+                self._net.cancel(task)
+        self._read_task = self._write_task = None
         proto = self._protocol
         self._protocol = None
         if proto is not None:
