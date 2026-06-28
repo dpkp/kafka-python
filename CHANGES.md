@@ -1,8 +1,13 @@
+# 3.0.7 (Jun 28, 2026)
+
+### Fixes
+* transport: cancel pending io coroutines on close() (#3109)
+* producer: fix stalled shutdown when brokers unreachable (#3108)
+
 # 3.0.6 (Jun 25, 2026)
 
 ### Fixes
 * consumer: track current leader epoch in addition to record epoch (#3107)
-
 
 ### CI
 * Also `wait_for_topics` on <0.10 test fixtures (#3105)
