@@ -6,7 +6,7 @@ import pytest
 
 import kafka.errors as Errors
 from kafka.future import Future
-from kafka.net.selector import NetworkSelector
+from kafka.net.selector import NetworkSelector, TaskState
 from kafka.net.transport import KafkaTCPTransport
 
 
@@ -365,3 +365,58 @@ class TestKafkaTCPTransport:
         t._closed = True
         s = str(t)
         assert 'closed' in s
+
+
+class TestTransportWaiterCleanup:
+    """Regression: a locally-initiated close()/abort() must reclaim the socket
+    read/write coroutine tasks parked in the event loop.
+
+    These tests fail until ``KafkaTCPTransport._close`` cancels its read/write
+    waiter tasks (``net.cancel(task)``); the selector's existing WAIT_IO branch
+    in ``cancel()`` then drives the io_guard finalizer and discards the task.
+    """
+
+    def test_local_close_reclaims_parked_reader(self, net, socketpair):
+        rsock, wsock = socketpair
+        t = KafkaTCPTransport(net, wsock)
+        t.set_protocol(MagicMock())
+        baseline = len(net._pending_tasks)
+
+        t.resume_reading()
+        net.drain()  # reader runs and parks in WAIT_IO on wait_read(wsock)
+        parked = [task for task in net._pending_tasks if task.state is TaskState.WAIT_IO]
+        assert len(parked) == 1, 'reader did not park as expected'
+        assert len(net._pending_tasks) == baseline + 1
+
+        # Empty write buffer -> close() tears the socket down synchronously. The
+        # peer (rsock) never sent anything, so there is no I/O event to wake the
+        # parked reader; close() itself must reclaim it.
+        t.close()
+        net.drain()  # running the loop must not be needed -- and must not help either
+
+        assert t._sock is None
+        assert len(net._pending_tasks) == baseline, (
+            'parked reader leaked into _pending_tasks after local close')
+        assert not any(task.state is TaskState.WAIT_IO for task in net._pending_tasks)
+
+    def test_local_close_reclaims_parked_writer(self, net, socketpair):
+        rsock, wsock = socketpair
+        t = KafkaTCPTransport(net, wsock)
+        t.set_protocol(MagicMock())
+        baseline = len(net._pending_tasks)
+
+        # write() schedules _write_to_sock, whose loop parks on the first
+        # wait_write before the bytes leave the buffer. drain() steps it once
+        # to the park and returns (no _ready left), leaving it suspended.
+        t.write(b'data')
+        net.drain()
+        parked = [task for task in net._pending_tasks if task.state is TaskState.WAIT_IO]
+        assert len(parked) == 1, 'writer did not park as expected'
+
+        t.abort(error=Errors.KafkaConnectionError('boom'))
+        net.drain()
+
+        assert t._sock is None
+        assert len(net._pending_tasks) == baseline, (
+            'parked writer leaked into _pending_tasks after abort')
+        assert not any(task.state is TaskState.WAIT_IO for task in net._pending_tasks)
