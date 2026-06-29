@@ -2,12 +2,12 @@ import collections
 import copy
 import heapq
 import logging
-import threading
 import time
 
 from kafka import errors as Errors
 from kafka.metrics.measurable import AnonMeasurable
 from kafka.metrics.stats import Avg, Max, Rate
+from kafka.net.wakeup_notifier import WakeupNotifier
 from kafka.producer.transaction_manager import TransactionManager
 from kafka.protocol.producer import ProduceRequest, ProduceResponse
 from kafka.structs import TopicPartition
@@ -24,11 +24,15 @@ log = logging.getLogger(__name__)
 _PartitionProduceResponse = ProduceResponse.TopicProduceResponse.PartitionProduceResponse
 
 
-class Sender(threading.Thread):
+class Sender:
     """
-    The background thread that handles the sending of produce requests to the
-    Kafka cluster. This thread makes metadata requests to renew its view of the
-    cluster and then sends produce requests to the appropriate nodes.
+    Drives the sending of produce requests to the Kafka cluster.
+
+    Runs as an ``async def _sender_loop`` coroutine on the shared ``kafka/net/``
+    IO thread (scheduled via ``manager.call_soon`` in ``start``), alongside the
+    cluster metadata-refresh and coordinator-heartbeat loops. It drains the
+    accumulator, dispatches produce requests, and sleeps until the next deadline
+    on a thread-safe ``WakeupNotifier``.
     """
     DEFAULT_CONFIG = {
         'max_request_size': 1048576,
@@ -45,19 +49,23 @@ class Sender(threading.Thread):
     }
 
     def __init__(self, client, metadata, accumulator, **configs):
-        super().__init__()
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
             if key in configs:
                 self.config[key] = configs.pop(key)
 
-        self.name = self.config['client_id'] + '-network-thread'
         self._client = client
+        self._manager = client._manager
+        self._net = client._net
         self._accumulator = accumulator
         self._metadata = client.cluster
         self._running = True
         self._force_close = False
         self._topics_to_add = set()
+        self._wakeup = WakeupNotifier(self._net)
+        # Future returned by manager.call_soon(self._sender_loop); resolves when
+        # the loop coroutine returns. close() blocks on it.
+        self._loop_future = None
         if self.config['metrics']:
             self._sensors = SenderMetrics(self.config['metrics'], self._client, self._metadata)
         else:
@@ -103,18 +111,32 @@ class Sender(threading.Thread):
             del self._in_flight_batches[tp]
         return expired_batches
 
-    def run(self):
-        """The main run loop for the sender thread."""
-        log.debug("%s: Starting Kafka producer I/O thread.", str(self))
+    def start(self):
+        """Schedule the sender coroutine on the IO thread. Idempotent.
+
+        Returns the Future that resolves when the loop coroutine completes
+        (after the graceful drain on close).
+        """
+        if self._loop_future is None or self._loop_future.is_done:
+            self._loop_future = self._manager.call_soon(self._sender_loop)
+        return self._loop_future
+
+    def is_running(self):
+        return self._loop_future is not None and not self._loop_future.is_done
+
+    async def _sender_loop(self):
+        """The main loop for the sender, run as a coroutine on the IO thread."""
+        log.debug("%s: Starting Kafka producer I/O loop.", str(self))
 
         # main loop, runs until close is called
         while self._running:
             try:
-                self.run_once()
+                await self._run_once()
             except Exception:
-                log.exception("%s: Uncaught error in kafka producer I/O thread", str(self))
+                log.exception("%s: Uncaught error in kafka producer I/O loop", str(self))
+                await self._net.sleep(self.config['retry_backoff_ms'] / 1000)
 
-        log.debug("%s: Beginning shutdown of Kafka producer I/O thread, sending"
+        log.debug("%s: Beginning shutdown of Kafka producer I/O loop, sending"
                   " remaining records.", str(self))
 
         # okay we stopped accepting requests but there may still be
@@ -124,23 +146,19 @@ class Sender(threading.Thread):
                and (self._accumulator.has_undrained()
                     or self._client.in_flight_request_count() > 0)):
             try:
-                self.run_once()
+                await self._run_once()
             except Exception:
-                log.exception("%s: Uncaught error in kafka producer I/O thread", str(self))
+                log.exception("%s: Uncaught error in kafka producer I/O loop", str(self))
+                await self._net.sleep(self.config['retry_backoff_ms'] / 1000)
 
         if self._force_close:
             # We need to fail all the incomplete batches and wake up the
             # threads waiting on the futures.
             self._accumulator.abort_incomplete_batches()
 
-        try:
-            self._client.close()
-        except Exception:
-            log.exception("%s: Failed to close network client", str(self))
+        log.debug("%s: Shutdown of Kafka producer I/O loop has completed.", str(self))
 
-        log.debug("%s: Shutdown of Kafka producer I/O thread has completed.", str(self))
-
-    def run_once(self):
+    async def _run_once(self):
         """Run a single iteration of sending."""
         while self._topics_to_add:
             self._metadata.add_topic(self._topics_to_add.pop())
@@ -155,9 +173,15 @@ class Sender(threading.Thread):
                     # below blocks new sends until the response arrives.
                     self._transaction_manager.init_producer_id()
 
-                if self._transaction_manager.has_in_flight_transactional_request() or self._maybe_send_pending_request():
+                if self._transaction_manager.has_in_flight_transactional_request():
                     # as long as there are outstanding transactional requests, we simply wait for them to return
-                    self._client.poll(timeout_ms=self.config['retry_backoff_ms'])
+                    await self._wakeup(self.config['retry_backoff_ms'] / 1000)
+                    return
+
+                if await self._maybe_send_pending_request():
+                    # A transactional request was dispatched or is backing off
+                    # (the latter already awaited its delay); gate produce until
+                    # the next iteration.
                     return
 
                 # do not continue sending if the transaction manager is in a failed state, if there
@@ -170,7 +194,7 @@ class Sender(threading.Thread):
                     last_error = self._transaction_manager.last_error
                     if last_error is not None:
                         self._maybe_abort_batches(last_error)
-                    self._client.poll(timeout_ms=self.config['retry_backoff_ms'])
+                    await self._wakeup(self.config['retry_backoff_ms'] / 1000)
                     return
                 elif self._transaction_manager.has_abortable_error():
                     # Attempt to get the last error that caused this abort.
@@ -185,7 +209,7 @@ class Sender(threading.Thread):
                 self._transaction_manager.authentication_failed(e)
 
         poll_timeout_ms = self._send_producer_data()
-        self._client.poll(timeout_ms=poll_timeout_ms)
+        await self._wakeup(poll_timeout_ms / 1000)
 
     def _send_producer_data(self, now=None):
         now = time.monotonic() if now is None else now
@@ -203,7 +227,7 @@ class Sender(threading.Thread):
         not_ready_timeout_ms = float('inf')
         for node in list(ready_nodes):
             if not self._client.is_ready(node):
-                node_delay_ms = self._client.connection_delay(node)
+                node_delay_ms = self._manager.connection_delay(node)
                 log.debug('%s: Node %s not ready; delaying produce of accumulated batch (%f ms)', str(self), node, node_delay_ms)
                 self._client.maybe_connect(node, wakeup=False)
                 ready_nodes.remove(node)
@@ -282,14 +306,20 @@ class Sender(threading.Thread):
         for node_id, request in requests.items():
             batches = batches_by_node[node_id]
             log.debug('%s: Sending Produce Request: %r', str(self), request)
-            (self._client.send(node_id, request, wakeup=False)
+            (self._manager.send(request, node_id=node_id)
                  .add_callback(
                      self._handle_produce_response, node_id, time.monotonic(), batches)
                  .add_errback(
                      self._failed_produce, batches, node_id))
         return poll_timeout_ms
 
-    def _maybe_send_pending_request(self):
+    async def _maybe_send_pending_request(self):
+        """Dispatch the next pending transactional/idempotent coordinator request.
+
+        Returns True if a request was dispatched or is backing off (in which case
+        the produce path is gated until the next loop iteration), False if there
+        is no pending request to send.
+        """
         if self._transaction_manager.is_completing() and self._accumulator.has_incomplete:
             if self._transaction_manager.is_aborting():
                 # KIP-654: prefer the last error that triggered the abort;
@@ -310,44 +340,48 @@ class Sender(threading.Thread):
             return False
 
         log.debug("%s: Sending transactional request %s", str(self), next_request_handler.request)
-        while self._running and not self._force_close:
-            target_node = None
-            try:
-                if next_request_handler.needs_coordinator():
-                    target_node = self._transaction_manager.coordinator(next_request_handler.coordinator_type)
-                    if target_node is None:
-                        self._transaction_manager.lookup_coordinator_for_request(next_request_handler)
-                        break
-                    elif not self._client.await_ready(target_node, timeout_ms=self.config['request_timeout_ms']):
-                        self._transaction_manager.lookup_coordinator_for_request(next_request_handler)
-                        target_node = None
-                        break
-                else:
-                    target_node = self._client.least_loaded_node()
-                    if target_node is None:
-                        self._client.poll(timeout_ms=self.config['retry_backoff_ms'],
-                                          future=self._metadata.request_update())
-                    elif not self._client.await_ready(target_node, timeout_ms=self.config['request_timeout_ms']):
-                        continue
-
-                if target_node is not None:
-                    if next_request_handler.is_retry:
-                        time.sleep(self.config['retry_backoff_ms'] / 1000)
-                    txn_correlation_id = self._transaction_manager.next_in_flight_request_correlation_id()
-                    future = self._client.send(target_node, next_request_handler.request)
-                    future.add_both(next_request_handler.on_complete, txn_correlation_id)
+        backoff = self.config['retry_backoff_ms'] / 1000
+        try:
+            if next_request_handler.needs_coordinator():
+                target_node = self._transaction_manager.coordinator(next_request_handler.coordinator_type)
+                if target_node is None or not self._client.is_ready(target_node):
+                    # Coordinator unknown or its connection isn't ready: re-look
+                    # up the coordinator (it may have moved) and back off.
+                    if target_node is not None:
+                        self._client.maybe_connect(target_node, wakeup=False)
+                        backoff = max(backoff, self._manager.connection_delay(target_node))
+                    self._transaction_manager.lookup_coordinator_for_request(next_request_handler)
+                    self._transaction_manager.retry(next_request_handler)
+                    await self._net.sleep(backoff)
+                    return True
+            else:
+                target_node = self._manager.least_loaded_node()
+                if target_node is None:
+                    # No known broker -- force a metadata refresh and back off.
+                    self._metadata.request_update()
+                    self._transaction_manager.retry(next_request_handler)
+                    await self._net.sleep(backoff)
+                    return True
+                if not self._client.is_ready(target_node):
+                    self._client.maybe_connect(target_node, wakeup=False)
+                    self._transaction_manager.retry(next_request_handler)
+                    await self._net.sleep(max(backoff, self._manager.connection_delay(target_node)))
                     return True
 
-            except Exception as e:
-                log.warning("%s: Got an exception when trying to find a node to send a transactional request to. Going to back off and retry: %s", str(self), e)
-                if next_request_handler.needs_coordinator():
-                    self._transaction_manager.lookup_coordinator_for_request(next_request_handler)
-                    break
+            if next_request_handler.is_retry:
+                await self._net.sleep(backoff)
+            txn_correlation_id = self._transaction_manager.next_in_flight_request_correlation_id()
+            future = self._manager.send(next_request_handler.request, node_id=target_node)
+            future.add_both(next_request_handler.on_complete, txn_correlation_id)
+            return True
 
-        if target_node is None:
+        except Exception as e:
+            log.warning("%s: Got an exception when trying to find a node to send a transactional request to. Going to back off and retry: %s", str(self), e)
+            if next_request_handler.needs_coordinator():
+                self._transaction_manager.lookup_coordinator_for_request(next_request_handler)
             self._transaction_manager.retry(next_request_handler)
-
-        return True
+            await self._net.sleep(backoff)
+            return True
 
     def _maybe_abort_batches(self, exc):
         if self._accumulator.has_incomplete:
@@ -383,6 +417,9 @@ class Sender(threading.Thread):
         log.error("%s: Error sending produce request to node %d: %s", str(self), node_id, error) # trace
         for batch in batches:
             self._complete_batch_with_exception(batch, error)
+        # Completing batches frees in-flight capacity, unmutes partitions, and
+        # may re-enqueue retries; wake the loop to re-drain promptly.
+        self.wakeup()
 
     def _handle_produce_response(self, node_id, send_time, batches, response):
         """Handle a produce response."""
@@ -401,6 +438,9 @@ class Sender(threading.Thread):
             synthetic = _PartitionProduceResponse(error_code=0)
             for batch in batches:
                 self._complete_batch(batch, synthetic)
+        # Completing batches frees in-flight capacity, unmutes partitions, and
+        # may re-enqueue retries; wake the loop to re-drain promptly.
+        self.wakeup()
 
     def _record_exceptions_fn(self, top_level_exception, record_errors, error_message):
         """Returns a fn mapping batch_index to exception"""
@@ -705,8 +745,12 @@ class Sender(threading.Thread):
         )
 
     def wakeup(self):
-        """Wake up the selector associated with this send thread."""
-        self._client.wakeup()
+        """Wake the sender loop early (e.g. when a sendable batch is appended).
+
+        Thread-safe: ``WakeupNotifier.notify`` routes through
+        ``call_soon_threadsafe``, so user threads may call this directly.
+        """
+        self._wakeup.notify()
 
     def bootstrap_connected(self):
         return self._client.bootstrap_connected()

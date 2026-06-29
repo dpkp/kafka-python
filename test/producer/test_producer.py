@@ -94,15 +94,22 @@ def _producer_for_send_test(partitioner):
     """Build a real KafkaProducer but replace the accumulator + sender
     with mocks so ``send()`` doesn't try to actually push data.
 
-    __init__ already starts a real Sender thread; we stop and join it before
-    swapping in the mock so it isn't orphaned (close() would otherwise act on
-    the mock and leak the real daemon thread). MockBroker keeps it off the
-    real network."""
+    __init__ already starts the real Sender coroutine on the IO thread; we stop
+    it and wait on its loop Future before swapping in the mock so it isn't
+    orphaned (close() would otherwise act on the mock). MockBroker keeps it off
+    the real network."""
     producer = _mock_producer(partitioner=partitioner)
     producer._sender.initiate_close()
-    producer._sender.join(2)
+    producer._manager.run(producer._manager.wait_for, producer._sender._loop_future, 2000)
     producer._accumulator = MagicMock()
     producer._sender = MagicMock()
+    # close() now blocks on the sender's loop Future; give the mock an
+    # already-resolved one (and is_running()==False) so teardown doesn't hang.
+    from kafka.future import Future
+    _done = Future()
+    _done.success(None)
+    producer._sender._loop_future = _done
+    producer._sender.is_running.return_value = False
     producer._metadata = MagicMock()
     producer._metadata.topics.return_value = {'t'}
     producer._metadata.partitions_for_topic.return_value = set(range(20))
