@@ -30,6 +30,30 @@ from test.mock_broker import MockBroker
 _PartitionProduceResponse = ProduceResponse.TopicProduceResponse.PartitionProduceResponse
 
 
+class _RecordingWakeup:
+    """Stand-in for ``Sender._wakeup`` (a WakeupNotifier) in unit tests.
+
+    The sender loop sleeps via ``await self._wakeup(timeout_secs)``; this
+    records the timeouts so tests can assert on them without driving a real
+    timer, and provides a no-op ``notify`` for ``Sender.wakeup``.
+    """
+    def __init__(self):
+        self.calls = []
+
+    async def __call__(self, timeout_secs=None):
+        self.calls.append(timeout_secs)
+
+    def notify(self):
+        pass
+
+
+def _drive(sender, coro_method):
+    """Run one of the sender's coroutine methods to completion on the test
+    selector (no IO thread is started in unit tests, so manager.run drives
+    the loop on the calling thread)."""
+    return sender._manager.run(coro_method)
+
+
 def _partition_response(error_cls=None, **kwargs):
     """Test helper that constructs a PartitionProduceResponse.
 
@@ -397,7 +421,7 @@ def test_transaction_aborted_error_on_user_abort_with_undrained_batches(client, 
     # Short-circuit the EndTxnHandler dispatch so we don't need a live
     # coordinator -- the abort happens before next_request_handler is consulted.
     mocker.patch.object(tm, 'next_request_handler', return_value=None)
-    sender._maybe_send_pending_request()
+    _drive(sender, sender._maybe_send_pending_request)
 
     assert future.failed()
     assert isinstance(future.exception, Errors.TransactionAbortedError)
@@ -461,38 +485,41 @@ def test_failed_produce(sender, mocker):
 
 def test_run_once(sender, mocker):
     """The plain (non-transactional) iteration: drain pending topic adds into
-    cluster metadata, send producer data, and poll the client with the
-    timeout _send_producer_data returned."""
-    mocker.patch.object(sender, '_client')
+    cluster metadata, send producer data, and sleep for the timeout
+    _send_producer_data returned."""
     mocker.patch.object(sender, '_send_producer_data', return_value=42)
+    wakeup = _RecordingWakeup()
+    sender._wakeup = wakeup
     spy_add_topic = mocker.spy(sender._metadata, 'add_topic')
     sender.add_topic('foo-topic')
 
-    sender.run_once()
+    _drive(sender, sender._run_once)
 
     spy_add_topic.assert_called_once_with('foo-topic')
     assert not sender._topics_to_add
     sender._send_producer_data.assert_called_once()
-    sender._client.poll.assert_called_once_with(timeout_ms=42)
+    assert wakeup.calls == [42 / 1000]
 
 
 def test_run_once_gates_on_transactional_request(sender, transaction_manager, mocker):
     """An idempotent producer without a producer_id enqueues InitProducerId
     and waits on the transactional request instead of sending produce data."""
     sender._transaction_manager = transaction_manager
-    mocker.patch.object(sender, '_client')
     mocker.patch.object(sender, '_send_producer_data')
-    mocker.patch.object(sender, '_maybe_send_pending_request', return_value=True)
+    mocker.patch.object(sender, '_maybe_send_pending_request',
+                        new_callable=mocker.AsyncMock, return_value=True)
+    wakeup = _RecordingWakeup()
+    sender._wakeup = wakeup
     spy_init = mocker.spy(transaction_manager, 'init_producer_id')
     assert not transaction_manager.has_producer_id()
 
-    sender.run_once()
+    _drive(sender, sender._run_once)
 
     spy_init.assert_called_once()
-    sender._maybe_send_pending_request.assert_called_once()
+    sender._maybe_send_pending_request.assert_awaited_once()
     sender._send_producer_data.assert_not_called()
-    sender._client.poll.assert_called_once_with(
-        timeout_ms=sender.config['retry_backoff_ms'])
+    # _maybe_send_pending_request handled its own backoff; the loop just gates.
+    assert wakeup.calls == []
 
 
 def test_run_once_fatal_error_aborts_batches(sender, transaction_manager, mocker):
@@ -501,16 +528,16 @@ def test_run_once_fatal_error_aborts_batches(sender, transaction_manager, mocker
     transaction_manager.set_producer_id_and_epoch(ProducerIdAndEpoch(1000, 0))
     error = Errors.ProducerFencedError()
     transaction_manager.transition_to_fatal_error(error)
-    mocker.patch.object(sender, '_client')
     mocker.patch.object(sender, '_send_producer_data')
     mocker.patch.object(sender, '_maybe_abort_batches')
+    wakeup = _RecordingWakeup()
+    sender._wakeup = wakeup
 
-    sender.run_once()
+    _drive(sender, sender._run_once)
 
     sender._maybe_abort_batches.assert_called_once_with(error)
     sender._send_producer_data.assert_not_called()
-    sender._client.poll.assert_called_once_with(
-        timeout_ms=sender.config['retry_backoff_ms'])
+    assert wakeup.calls == [sender.config['retry_backoff_ms'] / 1000]
 
 
 def test_run_once_abortable_error_aborts_undrained_batches(client, mocker):
@@ -533,15 +560,16 @@ def test_run_once_abortable_error_aborts_undrained_batches(client, mocker):
 
     accumulator = RecordAccumulator(transaction_manager=tm)
     sender = Sender(client, cluster, accumulator, transaction_manager=tm)
-    mocker.patch.object(sender, '_client')
     mocker.patch.object(sender, '_send_producer_data', return_value=0)
+    wakeup = _RecordingWakeup()
+    sender._wakeup = wakeup
     spy_abort = mocker.spy(accumulator, 'abort_undrained_batches')
 
-    sender.run_once()
+    _drive(sender, sender._run_once)
 
     spy_abort.assert_called_once_with(error)
     sender._send_producer_data.assert_called_once()
-    sender._client.poll.assert_called_once_with(timeout_ms=0)
+    assert wakeup.calls == [0 / 1000]
 
 
 def test__send_producer_data_expiry_time_reset(sender, accumulator, mocker):
@@ -1425,19 +1453,23 @@ class TestKip360SenderIntegration:
         assert len(second_init_handlers) == 1  # still just one
 
     def test_sender_loop_gates_on_bumping_state(self, sender, accumulator, mocker):
-        """When in BUMPING_PRODUCER_EPOCH, run_once short-circuits before
+        """When in BUMPING_PRODUCER_EPOCH, _run_once short-circuits before
         sending produce data."""
         from kafka.producer.transaction_manager import TransactionState as _TS
         tm = self._make_txn_manager()
         sender._transaction_manager = tm
         tm._current_state = _TS.BUMPING_PRODUCER_EPOCH
         mocker.patch.object(sender, '_send_producer_data')
-        mocker.patch.object(sender._client, 'poll')
+        # No pending coordinator request; fall through to the bumping gate.
+        mocker.patch.object(sender, '_maybe_send_pending_request',
+                            new_callable=mocker.AsyncMock, return_value=False)
+        wakeup = _RecordingWakeup()
+        sender._wakeup = wakeup
 
-        sender.run_once()
+        _drive(sender, sender._run_once)
 
         sender._send_producer_data.assert_not_called()
-        sender._client.poll.assert_called_once()
+        assert wakeup.calls == [sender.config['retry_backoff_ms'] / 1000]
 
 
 class TestProducerAcks:

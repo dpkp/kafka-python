@@ -525,7 +525,10 @@ class KafkaProducer:
             metrics=self._metrics, metric_group_prefix='producer',
             wakeup_timeout_ms=self.config['max_block_ms'],
             **self.config)
-        manager = client._manager
+        self._client = client
+        self._manager = manager = client._manager
+        self._net = client._net
+        self._net.start()
 
         # We currently depend on eager-resolution of api_version.
         # If it wasn't provided as a config option, we need to bootstrap
@@ -629,7 +632,6 @@ class KafkaProducer:
                               transaction_manager=self._transaction_manager,
                               guarantee_message_order=guarantee_message_order,
                               **self.config)
-        self._sender.daemon = True
         self._sender.start()
         self._closed = False
 
@@ -693,25 +695,40 @@ class KafkaProducer:
 
         log.info("%s: Closing the Kafka producer with %s secs timeout.", str(self), timeout)
         self.flush(timeout)
-        invoked_from_callback = bool(threading.current_thread() is self._sender)
+        on_io_thread = bool(self._net._io_thread is not None
+                            and threading.current_thread() is self._net._io_thread)
         if timeout > 0:
-            if invoked_from_callback:
+            if on_io_thread:
                 log.warning("%s: Overriding close timeout %s secs to 0 in order to"
                             " prevent useless blocking due to self-join. This"
                             " means you have incorrectly invoked close with a"
                             " non-zero timeout from the producer call-back.",
                             str(self), timeout)
-            else:
-                # Try to close gracefully.
-                if self._sender is not None:
-                    self._sender.initiate_close()
-                    self._sender.join(timeout)
+            elif self._sender is not None:
+                self._sender.initiate_close()
+                try:
+                    self._manager.run(self._manager.wait_for,
+                                      self._sender._loop_future, timeout * 1000)
+                except Errors.KafkaTimeoutError:
+                    pass
 
-        if self._sender is not None and self._sender.is_alive():
+        if self._sender is not None and self._sender.is_running():
             log.info("%s: Proceeding to force close the producer since pending"
                      " requests could not be completed within timeout %s.",
                      str(self), timeout)
             self._sender.force_close()
+            if not on_io_thread:
+                try:
+                    self._manager.run(self._manager.wait_for,
+                                      self._sender._loop_future, self.config['retry_backoff_ms'])
+                except Errors.KafkaTimeoutError:
+                    pass
+
+        if not on_io_thread:
+            try:
+                self._client.close()
+            except Exception:
+                log.exception("%s: Failed to close network client", str(self))
 
         if self._metrics:
             self._metrics.close()
