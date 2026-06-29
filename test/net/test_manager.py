@@ -43,6 +43,12 @@ class TestKafkaConnectionManagerConfig:
         m = KafkaConnectionManager(net, api_version=(1, 0))
         assert m.broker_version_data == BrokerVersionData((1, 0))
 
+    def test_create_future_forwards_to_backend(self, net):
+        m = KafkaConnectionManager(net)
+        fut = m.create_future()
+        assert isinstance(fut, Future)
+        assert not fut.is_done
+
     def test_client_dns_lookup_default(self, net):
         m = KafkaConnectionManager(net)
         assert m.config['client_dns_lookup'] == 'use_all_dns_ips'

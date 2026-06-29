@@ -150,7 +150,7 @@ class ClusterMetadata:
             log.debug('Metadata refresh already in flight; awaiting existing')
             await self._refresh_future
             return
-        self._refresh_future = Future()
+        self._refresh_future = self._manager.create_future()
         try:
             await self._do_refresh_metadata(node_id)
         except Exception as exc:

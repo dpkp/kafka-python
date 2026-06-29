@@ -445,6 +445,16 @@ class NetworkSelector:
         self.call_at(when, task)
         return task
 
+    def create_future(self):
+        """Create a Future suitable for awaiting on this backend's loop.
+
+        Portability seam for pluggable backends: core coroutines call this
+        instead of constructing ``Future`` directly, so an alternate backend
+        (asyncio, Twisted) can return its own awaitable type. The selector's
+        native awaitable is ``kafka.future.Future``.
+        """
+        return Future()
+
     def sleep(self, delay):
         return KernelEvent('_sleep', delay)
 

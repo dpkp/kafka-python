@@ -412,7 +412,7 @@ class KafkaConnectionManager:
         """
         if timeout_ms is None:
             return await future
-        wrapper = Future()
+        wrapper = self._net.create_future()
         def _on_success(value):
             if not wrapper.is_done:
                 wrapper.success(value)
@@ -430,6 +430,14 @@ class KafkaConnectionManager:
             return await wrapper
         finally:
             self._net.cancel(timer)
+
+    def create_future(self):
+        """Create a Future suitable for awaiting on the underlying loop.
+
+        Forwards to the backend so loop coroutines get the backend's native
+        awaitable type. See ``NetworkSelector.create_future``.
+        """
+        return self._net.create_future()
 
     def call_soon(self, coro, *args):
         """Accepts a coroutine / awaitable / function and schedules it on the event loop.
