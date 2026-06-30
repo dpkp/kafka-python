@@ -1,6 +1,7 @@
 import functools
 import logging
 import threading
+from typing import Any, Callable, Protocol, runtime_checkable
 
 from kafka.errors import RetriableError
 
@@ -8,6 +9,18 @@ log = logging.getLogger(__name__)
 
 
 class Future:
+    """Callback/errback future, and the reference implementation of the
+    :class:`BackendFuture` contract.
+
+    ``Future`` owns the portable callback core (``success`` / ``failure`` /
+    ``add_callback`` / ``add_errback`` / ``add_both`` / ``chain`` and the
+    ``is_done`` / ``value`` / ``exception`` state). A pluggable async backend
+    returns its own awaitable from ``net.create_future()`` by subclassing
+    ``Future`` and overriding only :meth:`__await__` — the single
+    backend-specific hook. The selector backend uses ``Future`` directly
+    (``__await__`` yields ``self``; the selector resumes the task on
+    resolution). See :class:`BackendFuture` for the full contract.
+    """
     __slots__ = ('is_done', 'value', 'exception', '_callbacks', '_errbacks', '_lock')
     error_on_callbacks = False # and errbacks
 
@@ -159,8 +172,63 @@ class Future:
         return self
 
     def __await__(self):
+        # The single backend-specific hook (see BackendFuture). For the
+        # selector backend the awaitable IS the Future: yield self and the
+        # selector re-enqueues the awaiting task when this future resolves.
+        # asyncio/Twisted backends override this to bridge to their native
+        # awaitable, leaving the callback core above untouched.
         if not self.is_done:
             yield self
         if self.exception:
             raise self.exception
         return self.value
+
+
+@runtime_checkable
+class BackendFuture(Protocol):
+    """Contract for the awaitable futures returned by ``net.create_future()``.
+
+    A pluggable async backend (the kafka.net selector, asyncio, Twisted, ...)
+    returns its own future type from ``create_future()``. Core loop coroutines
+    touch it only through this surface, so the type is interchangeable across
+    backends. :class:`Future` is the reference implementation and the base
+    class backends subclass, overriding only ``__await__``.
+
+    Pinned semantics — the three axes where backends could otherwise diverge:
+
+    1. **Resolution thread.** A future from ``create_future()`` is created and
+       resolved (``success`` / ``failure``) on the loop/IO thread only.
+       Cross-thread handoffs (a user thread blocking on a loop result) use a
+       plain thread-safe ``Future`` bridged via ``manager.wait_for`` /
+       ``manager.run`` — never a backend future awaited directly. Backends
+       whose native awaitable is loop-affine (``asyncio.Future``, Twisted
+       ``Deferred``) depend on this; their ``__await__`` adapter may assert it.
+
+    2. **Fan-out.** Multiple coroutines may ``await`` the same future and
+       multiple callbacks may be registered; all are resumed / invoked. (A bare
+       Twisted ``Deferred`` is single-consumer, so that backend wraps it
+       per-awaiter inside ``__await__``.)
+
+    3. **Callback timing is unspecified.** Callbacks may fire inline on the
+       resolving thread (selector) or on a later loop iteration (asyncio).
+       Callers must not assume callbacks have run when ``success`` / ``failure``
+       returns. Code needing synchronous-resolution ordering uses a plain
+       ``Future`` (e.g. the producer batch latch), not a backend future.
+
+    ``__await__`` is the only backend-specific member; the callback core is
+    portable and supplied by ``Future``.
+    """
+
+    is_done: bool
+    value: Any
+    exception: Any
+
+    def __await__(self): ...
+    def success(self, value: Any) -> 'BackendFuture': ...
+    def failure(self, e: Any) -> 'BackendFuture': ...
+    def add_callback(self, f: Callable, *args: Any, **kwargs: Any) -> 'BackendFuture': ...
+    def add_errback(self, f: Callable, *args: Any, **kwargs: Any) -> 'BackendFuture': ...
+    def add_both(self, f: Callable, *args: Any, **kwargs: Any) -> 'BackendFuture': ...
+    def chain(self, future: 'BackendFuture') -> 'BackendFuture': ...
+    def succeeded(self) -> bool: ...
+    def failed(self) -> bool: ...
