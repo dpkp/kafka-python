@@ -206,6 +206,8 @@ class ClusterMetadata:
         for topic in topics:
             ensure_valid_topic_name(topic)
         if not set(topics).difference(self._topics):
+            # Pre-resolved sibling of request_update() (cross-thread handoff);
+            # already done, so it never yields -- safe as a plain Future.
             return Future().success(self)
         # TODO: handle future when old metadata request is currently in-flight
         # TODO: handle future when set_topics called multiple times before new request
@@ -227,6 +229,8 @@ class ClusterMetadata:
         """
         ensure_valid_topic_name(topic)
         if topic in self._topics:
+            # Pre-resolved sibling of request_update() (cross-thread handoff);
+            # already done, so it never yields -- safe as a plain Future.
             return Future().success(self)
         # TODO: handle future when old metadata request is currently in-flight
         self._topics.add(topic)
@@ -430,6 +434,11 @@ class ClusterMetadata:
         with self._lock:
             self._need_update = True
             if not self._future or self._future.is_done:
+                # Cross-thread handoff: created here on a user thread (callers
+                # invoke request_update() off-loop), resolved on the loop, and
+                # awaited only via manager.wait_for's wrapper -- never directly.
+                # Stays a plain thread-safe Future -> concurrent.futures.Future
+                # candidate, not create_future().
                 self._future = Future()
             ret = self._future
             if self._manager:

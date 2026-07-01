@@ -13,7 +13,6 @@ from kafka.cluster import ClusterMetadata
 import kafka.errors as Errors
 from kafka.net.wakeup_notifier import WakeupNotifier
 from kafka.protocol.broker_version_data import BrokerVersionData
-from kafka.future import Future
 from kafka.version import __version__
 
 
@@ -299,7 +298,9 @@ class KafkaConnectionManager:
         try:
             conn = self.get_connection(node_id)
         except Errors.NodeNotReadyError as e:
-            return Future().failure(e)
+            # Pre-failed sibling of send_request()'s create_future(); awaited
+            # on the loop by the same caller, so mint it from the backend too.
+            return self.create_future().failure(e)
         else:
             return conn.send_request(request, request_timeout_ms=request_timeout_ms)
 

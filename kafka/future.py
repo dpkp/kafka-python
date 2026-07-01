@@ -204,6 +204,11 @@ class BackendFuture(Protocol):
        whose native awaitable is loop-affine (``asyncio.Future``, Twisted
        ``Deferred``) depend on this; their ``__await__`` adapter may assert it.
 
+       There is no permanent third future category: a call site uses
+       ``create_future()`` when a coroutine awaits the result on the loop, and
+       a plain ``Future`` otherwise (a cross-thread handoff or a fan-out
+       lifecycle event — the eventual ``concurrent.futures.Future`` home).
+
     2. **Fan-out.** Multiple coroutines may ``await`` the same future and
        multiple callbacks may be registered; all are resumed / invoked. (A bare
        Twisted ``Deferred`` is single-consumer, so that backend wraps it
