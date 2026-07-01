@@ -11,6 +11,8 @@ import time
 
 import kafka.errors as Errors
 from kafka.future import Future
+from kafka.net.inet import create_connection as _inet_create_connection
+from kafka.net.transport import KafkaSSLTransport, KafkaTCPTransport
 from kafka.version import __version__
 
 
@@ -484,6 +486,32 @@ class NetworkSelector:
         native awaitable is ``SelectorFuture`` (a ``Future`` with ``__await__``).
         """
         return SelectorFuture()
+
+    async def create_connection(self, protocol, host, port, *, ssl=None,
+                                ssl_check_hostname=True, proxy_url=None,
+                                socket_options=(), timeout_at=None):
+        """Establish and return a connected transport to host:port.
+
+        The selector owns the raw socket: DNS + non-blocking connect (with
+        optional SOCKS5/HTTP-CONNECT proxy via KafkaNetSocket), then wraps it
+        in a TCP or SSL transport and runs the TLS handshake. ``protocol`` (the
+        KafkaConnection) is not used here -- the caller wires it via
+        ``connection_made()`` after its own "closed during connect" check; it
+        is part of the contract because socket-owning backends (asyncio,
+        Twisted) need it at connect time.
+        """
+        sock = await _inet_create_connection(self, host, port, socket_options,
+                                             proxy_url=proxy_url, timeout_at=timeout_at)
+        if ssl is not None:
+            transport = KafkaSSLTransport(self, sock, ssl, host=host,
+                                          ssl_check_hostname=ssl_check_hostname)
+        else:
+            transport = KafkaTCPTransport(self, sock, host=host)
+        try:
+            await transport.handshake()
+        except Exception as e:
+            raise Errors.KafkaConnectionError('Handshake failed: %s' % e)
+        return transport
 
     def sleep(self, delay):
         return KernelEvent('_sleep', delay)

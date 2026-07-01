@@ -7,8 +7,9 @@ the same isinstance/method-presence checks.
 """
 import threading
 
-from kafka.net.backend import NetBackend
+from kafka.net.backend import NetBackend, Transport
 from kafka.net.selector import NetworkSelector
+from kafka.net.transport import KafkaTCPTransport
 
 
 # The full contract surface, kept here so a missing/renamed method fails loudly.
@@ -16,9 +17,12 @@ CONTRACT_METHODS = (
     'start', 'stop', 'close', 'on_io_thread',
     'call_soon', 'call_soon_threadsafe', 'call_soon_with_future',
     'call_at', 'call_later', 'cancel',
-    'sleep', 'wait_read', 'wait_write',
-    'run', 'create_future', 'wakeup', 'unregister_event',
+    'sleep', 'create_connection',
+    'run', 'create_future', 'wakeup',
 )
+
+# Removed from the contract by the connection-seam revision (selector-private).
+NON_CONTRACT_METHODS = ('wait_read', 'wait_write', 'unregister_event', 'poll')
 
 
 class TestNetBackendContract:
@@ -40,10 +44,25 @@ class TestNetBackendContract:
         for name in CONTRACT_METHODS:
             assert callable(getattr(net, name)), name
 
-    def test_poll_is_not_part_of_contract(self):
-        # poll() exists on NetworkSelector (legacy) but is intentionally not
-        # in the NetBackend surface; asyncio has no equivalent.
-        assert 'poll' not in CONTRACT_METHODS
+    def test_readiness_primitives_and_poll_excluded(self):
+        # wait_read/wait_write/unregister_event (selector-private, replaced by
+        # the connection seam) and legacy poll() are intentionally NOT in the
+        # contract, though they still exist on NetworkSelector.
+        net = NetworkSelector()
+        for name in NON_CONTRACT_METHODS:
+            assert name not in CONTRACT_METHODS
+            assert hasattr(net, name), name  # still present on the selector impl
+
+
+class TestTransportContract:
+    def test_kafkatcptransport_satisfies_transport(self):
+        # Method-presence check against the Transport protocol (no socket needed).
+        for name in ('write', 'close', 'abort', 'is_closing',
+                     'pause_reading', 'resume_reading', 'host_port'):
+            assert callable(getattr(KafkaTCPTransport, name)), name
+
+    def test_plain_object_is_not_transport(self):
+        assert not isinstance(object(), Transport)
 
 
 class TestOnIoThread:

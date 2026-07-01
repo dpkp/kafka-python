@@ -14,31 +14,39 @@ loop-awaitable futures a backend hands out from ``net.create_future()``. The
 selector's implementation is ``kafka.net.selector.SelectorFuture``; an asyncio
 (and eventually Twisted) backend supplies its own.
 
-Two things are intentionally **not** part of the contract:
+Networking is a **connection seam**, not fd-readiness. asyncio and Twisted own
+the socket (DNS, connect, TLS, buffering) and drive protocol callbacks; they do
+not expose portable fd-readiness (asyncio's Proactor loop has no ``add_reader``,
+Twisted never exposes arbitrary-fd readiness). So the backend provides
+``create_connection`` -- given a ``KafkaConnection`` (which already implements
+the ``asyncio.Protocol`` surface) and an endpoint, it establishes the transport
+and wires the two together. The returned object satisfies the small
+:class:`Transport` protocol (the subset ``KafkaConnection`` drives).
 
+Three things are intentionally **not** part of the contract:
+
+* ``wait_read`` / ``wait_write`` / ``unregister_event`` -- the low-level
+  fd-readiness primitives. They are the *selector's* private mechanism (used
+  only inside ``kafka/net/transport.py`` + ``inet.py``, zero core callers) and
+  do not port to asyncio/Twisted. The connection seam replaces them.
 * ``poll(timeout_ms, future=...)`` -- the legacy single-tick driver. Its only
   remaining caller is the ``KafkaNetClient`` compat shim
   (``kafka/net/compat.py``), which is selector-bound; asyncio has no bounded
-  single-tick equivalent (``run_forever`` never returns, ``run_until_complete``
-  runs to a specific future). New code does not use it.
+  single-tick equivalent.
 * ``register_event`` / selector internals -- backend-private plumbing.
-  ``unregister_event`` is included only because the transport calls it on the
-  cleanup path.
 
 Method families:
 
 * **Lifecycle** -- ``start`` / ``stop`` / ``close`` / ``on_io_thread``.
 * **Scheduling** -- ``call_soon`` / ``call_soon_threadsafe`` /
   ``call_soon_with_future`` / ``call_at`` / ``call_later`` / ``cancel``.
-* **Awaitable primitives** -- ``sleep`` / ``wait_read`` / ``wait_write``.
-  These return a backend-specific awaitable (a ``KernelEvent`` for the
-  selector; an ``async def`` result for asyncio) -- core coroutines only
-  ``await`` them.
+* **Timing** -- ``sleep`` (backend-specific awaitable; core coroutines await it).
+* **Connection** -- ``create_connection`` (returns a :class:`Transport`).
 * **Cross-thread bridge** -- ``run`` (schedule on the loop, block the caller).
 * **Future factory** -- ``create_future`` (see ``BackendFuture``).
 * **Cross-thread wake** -- ``wakeup``.
 """
-from typing import Any, Callable, Optional, Protocol, runtime_checkable
+from typing import Any, Optional, Protocol, Sequence, Tuple, runtime_checkable
 
 
 @runtime_checkable
@@ -95,6 +103,24 @@ class BackendFuture(Protocol):
 
 
 @runtime_checkable
+class Transport(Protocol):
+    """The transport surface a backend's ``create_connection`` returns.
+
+    The subset of the ``asyncio.Transport`` / Twisted ``ITransport`` surface
+    that ``KafkaConnection`` actually drives. The selector's
+    ``KafkaTCPTransport`` and an asyncio-transport adapter both satisfy it.
+    """
+
+    def write(self, data: bytes) -> None: ...
+    def close(self) -> None: ...
+    def abort(self, error: Any = None) -> None: ...
+    def is_closing(self) -> bool: ...
+    def pause_reading(self) -> None: ...
+    def resume_reading(self) -> None: ...
+    def host_port(self) -> Tuple[str, int]: ...
+
+
+@runtime_checkable
 class NetBackend(Protocol):
     """Structural contract for a pluggable async event-loop backend.
 
@@ -135,15 +161,34 @@ class NetBackend(Protocol):
     def cancel(self, task: Any) -> None:
         """Cancel a scheduled task/timer previously returned by call_*."""
 
-    # --- awaitable primitives (core coroutines only await these) ----------
+    # --- timing (core coroutines await this) ------------------------------
     def sleep(self, delay: float) -> Any:
         """Awaitable that resolves after ``delay`` seconds."""
 
-    def wait_read(self, fileobj: Any, timeout_at: Optional[float] = None) -> Any:
-        """Awaitable that resolves when ``fileobj`` is readable."""
+    # --- connection seam --------------------------------------------------
+    async def create_connection(
+        self,
+        protocol: Any,
+        host: str,
+        port: int,
+        *,
+        ssl: Any = None,
+        ssl_check_hostname: bool = True,
+        proxy_url: Optional[str] = None,
+        socket_options: Sequence[Any] = (),
+        timeout_at: Optional[float] = None,
+    ) -> Transport:
+        """Establish and return a connected :class:`Transport` to ``host:port``.
 
-    def wait_write(self, fileobj: Any, timeout_at: Optional[float] = None) -> Any:
-        """Awaitable that resolves when ``fileobj`` is writable."""
+        The backend owns DNS, connect, TLS and (where supported) proxying. The
+        *caller* wires the transport to the protocol afterwards via
+        ``protocol.connection_made(transport)`` (so manager-level policy such as
+        the "closed during connect" check runs first). ``protocol`` (a
+        ``KafkaConnection``) is passed because backends that own the socket
+        (asyncio/Twisted) need it at connect time to receive transport events;
+        they buffer inbound data until ``connection_made`` is called. Backends
+        without native proxy support raise when ``proxy_url`` is set.
+        """
 
     # --- cross-thread bridge ---------------------------------------------
     def run(self, coro: Any, *args: Any) -> Any:
@@ -159,6 +204,3 @@ class NetBackend(Protocol):
     # --- misc -------------------------------------------------------------
     def wakeup(self) -> None:
         """Interrupt the loop's select() from another thread."""
-
-    def unregister_event(self, fileobj: Any, event: Any) -> None:
-        """Drop a registered read/write interest (transport cleanup path)."""

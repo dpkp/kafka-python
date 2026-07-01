@@ -86,23 +86,23 @@ class TestKafkaConnectionManagerProxyConfig:
         )
         assert m.config['proxy_url'] == 'socks5://new:1080'
 
-    def test_build_transport_passes_proxy_url(self, net):
-        """_build_transport must forward the configured proxy_url to
-        create_connection. Regression guard against the kwarg name drifting
-        from the create_connection signature."""
-        import asyncio
+    def test_connect_passes_proxy_url(self, net):
+        """_connect must forward the configured proxy_url to
+        net.create_connection. Regression guard against the kwarg name
+        drifting from the create_connection signature."""
         m = KafkaConnectionManager(net, proxy_url='socks5://proxy:1080')
-        node = MagicMock(host='broker', port=9092)
-        async def fake_create_connection(*args, **kwargs):
+        node = MagicMock(host='broker', port=9092, node_id='bootstrap-0')
+        conn = KafkaConnection(net, node_id='bootstrap-0', **m.config)
+
+        async def fake_create_connection(protocol, host, port, **kwargs):
+            # Close mid-connect so _connect short-circuits before
+            # connection_made()/initialize() -- we only assert the forwarded kwarg.
+            conn.close()
             return MagicMock()
-        with patch('kafka.net.manager.create_connection',
-                   side_effect=fake_create_connection) as mc, \
-             patch('kafka.net.manager.KafkaTCPTransport') as mock_transport_cls:
-            mock_transport = MagicMock()
-            mock_transport.handshake = MagicMock(
-                side_effect=lambda: asyncio.sleep(0))
-            mock_transport_cls.return_value = mock_transport
-            net.run(m._build_transport(node))
+
+        with patch.object(net, 'create_connection',
+                          side_effect=fake_create_connection) as mc:
+            net.run(m._connect(node, conn))
         assert mc.call_args.kwargs.get('proxy_url') == 'socks5://proxy:1080'
 
 
@@ -412,8 +412,8 @@ class TestKafkaConnectionManagerClose:
 
 class TestKafkaConnectionManagerConnectRace:
     """A connection can be closed (by manager.close() / bootstrap teardown)
-    while its _connect() coroutine is still awaiting _build_transport. When
-    the transport finally arrives, _connect must not resurrect the dead
+    while its _connect() coroutine is still awaiting net.create_connection.
+    When the transport finally arrives, _connect must not resurrect the dead
     connection via connection_made() -- doing so flips it back to
     `initializing`."""
 
@@ -423,13 +423,13 @@ class TestKafkaConnectionManagerConnectRace:
         conn = KafkaConnection(net, node_id='bootstrap-0', **manager.config)
         transport = MagicMock()
 
-        async def fake_build_transport(n, timeout_at=None):
+        async def fake_create_connection(protocol, host, port, **kwargs):
             # Simulate a concurrent close landing mid-connect.
             conn.close()
             return transport
 
-        with patch.object(manager, '_build_transport',
-                          side_effect=fake_build_transport):
+        with patch.object(net, 'create_connection',
+                          side_effect=fake_create_connection):
             net.run(manager._connect(node, conn))
 
         # Dead connection stays dead -- not resurrected to `initializing`.
