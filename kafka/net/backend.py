@@ -203,3 +203,74 @@ class NetBackend(Protocol):
     # --- misc -------------------------------------------------------------
     def wakeup(self) -> None:
         """Interrupt the loop's select() from another thread."""
+
+
+# --- backend selection ----------------------------------------------------
+from kafka.net.selector import NetworkSelector
+
+# name -> factory(**config) -> NetBackend. Populated by register_backend();
+# 'selector' is always available, 'asyncio' registers itself in Step 4.
+_BACKENDS = {}
+
+
+def register_backend(name, factory):
+    """Register a named backend factory for ``net='<name>'`` selection."""
+    _BACKENDS[name] = factory
+
+
+register_backend('selector', NetworkSelector)
+
+
+def _detect_async_library():
+    """Best-effort name of the async framework the caller is running under.
+
+    Returns 'asyncio' / 'trio' / ... via sniffio if installed, else 'asyncio'
+    if a running asyncio loop is detected, else None (plain sync context).
+    """
+    try:
+        import sniffio
+        try:
+            return sniffio.current_async_library()
+        except sniffio.AsyncLibraryNotFoundError:
+            pass
+    except ImportError:
+        pass
+    try:
+        import asyncio
+        asyncio.get_running_loop()
+        return 'asyncio'
+    except RuntimeError:
+        return None
+
+
+def resolve_backend(net, config):
+    """Resolve the ``net`` config value to a concrete NetBackend instance.
+
+    Precedence:
+      1. an already-constructed NetBackend instance -> used as-is;
+      2. a string name -> looked up in the registry (raises if unknown);
+      3. None -> auto-detect a running async framework (sniffio / running
+         asyncio loop) and use that backend *if registered*, otherwise fall
+         back to the default ``NetworkSelector``.
+
+    Note (Phase 1): auto-detect only selects the *implementation*; the backend
+    still runs on its own IO thread and the public API still blocks the caller.
+    """
+    if isinstance(net, str):
+        try:
+            factory = _BACKENDS[net]
+        except KeyError:
+            raise ValueError('Unknown net backend %r (available: %s)'
+                             % (net, sorted(_BACKENDS)))
+        return factory(**config)
+    if net is not None:
+        if not isinstance(net, NetBackend):
+            raise TypeError('net must be a NetBackend instance, a backend name, '
+                            'or None; got %r' % (net,))
+        return net
+    # net is None: auto-detect, else default. Auto-detected-but-unregistered
+    # backends fall back silently (an explicit name would have raised above).
+    name = _detect_async_library()
+    if name is not None and name in _BACKENDS:
+        return _BACKENDS[name](**config)
+    return NetworkSelector(**config)

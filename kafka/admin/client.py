@@ -210,6 +210,7 @@ class KafkaAdminClient(
         'metrics_num_samples': 2,
         'metrics_sample_window_ms': 30000,
         'kafka_client': KafkaNetClient,
+        'net': None,
     }
 
     def __init__(self, **configs):

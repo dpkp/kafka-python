@@ -362,6 +362,7 @@ class KafkaConsumer:
         'proxy_url': None,
         'socks5_proxy': None,  # deprecated
         'kafka_client': KafkaNetClient,
+        'net': None,
     }
     DEFAULT_SESSION_TIMEOUT_MS_PRE_KIP_735 = 30000
 

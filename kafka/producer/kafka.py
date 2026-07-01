@@ -458,6 +458,7 @@ class KafkaProducer:
         'proxy_url': None,
         'socks5_proxy': None,  # deprecated
         'kafka_client': KafkaNetClient,
+        'net': None,
     }
 
     DEPRECATED_CONFIGS = ()

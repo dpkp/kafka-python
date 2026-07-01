@@ -5,7 +5,6 @@ import time
 
 import kafka.errors as Errors
 from kafka.net.manager import KafkaConnectionManager
-from kafka.net.selector import NetworkSelector
 
 
 log = logging.getLogger(__name__)
@@ -22,8 +21,11 @@ class KafkaNetClient:
         # _lock is still used by the legacy Coordinator (kafka/coordinator/base.py).
         # Remove once Coordinator moves to the IO thread (Phase D).
         self._lock = threading.RLock()
-        self._net = NetworkSelector(**configs) if net is None else net
-        self._manager = KafkaConnectionManager(self._net, **configs) if manager is None else manager
+        # Backend selection (raw `net`: None | NetBackend | name) is resolved by
+        # KafkaConnectionManager, not here -- this compat shim is slated for
+        # removal once callers use the manager directly ("Phase D").
+        self._manager = KafkaConnectionManager(net, **configs) if manager is None else manager
+        self._net = self._manager._net
 
     @property
     def cluster(self):
