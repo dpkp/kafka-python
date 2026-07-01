@@ -277,6 +277,16 @@ class NetworkSelector:
         self._io_thread = t
         t.start()
 
+    def on_io_thread(self):
+        """True if the caller is running on this backend's IO thread.
+
+        The clean form of the ``current_thread() is _io_thread`` identity
+        check; callers use it to avoid blocking the loop on itself (e.g. a
+        producer ``close()`` invoked from a produce callback). Part of the
+        NetBackend contract so alternate backends can answer it their own way.
+        """
+        return self._io_thread is not None and threading.current_thread() is self._io_thread
+
     def stop(self, timeout_ms=None):
         """Signal run_forever() to exit and join the IO thread.
 

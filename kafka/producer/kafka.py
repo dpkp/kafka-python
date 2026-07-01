@@ -695,8 +695,7 @@ class KafkaProducer:
 
         log.info("%s: Closing the Kafka producer with %s secs timeout.", str(self), timeout)
         self.flush(timeout)
-        on_io_thread = bool(self._net._io_thread is not None
-                            and threading.current_thread() is self._net._io_thread)
+        on_io_thread = self._net.on_io_thread()
         if timeout > 0:
             if on_io_thread:
                 log.warning("%s: Overriding close timeout %s secs to 0 in order to"
