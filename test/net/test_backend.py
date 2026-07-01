@@ -118,11 +118,12 @@ class TestResolveBackend:
         with pytest.raises(ValueError, match='Unknown net backend'):
             resolve_backend('bogus', {})
 
-    def test_asyncio_name_unregistered_raises(self):
-        # In Phase-1/Step-3 the asyncio backend is not registered yet; an
-        # explicit request for it is a hard error (an auto-detect is not).
-        with pytest.raises(ValueError, match='Unknown net backend'):
-            resolve_backend('asyncio', {})
+    def test_asyncio_name_resolves(self):
+        # net='asyncio' lazily imports + registers the asyncio backend.
+        from kafka.net.asyncio_backend import AsyncioBackend
+        b = resolve_backend('asyncio', {'client_id': 'x'})
+        assert isinstance(b, AsyncioBackend)
+        b.close()
 
     def test_non_backend_instance_raises(self):
         with pytest.raises(TypeError):
@@ -152,13 +153,24 @@ class TestResolveBackend:
 
         assert asyncio.run(main()) is sentinel
 
-    def test_autodetect_falls_back_when_unregistered_in_loop(self, clean_registry):
-        _BACKENDS.pop('asyncio', None)  # ensure not registered
+    def test_autodetect_asyncio_in_loop_returns_asyncio_backend(self):
+        # In a running asyncio loop with no explicit net, auto-detect lazily
+        # registers + selects the asyncio backend (Phase-1: still own thread).
+        from kafka.net.asyncio_backend import AsyncioBackend
 
         async def main():
-            return resolve_backend(None, {})
+            return resolve_backend(None, {'client_id': 'auto'})
 
-        assert isinstance(asyncio.run(main()), NetworkSelector)
+        b = asyncio.run(main())
+        assert isinstance(b, AsyncioBackend)
+        b.close()
+
+    def test_autodetect_falls_back_for_unknown_framework(self, monkeypatch):
+        # A detected-but-unregistered framework (e.g. trio, no backend) falls
+        # back to the default selector rather than erroring.
+        import kafka.net.backend as backend_mod
+        monkeypatch.setattr(backend_mod, '_detect_async_library', lambda: 'trio')
+        assert isinstance(resolve_backend(None, {}), NetworkSelector)
 
     def test_no_running_loop_defaults_to_selector(self):
         assert isinstance(resolve_backend(None, {}), NetworkSelector)
