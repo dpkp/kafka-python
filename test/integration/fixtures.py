@@ -726,6 +726,12 @@ class KafkaFixture(Fixture):
         if self.ssl_enabled:
             params.setdefault('ssl_cafile', os.path.join(self.ssl_dir, 'ca-cert'))
             params.setdefault('ssl_check_hostname', False)
+        # Run the whole integration suite against a chosen net backend, e.g.
+        # KAFKA_PYTHON_NET=asyncio make test. Unset -> default (selector).
+        # setdefault so a test that pins net= still wins.
+        net = os.environ.get('KAFKA_PYTHON_NET')
+        if net:
+            params.setdefault('net', net)
         return params
 
 
