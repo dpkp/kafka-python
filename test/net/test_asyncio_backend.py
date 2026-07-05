@@ -6,6 +6,7 @@ and drives a real protocol round-trip through a MockBroker on a started
 AsyncioBackend -- the both-backends coverage for the async paths.
 """
 import asyncio
+import socket
 import threading
 import time
 
@@ -175,6 +176,150 @@ class TestAsyncioBackendFuture(BackendFutureContract):
         async def _all():
             await asyncio.gather(*coros)
         self.net.run(_all)
+
+
+class _StubProtocol:
+    """Minimal KafkaConnection-shaped protocol for transport tests."""
+    def __init__(self):
+        self.received = bytearray()
+        self.lost = False
+    def data_received(self, data):
+        self.received += data
+    def eof_received(self):
+        return None
+    def connection_lost(self, exc):
+        self.lost = True
+    def pause_writing(self):
+        pass
+    def resume_writing(self):
+        pass
+
+
+def _echo_server():
+    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    srv.bind(('127.0.0.1', 0))
+    srv.listen(1)
+    host, port = srv.getsockname()
+
+    def serve():
+        try:
+            conn, _ = srv.accept()
+        except OSError:
+            return
+        while True:
+            data = conn.recv(4096)
+            if not data:
+                break
+            conn.sendall(data)
+        conn.close()
+
+    t = threading.Thread(target=serve, daemon=True)
+    t.start()
+    return srv, host, port
+
+
+class TestCreateConnection:
+    def test_roundtrip_write_read_close(self, started_backend):
+        srv, host, port = _echo_server()
+        proto = _StubProtocol()
+
+        async def do():
+            transport = await started_backend.create_connection(proto, host, port)
+            # Wire like manager._connect -> conn.connection_made does.
+            transport.set_protocol(proto)
+            transport.resume_reading()
+            assert transport.host_port() == '%s:%s' % (host, port)
+            assert transport.getPeer()[0:2] == (host, port)
+            transport.write(b'ping')
+            for _ in range(100):
+                if proto.received:
+                    break
+                await started_backend.sleep(0.01)
+            transport.close()
+            return bytes(proto.received)
+
+        try:
+            assert started_backend.run(do) == b'ping'
+        finally:
+            srv.close()
+
+    def test_early_data_is_buffered_until_wired(self, started_backend):
+        # Server sends immediately on connect; data must not be lost before
+        # the protocol is wired via set_protocol().
+        srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        srv.bind(('127.0.0.1', 0))
+        srv.listen(1)
+        host, port = srv.getsockname()
+
+        def serve():
+            conn, _ = srv.accept()
+            conn.sendall(b'hello-early')
+            conn.recv(4096)
+            conn.close()
+
+        threading.Thread(target=serve, daemon=True).start()
+        proto = _StubProtocol()
+
+        async def do():
+            transport = await started_backend.create_connection(proto, host, port)
+            await started_backend.sleep(0.05)  # let early bytes arrive (buffered)
+            transport.set_protocol(proto)      # wiring flushes the buffer
+            transport.resume_reading()
+            for _ in range(100):
+                if proto.received:
+                    break
+                await started_backend.sleep(0.01)
+            transport.close()
+            return bytes(proto.received)
+
+        try:
+            assert started_backend.run(do) == b'hello-early'
+        finally:
+            srv.close()
+
+    def test_connect_refused_raises(self, started_backend):
+        # Nothing listening -> KafkaConnectionError.
+        s = socket.socket(); s.bind(('127.0.0.1', 0)); host, port = s.getsockname(); s.close()
+
+        async def do():
+            await started_backend.create_connection(_StubProtocol(), host, port)
+
+        with pytest.raises(Exception):  # KafkaConnectionError
+            started_backend.run(do)
+
+    def test_proxy_url_raises(self, started_backend):
+        async def do():
+            await started_backend.create_connection(
+                _StubProtocol(), 'h', 1, proxy_url='socks5://proxy:1080')
+        with pytest.raises(NotImplementedError, match='proxy'):
+            started_backend.run(do)
+
+
+class TestLoopConfig:
+    def test_loop_factory_used_and_owned(self):
+        calls = []
+
+        def factory():
+            calls.append(1)
+            return asyncio.new_event_loop()
+
+        b = AsyncioBackend(loop_factory=factory, client_id='lf')
+        try:
+            assert calls == [1]
+            assert b._owns_loop is True
+        finally:
+            b.close()
+
+    def test_injected_loop_not_owned_or_closed(self):
+        loop = asyncio.new_event_loop()
+        b = AsyncioBackend(loop=loop, client_id='inj')
+        assert b._loop is loop
+        assert b._owns_loop is False
+        b.close()
+        assert not loop.is_closed()  # injected loop must survive close()
+        loop.close()
 
 
 class TestEndToEndMockBroker:

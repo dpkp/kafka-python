@@ -78,8 +78,19 @@ class _DeferredHandle:
 
 
 class AsyncioBackend:
-    def __init__(self, **configs):
-        self._loop = asyncio.new_event_loop()
+    def __init__(self, *, loop=None, loop_factory=None, **configs):
+        # Loop acquisition is a strategy, not a hardcode (forward seam for a
+        # native/Phase-2 mode). Default: own a fresh loop on our daemon thread.
+        # loop_factory lets callers pick the loop implementation (e.g. uvloop)
+        # while keeping the owned-thread model. loop= injects an existing loop
+        # (not owned -- close() won't close it); in Phase 1 it is still run on
+        # our own thread. True native reuse of a *running* caller loop is Phase 2.
+        if loop is not None:
+            self._loop = loop
+            self._owns_loop = False
+        else:
+            self._loop = (loop_factory or asyncio.new_event_loop)()
+            self._owns_loop = True
         self._io_thread = None
         self._closed = False
         self._client_id = configs.get('client_id') or 'kafka-python'
@@ -130,7 +141,8 @@ class AsyncioBackend:
                         asyncio.gather(*pending, return_exceptions=True))
                 except RuntimeError:
                     pass
-            self._loop.close()
+            if self._owns_loop:
+                self._loop.close()
 
     def _fail_pending_waiters(self, exc):
         with self._pending_waiters_lock:
@@ -313,5 +325,174 @@ class AsyncioBackend:
     async def create_connection(self, protocol, host, port, *, ssl=None,
                                 ssl_check_hostname=True, proxy_url=None,
                                 socket_options=(), timeout_at=None):
-        raise NotImplementedError(
-            'AsyncioBackend.create_connection is implemented in a follow-up step')
+        if proxy_url is not None:
+            raise NotImplementedError(
+                'The asyncio backend does not support proxy_url yet; use the '
+                'default selector backend for SOCKS5/HTTP-CONNECT proxying.')
+        server_hostname = None
+        if ssl is not None:
+            # asyncio verifies the peer hostname via the context; align the
+            # context with ssl_check_hostname and supply the SNI name.
+            try:
+                ssl.check_hostname = ssl_check_hostname
+            except (AttributeError, ValueError):
+                pass
+            server_hostname = host
+        adapter = _AsyncioProtocolAdapter()
+        connect = self._loop.create_connection(
+            lambda: adapter, host, port, ssl=ssl, server_hostname=server_hostname)
+        try:
+            if timeout_at is not None:
+                connect = asyncio.wait_for(connect, max(0.0, timeout_at - time.monotonic()))
+            aio_transport, _ = await connect
+        except asyncio.TimeoutError:
+            raise Errors.KafkaConnectionError('Connection timed out')
+        except Errors.KafkaError:
+            raise
+        except Exception as exc:  # noqa: BLE001  -- surface any connect error uniformly
+            raise Errors.KafkaConnectionError('unable to connect to %s:%s: %s' % (host, port, exc))
+        sock = aio_transport.get_extra_info('socket')
+        if sock is not None:
+            for option in socket_options:
+                try:
+                    sock.setsockopt(*option)
+                except OSError:
+                    pass
+        return _AsyncioTransport(aio_transport, adapter, host, port)
+
+
+class _AsyncioProtocolAdapter(asyncio.Protocol):
+    """Bridges asyncio's Protocol callbacks to a KafkaConnection.
+
+    asyncio calls ``connection_made`` on this adapter during
+    ``create_connection`` -- before the manager wires the KafkaConnection via
+    ``transport.set_protocol(conn)`` (Option A: the caller runs connection_made
+    after its "closed during connect" check). Reading is paused until wired, so
+    no data is delivered early; a buffer/latched-loss is kept as a safety net.
+    """
+
+    def __init__(self):
+        self._kafka = None          # the KafkaConnection, once wired
+        self._transport = None
+        self._buffer = []
+        self._eof = False
+        self._lost = False
+        self._lost_exc = None
+        self._paused_writing = False
+        self._on_read = None        # bumps the wrapper's last_read
+
+    def connection_made(self, transport):
+        self._transport = transport
+        # Hold off delivery until the KafkaConnection is wired + resumes reading.
+        transport.pause_reading()
+
+    def data_received(self, data):
+        if self._on_read is not None:
+            self._on_read()
+        if self._kafka is None:
+            self._buffer.append(data)
+        else:
+            self._kafka.data_received(data)
+
+    def eof_received(self):
+        if self._kafka is not None:
+            return self._kafka.eof_received()
+        self._eof = True
+        return None
+
+    def connection_lost(self, exc):
+        if self._kafka is not None:
+            self._kafka.connection_lost(exc)
+        else:
+            self._lost = True
+            self._lost_exc = exc
+
+    def pause_writing(self):
+        if self._kafka is not None:
+            self._kafka.pause_writing()
+        else:
+            self._paused_writing = True
+
+    def resume_writing(self):
+        if self._kafka is not None:
+            self._kafka.resume_writing()
+        else:
+            self._paused_writing = False
+
+    def _wire(self, kafka_protocol, on_read):
+        self._kafka = kafka_protocol
+        self._on_read = on_read
+        if self._paused_writing:
+            kafka_protocol.pause_writing()
+        for data in self._buffer:
+            kafka_protocol.data_received(data)
+        self._buffer = []
+        if self._eof:
+            kafka_protocol.eof_received()
+        if self._lost:
+            kafka_protocol.connection_lost(self._lost_exc)
+
+
+class _AsyncioTransport:
+    """Transport returned by AsyncioBackend.create_connection.
+
+    Wraps an asyncio transport + its protocol adapter and exposes the surface
+    KafkaConnection / the manager drive (a superset of the NetBackend Transport
+    protocol): write/close/abort/is_closing, pause/resume_reading, set/get
+    protocol, host/host_port/getPeer, and last_activity for idle sweeping.
+    """
+
+    def __init__(self, transport, adapter, host, port):
+        self._t = transport
+        self._adapter = adapter
+        self.host = host
+        self._port = port
+        self._protocol = None
+        self.last_write = time.monotonic()
+        self.last_read = time.monotonic()
+
+    @property
+    def last_activity(self):
+        return max(self.last_write, self.last_read)
+
+    def _bump_read(self):
+        self.last_read = time.monotonic()
+
+    def get_protocol(self):
+        return self._protocol
+
+    def set_protocol(self, protocol):
+        self._protocol = protocol
+        self._adapter._wire(protocol, self._bump_read)
+
+    def write(self, data):
+        self.last_write = time.monotonic()
+        self._t.write(data)
+
+    def close(self):
+        self._t.close()
+
+    def abort(self, error=None):
+        self._t.abort()
+
+    def is_closing(self):
+        return self._t.is_closing()
+
+    def pause_reading(self):
+        try:
+            self._t.pause_reading()
+        except (RuntimeError, AttributeError):
+            pass
+
+    def resume_reading(self):
+        try:
+            self._t.resume_reading()
+        except (RuntimeError, AttributeError):
+            pass
+
+    def getPeer(self):
+        peer = self._t.get_extra_info('peername')
+        return peer if peer is not None else (self.host, self._port)
+
+    def host_port(self):
+        return '%s:%s' % (self.host, self._port)
