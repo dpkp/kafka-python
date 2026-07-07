@@ -76,12 +76,11 @@ def test_client(request, sasl_kafka):
     create_topics(sasl_kafka, [topic_name], num_partitions=1)
 
     # Low-level SASL round-trip via KafkaConnectionManager directly (no compat
-    # shim, no poll()): the started-loop + manager.run(coro) pattern the real
-    # clients use, so it runs on any net backend (selector or asyncio).
+    # shim, no poll()): the manager owns + auto-starts/closes its net, so this
+    # is just bootstrap + manager.run(coro) and runs on any backend.
     manager = KafkaConnectionManager(**client_params(sasl_kafka, 'client'))
-    manager._net.start()
     try:
-        manager.bootstrap(timeout_ms=5000)
+        manager.bootstrap(timeout_ms=5000)  # auto-starts the owned net
 
         async def fetch_metadata():
             future = manager.send(MetadataRequest(topics=None, version=1), node_id=None)
@@ -90,5 +89,4 @@ def test_client(request, sasl_kafka):
         result = manager.run(fetch_metadata)
         assert topic_name in [t[1] for t in result.topics]
     finally:
-        manager.close()
-        manager._net.close()
+        manager.close()  # auto-closes the owned net
