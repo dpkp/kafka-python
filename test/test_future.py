@@ -1,31 +1,8 @@
-import pytest
-
 from kafka.future import Future
 
 
-class TestFutureAwait:
-    def test_await_resolved_success(self):
-        f = Future()
-        f.success(42)
-        coro = f.__await__()
-        with pytest.raises(StopIteration) as exc_info:
-            next(coro)
-        assert exc_info.value.value == 42
-
-    def test_await_resolved_failure(self):
-        f = Future()
-        f.failure(ValueError('bad'))
-        coro = f.__await__()
-        with pytest.raises(ValueError, match='bad'):
-            next(coro)
-
-    def test_await_pending_yields_self(self):
-        f = Future()
-        coro = f.__await__()
-        yielded = next(coro)
-        assert yielded is f
-
-    def test_callbacks_still_work(self):
+class TestFutureCallbacks:
+    def test_callbacks(self):
         f = Future()
         results = []
         f.add_callback(lambda v: results.append(('cb', v)))
@@ -33,7 +10,7 @@ class TestFutureAwait:
         f.success(42)
         assert results == [('cb', 42)]
 
-    def test_errbacks_still_work(self):
+    def test_errbacks(self):
         f = Future()
         results = []
         f.add_errback(lambda e: results.append(('eb', str(e))))
@@ -55,3 +32,14 @@ class TestFutureAwait:
         f1.failure(ValueError('err'))
         assert f2.failed()
         assert isinstance(f2.exception, ValueError)
+
+
+class TestFutureNotAwaitable:
+    """The plain Future is a thread-safe handoff primitive, not loop-awaitable.
+    __await__ lives on the backend future (e.g. SelectorFuture from
+    create_future()), not the base, so awaiting a handoff Future fails loudly.
+    The backend futures' await behavior is covered by test_selector.py and the
+    BackendFuture conformance suite."""
+
+    def test_no_dunder_await(self):
+        assert not hasattr(Future(), '__await__')

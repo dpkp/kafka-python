@@ -571,7 +571,7 @@ class TestNetworkSelector:
 
     def test_await_future_already_done(self):
         net = NetworkSelector()
-        f = Future()
+        f = net.create_future()
         f.success(99)
         results = []
 
@@ -584,7 +584,7 @@ class TestNetworkSelector:
 
     def test_await_future_already_failed(self):
         net = NetworkSelector()
-        f = Future()
+        f = net.create_future()
         f.failure(ValueError('oops'))
         errors = []
 
@@ -648,7 +648,7 @@ class TestNetworkSelector:
 
     def test_await_future_resolved(self):
         net = NetworkSelector()
-        f = Future()
+        f = net.create_future()
         f.success(42)
         results = []
 
@@ -661,7 +661,7 @@ class TestNetworkSelector:
 
     def test_await_future_pending(self):
         net = NetworkSelector()
-        f = Future()
+        f = net.create_future()
         results = []
         done = Future()
 
@@ -681,7 +681,7 @@ class TestNetworkSelector:
 
     def test_await_future_failure(self):
         net = NetworkSelector()
-        f = Future()
+        f = net.create_future()
         errors = []
         done = Future()
 
@@ -703,8 +703,8 @@ class TestNetworkSelector:
 
     def test_await_multiple_futures(self):
         net = NetworkSelector()
-        f1 = Future()
-        f2 = Future()
+        f1 = net.create_future()
+        f2 = net.create_future()
         results = []
         done = Future()
 

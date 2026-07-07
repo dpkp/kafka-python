@@ -1370,7 +1370,7 @@ def test_join_group_async_returns_false_on_short_timeout_and_caches_task(
     seeded_coord.state = MemberState.UNJOINED
 
     # JoinGroup response future controlled by the test. Hangs until released.
-    join_response_pending = Future()
+    join_response_pending = seeded_coord._manager.create_future()  # awaited by slow_join_handler
     join_request_count = [0]
 
     async def slow_join_handler(api_key, api_version, correlation_id, request_bytes):
@@ -1489,7 +1489,7 @@ def test_heartbeat(mocker, coordinator):
     # spin); using side_effect with an async function that awaits the Future
     # forces the suspension we want. The Mock's call_count then verifies the
     # loop fired exactly once.
-    blocked_send = Future()
+    blocked_send = coordinator._manager.create_future()
     async def _hang(*args, **kwargs):
         await blocked_send
     mocker.patch.object(coordinator, '_send_heartbeat_request', side_effect=_hang)

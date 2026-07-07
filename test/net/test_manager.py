@@ -514,9 +514,10 @@ class TestKafkaConnectionManagerRun:
         monkeypatch.setattr(NetworkSelector, '_poll_once', aggressive_poll_once)
 
         async def hangs_then_times_out():
-            # Awaits a bare Future that nothing references externally --
-            # exactly the orphan-cycle shape that CPython's gc collects.
-            await Future()
+            # Awaits a bare (loop-awaitable) future that nothing references
+            # externally -- exactly the orphan-cycle shape that CPython's gc
+            # collects.
+            await manager.create_future()
 
         # wait_for should fail with KafkaTimeoutError, not GeneratorExit.
         async def waiter():

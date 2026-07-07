@@ -40,6 +40,26 @@ def _initialize_coro(maybe_coro):
         raise TypeError('Generator or coroutine not found: %s' % type(maybe_coro))
 
 
+class SelectorFuture(Future):
+    """The NetworkSelector's loop-awaitable future (see backend.BackendFuture).
+
+    ``kafka.future.Future`` is the thread-safe callback/handoff core with no
+    ``__await__``; ``SelectorFuture`` adds it: ``yield self`` suspends the
+    awaiting coroutine, and the selector re-enqueues it when the future
+    resolves (Task/_poll_once dispatch on ``isinstance(_, Future)``, which this
+    subclass satisfies). Returned by ``NetworkSelector.create_future()`` and
+    used for every future a loop coroutine awaits.
+    """
+    __slots__ = ()
+
+    def __await__(self):
+        if not self.is_done:
+            yield self
+        if self.exception:
+            raise self.exception
+        return self.value
+
+
 class KernelEvent:
     def __init__(self, method, *args):
         self.method = method
@@ -383,7 +403,7 @@ class NetworkSelector:
         if hasattr(coro, '__await__'):
             if args:
                 raise ValueError('initiated coroutine does not accept args')
-        future = Future()
+        future = SelectorFuture()  # returned to callers who await it
         async def wrapper():
             try:
                 future.success(await self._invoke(coro, *args))
@@ -446,14 +466,14 @@ class NetworkSelector:
         return task
 
     def create_future(self):
-        """Create a Future suitable for awaiting on this backend's loop.
+        """Create a loop-awaitable future (see backend.BackendFuture).
 
         Portability seam for pluggable backends: core coroutines call this
         instead of constructing ``Future`` directly, so an alternate backend
         (asyncio, Twisted) can return its own awaitable type. The selector's
-        native awaitable is ``kafka.future.Future``.
+        native awaitable is ``SelectorFuture`` (a ``Future`` with ``__await__``).
         """
-        return Future()
+        return SelectorFuture()
 
     def sleep(self, delay):
         return KernelEvent('_sleep', delay)

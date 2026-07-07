@@ -10,7 +10,8 @@ reuses the same mixin with an asyncio-driven subclass.
 """
 import pytest
 
-from kafka.future import Future, BackendFuture
+from kafka.future import Future
+from kafka.net.backend import BackendFuture
 from kafka.net.selector import NetworkSelector
 
 
@@ -147,7 +148,7 @@ class BackendFutureContract:
 
 
 class TestNetworkSelectorBackendFuture(BackendFutureContract):
-    """The selector backend: create_future() returns a plain Future, driven
+    """The selector backend: create_future() returns a SelectorFuture, driven
     synchronously via NetworkSelector.drain() (no IO thread needed)."""
 
     @pytest.fixture(autouse=True)
@@ -167,12 +168,16 @@ class TestNetworkSelectorBackendFuture(BackendFutureContract):
         self.net.drain()
 
 
-class TestReferenceFutureIsBackendFuture:
-    """The bare kafka.future.Future (not via create_future) also conforms --
-    it is the reference implementation of the contract."""
+class TestBackendFutureTypeEnforcement:
+    """A backend's create_future() result satisfies BackendFuture -- covered by
+    TestNetworkSelectorBackendFuture.test_satisfies_protocol above. Here we pin
+    the negative: the plain thread-safe Future (a cross-thread handoff)
+    deliberately does NOT (no __await__), which turns 'awaited a handoff future'
+    into a loud error rather than a silent backend-specific bug."""
 
-    def test_isinstance(self):
-        assert isinstance(Future(), BackendFuture)
+    def test_plain_future_is_not_backend_future(self):
+        assert not isinstance(Future(), BackendFuture)
+        assert not hasattr(Future(), '__await__')
 
     def test_non_future_is_not_backend_future(self):
         assert not isinstance(object(), BackendFuture)

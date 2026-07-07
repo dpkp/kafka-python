@@ -214,7 +214,7 @@ class TestSaslReauthenticationUnit:
 
         responses = iter([handshake_response, auth_response])
         def mock_send_request(request, **kwargs):
-            f = Future()
+            f = conn.net.create_future()  # loop-awaitable, like production
             f.success(next(responses))
             return f
         conn._send_request = mock_send_request
