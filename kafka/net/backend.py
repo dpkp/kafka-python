@@ -46,6 +46,7 @@ Method families:
 * **Future factory** -- ``create_future`` (see ``BackendFuture``).
 * **Cross-thread wake** -- ``wakeup``.
 """
+import importlib
 from typing import Any, Callable, Optional, Protocol, Sequence, Tuple, runtime_checkable
 
 
@@ -206,7 +207,6 @@ class NetBackend(Protocol):
 
 
 # --- backend selection ----------------------------------------------------
-from kafka.net.selector import NetworkSelector
 
 # name -> factory(**config) -> NetBackend. Populated by register_backend();
 # 'selector' is always available, 'asyncio' registers itself in Step 4.
@@ -218,14 +218,21 @@ def register_backend(name, factory):
     _BACKENDS[name] = factory
 
 
-register_backend('selector', NetworkSelector)
+def register_backend_lazy(name, module, klass):
+    """Lazy register a factory klass from module. Import is deferred until first use."""
+    def lazy_backend(**configs):
+        backend = getattr(importlib.import_module(module), klass)
+        register_backend(name, backend)
+        return backend(**configs)
+    register_backend(name, lazy_backend)
 
 
 def _detect_async_library():
     """Best-effort name of the async framework the caller is running under.
 
     Returns 'asyncio' / 'trio' / ... via sniffio if installed, else 'asyncio'
-    if a running asyncio loop is detected, else None (plain sync context).
+    if a running asyncio loop is detected, else None (plain sync context ->
+    caller falls back to the default backend).
     """
     try:
         import sniffio
@@ -271,6 +278,9 @@ def resolve_backend(net, config):
     # net is None: auto-detect, else default. Auto-detected-but-unregistered
     # backends fall back silently (an explicit name would have raised above).
     name = _detect_async_library()
-    if name is not None and name in _BACKENDS:
-        return _BACKENDS[name](**config)
-    return NetworkSelector(**config)
+    if name is None or name not in _BACKENDS:
+        name = 'selector'
+    return _BACKENDS[name](**config)
+
+
+register_backend_lazy('selector', 'kafka.net.selector', 'NetworkSelector')
