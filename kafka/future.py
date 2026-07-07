@@ -16,7 +16,7 @@ class Future:
     ``add_callback`` / ``add_errback`` / ``add_both`` / ``chain`` and the
     ``is_done`` / ``value`` / ``exception`` state). A pluggable async backend
     returns its own awaitable from ``net.create_future()`` by subclassing
-    ``Future`` and overriding only :meth:`__await__` — the single
+    ``Future`` and overriding only :meth:`__await__` -- the single
     backend-specific hook. The selector backend uses ``Future`` directly
     (``__await__`` yields ``self``; the selector resumes the task on
     resolution). See :class:`BackendFuture` for the full contract.
@@ -194,20 +194,20 @@ class BackendFuture(Protocol):
     backends. :class:`Future` is the reference implementation and the base
     class backends subclass, overriding only ``__await__``.
 
-    Pinned semantics — the three axes where backends could otherwise diverge:
+    Pinned semantics -- the three axes where backends could otherwise diverge:
 
     1. **Resolution thread.** A future from ``create_future()`` is created and
        resolved (``success`` / ``failure``) on the loop/IO thread only.
        Cross-thread handoffs (a user thread blocking on a loop result) use a
        plain thread-safe ``Future`` bridged via ``manager.wait_for`` /
-       ``manager.run`` — never a backend future awaited directly. Backends
+       ``manager.run`` -- never a backend future awaited directly. Backends
        whose native awaitable is loop-affine (``asyncio.Future``, Twisted
        ``Deferred``) depend on this; their ``__await__`` adapter may assert it.
 
        There is no permanent third future category: a call site uses
        ``create_future()`` when a coroutine awaits the result on the loop, and
        a plain ``Future`` otherwise (a cross-thread handoff or a fan-out
-       lifecycle event — the eventual ``concurrent.futures.Future`` home).
+       lifecycle event -- the eventual ``concurrent.futures.Future`` home).
 
     2. **Fan-out.** Multiple coroutines may ``await`` the same future and
        multiple callbacks may be registered; all are resumed / invoked. (A bare
