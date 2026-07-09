@@ -1,3 +1,8 @@
+# 3.0.8 (Jul 9, 2026)
+
+### Fixes
+* transport: Fix TLS SNI when `ssl_check_hostname=False` (#3114)
+
 # 3.0.7 (Jun 28, 2026)
 
 ### Fixes
