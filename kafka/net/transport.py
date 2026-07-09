@@ -1,4 +1,5 @@
 from collections import deque
+import copy
 import logging
 import selectors
 import socket
@@ -371,12 +372,48 @@ class KafkaTCPTransport:
 
 
 class KafkaSSLTransport(KafkaTCPTransport):
-    def __init__(self, net, sock, ssl_context, host=None, ssl_check_hostname=False):
-        self._ssl_context = ssl_context
-        server_hostname = host if ssl_check_hostname else None
-        sock = ssl_context.wrap_socket(
-            sock, server_hostname=server_hostname, do_handshake_on_connect=False)
+    DEFAULT_CONFIG = {
+        'ssl_context': None,
+        'ssl_check_hostname': True,
+        'ssl_cafile': None,
+        'ssl_certfile': None,
+        'ssl_keyfile': None,
+        'ssl_password': None,
+        'ssl_crlfile': None,
+    }
+    def __init__(self, net, sock, host=None, **configs):
+        self.ssl_config = copy.copy(self.DEFAULT_CONFIG)
+        for key in self.ssl_config:
+            if key in configs:
+                self.ssl_config[key] = configs[key]
+        self._ssl_context = self._build_ssl_context(self.ssl_config)
+        server_hostname = host.rstrip('.') if host is not None else None
+        sock = self._ssl_context.wrap_socket(
+            sock, server_hostname=server_hostname,
+            do_handshake_on_connect=False)
         super().__init__(net, sock, host=host)
+
+    @staticmethod
+    def _build_ssl_context(config):
+        if config['ssl_context'] is not None:
+            return config['ssl_context']
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+        ctx.check_hostname = config['ssl_check_hostname']
+        if config['ssl_cafile']:
+            ctx.load_verify_locations(config['ssl_cafile'])
+        else:
+            ctx.load_default_certs()
+        if config['ssl_certfile']:
+            ctx.load_cert_chain(
+                certfile=config['ssl_certfile'],
+                keyfile=config['ssl_keyfile'],
+                password=config['ssl_password'],
+            )
+        if config['ssl_crlfile']:
+            ctx.load_verify_locations(crl=config['ssl_crlfile'])
+            ctx.verify_flags |= ssl.VERIFY_CRL_CHECK_LEAF
+        return ctx
 
     async def handshake(self):
         while True:

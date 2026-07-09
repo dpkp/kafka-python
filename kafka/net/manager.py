@@ -3,7 +3,6 @@ import logging
 import inspect
 import random
 import socket
-import ssl
 import time
 
 from .inet import create_connection
@@ -205,35 +204,16 @@ class KafkaConnectionManager:
     def ssl_enabled(self):
         return self.config['security_protocol'] in ('SSL', 'SASL_SSL')
 
-    def _build_ssl_context(self):
-        if self.config['ssl_context'] is not None:
-            return self.config['ssl_context']
-        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        ctx.minimum_version = ssl.TLSVersion.TLSv1_2
-        ctx.check_hostname = self.config['ssl_check_hostname']
-        if self.config['ssl_cafile']:
-            ctx.load_verify_locations(self.config['ssl_cafile'])
-        else:
-            ctx.load_default_certs()
-        if self.config['ssl_certfile']:
-            ctx.load_cert_chain(
-                certfile=self.config['ssl_certfile'],
-                keyfile=self.config['ssl_keyfile'],
-                password=self.config['ssl_password'],
-            )
-        if self.config['ssl_crlfile']:
-            ctx.load_verify_locations(crl=self.config['ssl_crlfile'])
-            ctx.verify_flags |= ssl.VERIFY_CRL_CHECK_LEAF
-        return ctx
-
     async def _build_transport(self, node, timeout_at=None):
         sock = await create_connection(self._net, node.host, node.port,
                                        self.config['socket_options'],
                                        proxy_url=self.config['proxy_url'],
                                        timeout_at=timeout_at)
         if self.ssl_enabled:
-            transport = KafkaSSLTransport(self._net, sock, self._build_ssl_context(),
-                                          host=node.host, ssl_check_hostname=self.config['ssl_check_hostname'])
+            ssl_configs = {key: value
+                           for key, value in self.config.items()
+                           if key.startswith('ssl_')}
+            transport = KafkaSSLTransport(self._net, sock, host=node.host, **ssl_configs)
         else:
             transport = KafkaTCPTransport(self._net, sock, host=node.host)
 
