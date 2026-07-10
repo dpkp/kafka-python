@@ -431,7 +431,7 @@ class TestKafkaSSLTransport:
         # not a silently-default context.
         sock, _, _ = self._make_ssl_sock()
         with pytest.raises(TypeError):
-            KafkaSSLTransport(net, sock, host='broker.example.com')
+            KafkaSSLTransport(net, sock, host='broker.example.com')  # pylint: disable=E1120
 
 
 class TestBuildSSLContext:
