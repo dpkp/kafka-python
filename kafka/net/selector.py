@@ -488,8 +488,8 @@ class NetworkSelector:
         return SelectorFuture()
 
     async def create_connection(self, protocol, host, port, *, ssl=None,
-                                ssl_check_hostname=True, proxy_url=None,
-                                socket_options=(), timeout_at=None):
+                                proxy_url=None, socket_options=(),
+                                timeout_at=None):
         """Establish and return a connected transport to host:port.
 
         The selector owns the raw socket: DNS + non-blocking connect (with
@@ -503,8 +503,7 @@ class NetworkSelector:
         sock = await _inet_create_connection(self, host, port, socket_options,
                                              proxy_url=proxy_url, timeout_at=timeout_at)
         if ssl is not None:
-            transport = KafkaSSLTransport(self, sock, ssl, host=host,
-                                          ssl_check_hostname=ssl_check_hostname)
+            transport = KafkaSSLTransport(self, sock, ssl, host=host)
         else:
             transport = KafkaTCPTransport(self, sock, host=host)
         try:

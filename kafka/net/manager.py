@@ -9,6 +9,7 @@ from .connection import KafkaConnection
 from .metrics import KafkaManagerMetrics
 from kafka.cluster import ClusterMetadata
 import kafka.errors as Errors
+from kafka.net.transport import KafkaSSLTransport
 from kafka.net.wakeup_notifier import WakeupNotifier
 from kafka.protocol.broker_version_data import BrokerVersionData
 from kafka.version import __version__
@@ -83,6 +84,7 @@ class KafkaConnectionManager:
         self.cluster.attach(self)
         self._conns = {}
         self._backoff = dict() # node_id => (failures, backoff_until, socket_connect_setup_timeout_ms)
+        self.ssl_context = KafkaSSLTransport.build_ssl_context(self.config) if self.ssl_enabled else None
         # Cache the most recent SASL / SSL / auth failure per node so we can
         # surface it to the user instead of silently retrying forever.
         # Cleared on successful connect.
@@ -209,8 +211,7 @@ class KafkaConnectionManager:
         try:
             transport = await self._net.create_connection(
                 conn, node.host, node.port,
-                ssl=self._build_ssl_context() if self.ssl_enabled else None,
-                ssl_check_hostname=self.config['ssl_check_hostname'],
+                ssl=self.ssl_context,
                 proxy_url=self.config['proxy_url'],
                 socket_options=self.config['socket_options'],
                 timeout_at=timeout_at)

@@ -173,7 +173,6 @@ class NetBackend(Protocol):
         port: int,
         *,
         ssl: Any = None,
-        ssl_check_hostname: bool = True,
         proxy_url: Optional[str] = None,
         socket_options: Sequence[Any] = (),
         timeout_at: Optional[float] = None,
