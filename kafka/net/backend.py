@@ -46,7 +46,7 @@ Method families:
 * **Future factory** -- ``create_future`` (see ``BackendFuture``).
 * **Cross-thread wake** -- ``wakeup``.
 """
-from typing import Any, Optional, Protocol, Sequence, Tuple, runtime_checkable
+from typing import Any, Callable, Optional, Protocol, Sequence, Tuple, runtime_checkable
 
 
 @runtime_checkable
