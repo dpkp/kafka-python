@@ -8,6 +8,20 @@ log = logging.getLogger(__name__)
 
 
 class Future:
+    """Thread-safe callback/errback future -- a cross-thread handoff primitive.
+
+    ``Future`` owns the portable callback core (``success`` / ``failure`` /
+    ``add_callback`` / ``add_errback`` / ``add_both`` / ``chain`` and the
+    ``is_done`` / ``value`` / ``exception`` state) and is safe to resolve from
+    any thread. It is deliberately **not** awaitable: awaiting happens only on
+    the event loop, via the backend's loop-awaitable future from
+    ``net.create_future()`` (``kafka.net.selector.SelectorFuture`` for the
+    selector), which subclasses ``Future`` and adds ``__await__``. Keeping
+    ``__await__`` off the base makes the invariant type-enforced -- awaiting a
+    plain handoff ``Future`` raises immediately rather than silently working on
+    one backend and breaking on another. See ``kafka.net.backend.BackendFuture``
+    for the awaitable contract.
+    """
     __slots__ = ('is_done', 'value', 'exception', '_callbacks', '_errbacks', '_lock')
     error_on_callbacks = False # and errbacks
 
@@ -157,10 +171,3 @@ class Future:
     def chain(self, future):
         self._add_cb_eb(future.success, future.failure)
         return self
-
-    def __await__(self):
-        if not self.is_done:
-            yield self
-        if self.exception:
-            raise self.exception
-        return self.value

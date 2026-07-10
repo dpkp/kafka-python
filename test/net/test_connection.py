@@ -92,7 +92,9 @@ class TestKafkaConnectionCheckApiVersions:
         original_send = conn._send_request
         def mock_send_request(request, **kwargs):
             requests_sent.append(request.API_VERSION)
-            f = Future()
+            # Match production _send_request: a loop-awaitable SelectorFuture,
+            # not a plain (non-awaitable) Future -- the conn awaits this.
+            f = net.create_future()
             try:
                 resp = next(response_iter)
             except StopIteration:
@@ -531,7 +533,7 @@ class TestKafkaConnectionSasl:
 
         responses = iter([handshake_response, auth_response])
         def mock_send_request(request, **kwargs):
-            f = Future()
+            f = conn.net.create_future()  # loop-awaitable, like production
             f.success(next(responses))
             return f
         conn._send_request = mock_send_request
@@ -569,7 +571,7 @@ class TestKafkaConnectionSasl:
 
         responses = iter([handshake_response, auth_response])
         def mock_send_request(request, **kwargs):
-            f = Future()
+            f = conn.net.create_future()  # loop-awaitable, like production
             f.success(next(responses))
             return f
         conn._send_request = mock_send_request
@@ -591,7 +593,7 @@ class TestKafkaConnectionSasl:
         auth_response.session_lifetime_ms = 0
         responses = iter([handshake_response, auth_response])
         def mock_send_request(request, **kwargs):
-            f = Future()
+            f = conn.net.create_future()  # loop-awaitable, like production
             f.success(next(responses))
             return f
         conn._send_request = mock_send_request

@@ -13,7 +13,6 @@ from kafka.cluster import ClusterMetadata
 import kafka.errors as Errors
 from kafka.net.wakeup_notifier import WakeupNotifier
 from kafka.protocol.broker_version_data import BrokerVersionData
-from kafka.future import Future
 from kafka.version import __version__
 
 
@@ -299,7 +298,9 @@ class KafkaConnectionManager:
         try:
             conn = self.get_connection(node_id)
         except Errors.NodeNotReadyError as e:
-            return Future().failure(e)
+            # Pre-failed sibling of send_request()'s create_future(); awaited
+            # on the loop by the same caller, so mint it from the backend too.
+            return self.create_future().failure(e)
         else:
             return conn.send_request(request, request_timeout_ms=request_timeout_ms)
 
@@ -410,9 +411,11 @@ class KafkaConnectionManager:
         future is not cancelled on timeout - it continues to run; the timeout
         only unblocks the awaiter.
         """
-        if timeout_ms is None:
-            return await future
-        wrapper = Future()
+        # Always await a backend-native wrapper, never `future` directly:
+        # `future` may be a plain thread-safe Future which isn't awaitable on
+        # every backend (e.g. asyncio rejects a bare `yield self`). We touch it
+        # only via callbacks. (create_future() gives the backend's awaitable.)
+        wrapper = self._net.create_future()
         def _on_success(value):
             if not wrapper.is_done:
                 wrapper.success(value)
@@ -421,15 +424,26 @@ class KafkaConnectionManager:
                 wrapper.failure(exc)
         future.add_callback(_on_success)
         future.add_errback(_on_failure)
-        def _on_timeout():
-            if not wrapper.is_done:
-                wrapper.failure(Errors.KafkaTimeoutError(
-                    'Timed out after %s ms' % timeout_ms))
-        timer = self._net.call_later(timeout_ms / 1000, _on_timeout)
+        timer = None
+        if timeout_ms is not None:
+            def _on_timeout():
+                if not wrapper.is_done:
+                    wrapper.failure(Errors.KafkaTimeoutError(
+                        'Timed out after %s ms' % timeout_ms))
+            timer = self._net.call_later(timeout_ms / 1000, _on_timeout)
         try:
             return await wrapper
         finally:
-            self._net.cancel(timer)
+            if timer is not None:
+                self._net.cancel(timer)
+
+    def create_future(self):
+        """Create a Future suitable for awaiting on the underlying loop.
+
+        Forwards to the backend so loop coroutines get the backend's native
+        awaitable type. See ``NetworkSelector.create_future``.
+        """
+        return self._net.create_future()
 
     def call_soon(self, coro, *args):
         """Accepts a coroutine / awaitable / function and schedules it on the event loop.

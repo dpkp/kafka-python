@@ -53,7 +53,9 @@ class KafkaConnection:
         self.paused = set()
         self.connected = False
         self.initializing = True
-        self._init_future = Future()
+        self._init_future = net.create_future()  # awaited via __await__; backend-native
+        # Cross-thread fan-out event (resolved on the loop on error/idle sweep,
+        # or on a user thread via manager.close()); never awaited, only callbacks.
         self._close_future = Future()
         self.in_flight_requests = collections.deque()
         self.broker_version_data = broker_version_data
@@ -116,7 +118,7 @@ class KafkaConnection:
                 return now + self._timeout_secs
 
     def send_request(self, request, request_timeout_ms=None):
-        future = Future()
+        future = self.net.create_future()
         timeout_at = self._timeout_at(timeout_ms=request_timeout_ms)
         if self.initializing or self._reauth.is_reauthenticating:
             self._request_buffer.append((request, future, timeout_at))
@@ -131,7 +133,7 @@ class KafkaConnection:
 
     def _send_request(self, request, future=None, timeout_at=None):
         if future is None:
-            future = Future()
+            future = self.net.create_future()
         if self.closed:
             return future.failure(Errors.KafkaConnectionError('closed'))
         if request.API_VERSION is None:
@@ -587,7 +589,7 @@ class SaslReauthenticator:
             # reasoning about FIFO interleaving with the broker's reauth
             # validation).
             while self._conn.in_flight_requests and not self._conn.closed:
-                self._drain_future = Future()
+                self._drain_future = self._conn.net.create_future()
                 if not self._conn.in_flight_requests:
                     break
                 await self._drain_future

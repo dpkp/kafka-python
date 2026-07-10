@@ -150,7 +150,7 @@ class ClusterMetadata:
             log.debug('Metadata refresh already in flight; awaiting existing')
             await self._refresh_future
             return
-        self._refresh_future = Future()
+        self._refresh_future = self._manager.create_future()
         try:
             await self._do_refresh_metadata(node_id)
         except Exception as exc:
@@ -206,6 +206,8 @@ class ClusterMetadata:
         for topic in topics:
             ensure_valid_topic_name(topic)
         if not set(topics).difference(self._topics):
+            # Pre-resolved sibling of request_update() (cross-thread handoff);
+            # already done, so it never yields -- safe as a plain Future.
             return Future().success(self)
         # TODO: handle future when old metadata request is currently in-flight
         # TODO: handle future when set_topics called multiple times before new request
@@ -227,6 +229,8 @@ class ClusterMetadata:
         """
         ensure_valid_topic_name(topic)
         if topic in self._topics:
+            # Pre-resolved sibling of request_update() (cross-thread handoff);
+            # already done, so it never yields -- safe as a plain Future.
             return Future().success(self)
         # TODO: handle future when old metadata request is currently in-flight
         self._topics.add(topic)
@@ -419,18 +423,34 @@ class ClusterMetadata:
         return self.config['retry_backoff_ms']
 
     def request_update(self):
-        """Flags metadata for update, return Future()
+        """Trigger a metadata refresh; return a completion token (not awaitable).
 
-        Actual update must be handled separately. This method will only
-        change the reported ttl()
+        This is a cross-thread trigger, not a coroutine: it flags metadata as
+        stale (changing the reported ttl()), wakes the refresh loop, and returns
+        a token Future that resolves when the next update lands. It is safe to
+        call from any thread -- including user threads off the IO loop -- which
+        is precisely why the returned Future is a plain thread-safe handoff and
+        NOT a backend awaitable: a loop-affine future (create_future()) can't be
+        minted off the loop thread.
+
+        Do not ``await`` the returned Future directly. Await it at the edge via
+        ``manager.wait_for(future, timeout_ms)``, which resolves it through the
+        backend's own awaitable:
+            on-loop:  await self._manager.wait_for(cluster.request_update(), t)
+            off-loop: self._net.run(self._manager.wait_for, cluster.request_update(), None)
+        Many callers want only the flag+wake side effect and discard the token.
+
+        On-loop callers that simply want to await a refresh can instead use the
+        awaitable sibling ``await refresh_metadata()`` and skip the token.
 
         Returns:
-            kafka.future.Future (value will be the cluster object after update)
+            kafka.future.Future: completion token, resolved when the next
+                metadata update (or failure) is applied.
         """
         with self._lock:
             self._need_update = True
             if not self._future or self._future.is_done:
-                self._future = Future()
+                self._future = Future()  # simple future; not backend / no await
             ret = self._future
             if self._manager:
                 self.start_refresh_loop()

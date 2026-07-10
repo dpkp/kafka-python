@@ -1,7 +1,5 @@
 import weakref
 
-from kafka.future import Future
-
 
 class WakeupNotifier:
     """await wakeup(timeout_secs) when either ``timeout_secs`` elapses or
@@ -49,7 +47,7 @@ class WakeupNotifier:
     async def __call__(self, timeout_secs=None):
         if self._fut is not None:
             raise RuntimeError('Concurrent access to WakeupNotifier!')
-        self._fut = Future()
+        self._fut = self._net.create_future()
         if self._pending:
             self._pending = False
             self._fut.success(None)

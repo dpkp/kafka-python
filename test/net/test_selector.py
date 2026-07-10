@@ -571,7 +571,7 @@ class TestNetworkSelector:
 
     def test_await_future_already_done(self):
         net = NetworkSelector()
-        f = Future()
+        f = net.create_future()
         f.success(99)
         results = []
 
@@ -584,7 +584,7 @@ class TestNetworkSelector:
 
     def test_await_future_already_failed(self):
         net = NetworkSelector()
-        f = Future()
+        f = net.create_future()
         f.failure(ValueError('oops'))
         errors = []
 
@@ -648,7 +648,7 @@ class TestNetworkSelector:
 
     def test_await_future_resolved(self):
         net = NetworkSelector()
-        f = Future()
+        f = net.create_future()
         f.success(42)
         results = []
 
@@ -661,7 +661,7 @@ class TestNetworkSelector:
 
     def test_await_future_pending(self):
         net = NetworkSelector()
-        f = Future()
+        f = net.create_future()
         results = []
         done = Future()
 
@@ -681,7 +681,7 @@ class TestNetworkSelector:
 
     def test_await_future_failure(self):
         net = NetworkSelector()
-        f = Future()
+        f = net.create_future()
         errors = []
         done = Future()
 
@@ -703,8 +703,8 @@ class TestNetworkSelector:
 
     def test_await_multiple_futures(self):
         net = NetworkSelector()
-        f1 = Future()
-        f2 = Future()
+        f1 = net.create_future()
+        f2 = net.create_future()
         results = []
         done = Future()
 
@@ -740,6 +740,60 @@ class TestNetworkSelector:
             'unschedule() did not close task queued in _ready'
         net.drain()  # skips the queued timer without running
         assert fired == []
+
+
+class TestCreateFuture:
+    """The pluggable-backend portability seam.
+
+    Core coroutines call ``net.create_future()`` instead of constructing
+    ``Future`` directly so an alternate backend can return its own awaitable.
+    For ``NetworkSelector`` the native awaitable is ``kafka.future.Future``;
+    the contract these tests pin is: it is awaitable on the loop *and* honors
+    the callback-chain surface (``add_callback`` / ``add_errback`` /
+    ``add_both`` / ``success`` / ``failure``) that callers like
+    ``KafkaConnectionManager.wait_for`` rely on.
+    """
+
+    def test_returns_future(self):
+        net = NetworkSelector()
+        fut = net.create_future()
+        assert isinstance(fut, Future)
+        assert not fut.is_done
+
+    def test_callback_chain(self):
+        net = NetworkSelector()
+        fut = net.create_future()
+        seen = []
+        fut.add_callback(seen.append)
+        fut.success(42)
+        assert seen == [42]
+        assert fut.succeeded() and fut.value == 42
+
+    def test_errback_chain(self):
+        net = NetworkSelector()
+        fut = net.create_future()
+        errs = []
+        fut.add_errback(errs.append)
+        exc = ValueError('boom')
+        fut.failure(exc)
+        assert errs == [exc]
+        assert fut.failed()
+
+    def test_awaitable_on_loop(self):
+        net = NetworkSelector()
+        result = []
+
+        async def producer(fut):
+            fut.success('done')
+
+        async def consumer(fut):
+            result.append(await fut)
+
+        fut = net.create_future()
+        net.call_soon(consumer(fut))
+        net.call_soon(producer(fut))
+        net.drain()
+        assert result == ['done']
 
 
 class TestSlowTaskMonitor:

@@ -250,7 +250,7 @@ class Fetcher:
         if not waited_on:
             return records, True  # nothing pending; caller should sleep
 
-        wakeup = Future()
+        wakeup = Future()  # plain future, not backend / no await
         def _wake(_):
             if not wakeup.is_done:
                 wakeup.success(None)

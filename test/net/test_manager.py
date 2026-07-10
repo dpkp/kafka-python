@@ -43,6 +43,12 @@ class TestKafkaConnectionManagerConfig:
         m = KafkaConnectionManager(net, api_version=(1, 0))
         assert m.broker_version_data == BrokerVersionData((1, 0))
 
+    def test_create_future_forwards_to_backend(self, net):
+        m = KafkaConnectionManager(net)
+        fut = m.create_future()
+        assert isinstance(fut, Future)
+        assert not fut.is_done
+
     def test_client_dns_lookup_default(self, net):
         m = KafkaConnectionManager(net)
         assert m.config['client_dns_lookup'] == 'use_all_dns_ips'
@@ -508,9 +514,10 @@ class TestKafkaConnectionManagerRun:
         monkeypatch.setattr(NetworkSelector, '_poll_once', aggressive_poll_once)
 
         async def hangs_then_times_out():
-            # Awaits a bare Future that nothing references externally --
-            # exactly the orphan-cycle shape that CPython's gc collects.
-            await Future()
+            # Awaits a bare (loop-awaitable) future that nothing references
+            # externally -- exactly the orphan-cycle shape that CPython's gc
+            # collects.
+            await manager.create_future()
 
         # wait_for should fail with KafkaTimeoutError, not GeneratorExit.
         async def waiter():

@@ -7,7 +7,6 @@ import warnings
 
 from kafka.coordinator.heartbeat import Heartbeat
 from kafka import errors as Errors
-from kafka.future import Future
 from kafka.metrics import AnonMeasurable
 from kafka.metrics.stats import Avg, Count, Max, Rate
 from kafka.net.wakeup_notifier import WakeupNotifier
@@ -352,7 +351,9 @@ class BaseCoordinator(ABC):
             if self.config['api_version'] < (0, 8, 2):
                 maybe_coordinator_id = self._client.least_loaded_node()
                 if maybe_coordinator_id is None:
-                    future = Future().failure(Errors.NodeNotReadyError('coordinator'))
+                    # Pre-failed sibling of lookup_coordinator(); consumed via
+                    # wait_for on the loop, so mint it from the backend too.
+                    future = self._manager.create_future().failure(Errors.NodeNotReadyError('coordinator'))
                 else:
                     self.coordinator_id = maybe_coordinator_id
                     return not timer.expired
