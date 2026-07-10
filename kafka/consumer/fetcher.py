@@ -250,12 +250,7 @@ class Fetcher:
         if not waited_on:
             return records, True  # nothing pending; caller should sleep
 
-        # Cross-thread wait-for-first: created here on the user thread, resolved
-        # on the loop via the waited_on callbacks, and bridged to the user
-        # thread via self._net.run(wait_for, ...) -- never awaited directly.
-        # Stays a plain thread-safe Future -> concurrent.futures.Future
-        # candidate, not create_future().
-        wakeup = Future()
+        wakeup = Future()  # plain future, not backend / no await
         def _wake(_):
             if not wakeup.is_done:
                 wakeup.success(None)

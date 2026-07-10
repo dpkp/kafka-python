@@ -55,9 +55,7 @@ class KafkaConnection:
         self.initializing = True
         self._init_future = net.create_future()  # awaited via __await__; backend-native
         # Cross-thread fan-out event (resolved on the loop on error/idle sweep,
-        # or on a user thread via manager.close()); never awaited, only
-        # callbacks. Stays a plain thread-safe Future -> concurrent.futures.Future
-        # candidate, not create_future().
+        # or on a user thread via manager.close()); never awaited, only callbacks.
         self._close_future = Future()
         self.in_flight_requests = collections.deque()
         self.broker_version_data = broker_version_data
