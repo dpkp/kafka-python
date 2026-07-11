@@ -5,12 +5,11 @@ import random
 import socket
 import time
 
-from .inet import create_connection
 from .connection import KafkaConnection
 from .metrics import KafkaManagerMetrics
-from .transport import KafkaSSLTransport, KafkaTCPTransport
 from kafka.cluster import ClusterMetadata
 import kafka.errors as Errors
+from kafka.net.transport import KafkaSSLTransport
 from kafka.net.wakeup_notifier import WakeupNotifier
 from kafka.protocol.broker_version_data import BrokerVersionData
 from kafka.version import __version__
@@ -85,6 +84,7 @@ class KafkaConnectionManager:
         self.cluster.attach(self)
         self._conns = {}
         self._backoff = dict() # node_id => (failures, backoff_until, socket_connect_setup_timeout_ms)
+        self.ssl_context = KafkaSSLTransport.build_ssl_context(self.config) if self.ssl_enabled else None
         # Cache the most recent SASL / SSL / auth failure per node so we can
         # surface it to the user instead of silently retrying forever.
         # Cleared on successful connect.
@@ -203,33 +203,18 @@ class KafkaConnectionManager:
     def ssl_enabled(self):
         return self.config['security_protocol'] in ('SSL', 'SASL_SSL')
 
-    async def _build_transport(self, node, timeout_at=None):
-        sock = await create_connection(self._net, node.host, node.port,
-                                       self.config['socket_options'],
-                                       proxy_url=self.config['proxy_url'],
-                                       timeout_at=timeout_at)
-        if self.ssl_enabled:
-            ssl_configs = {key: value
-                           for key, value in self.config.items()
-                           if key.startswith('ssl_')}
-            transport = KafkaSSLTransport(self._net, sock, host=node.host, **ssl_configs)
-        else:
-            transport = KafkaTCPTransport(self._net, sock, host=node.host)
-
-        try:
-            await transport.handshake()
-        except Exception as e:
-            raise Errors.KafkaConnectionError('Handshake failed: %s' % e)
-        else:
-            return transport
-
     async def _connect(self, node, conn, reset_backoff_on_connect=True, timeout_at=None):
         # Tracks ownership of the freshly built transport: while non-None it is
         # ours to clean up (the connection hasn't taken it over yet), so the
         # finally clause closes it. Cleared once connection_made() succeeds.
         transport = None
         try:
-            transport = await self._build_transport(node, timeout_at=timeout_at)
+            transport = await self._net.create_connection(
+                conn, node.host, node.port,
+                ssl=self.ssl_context,
+                proxy_url=self.config['proxy_url'],
+                socket_options=self.config['socket_options'],
+                timeout_at=timeout_at)
             # The connection (or the whole manager) may have been closed while
             # we were building the transport. Handing it to connection_made()
             # would flip the conn back to `initializing` and resurrect a

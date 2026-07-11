@@ -1,4 +1,5 @@
 import socket
+import ssl
 import time
 from unittest.mock import MagicMock
 
@@ -385,72 +386,75 @@ class TestKafkaSSLTransport:
 
     def test_sni_sent_when_check_hostname_true(self, net):
         sock, ctx, _ = self._make_ssl_sock()
-        KafkaSSLTransport(net, sock, host='broker.example.com',
-                          ssl_context=ctx, ssl_check_hostname=True)
+        ctx.check_hostname = True
+        KafkaSSLTransport(net, sock, ctx, host='broker.example.com')
         _, kwargs = ctx.wrap_socket.call_args
         assert kwargs['server_hostname'] == 'broker.example.com'
 
     def test_sni_sent_when_check_hostname_false(self, net):
         # The bug: SNI used to be suppressed when verification was disabled.
         sock, ctx, _ = self._make_ssl_sock()
-        KafkaSSLTransport(net, sock, host='broker.example.com',
-                          ssl_context=ctx, ssl_check_hostname=False)
+        ctx.check_hostname = False
+        KafkaSSLTransport(net, sock, ctx, host='broker.example.com')
         _, kwargs = ctx.wrap_socket.call_args
         assert kwargs['server_hostname'] == 'broker.example.com'
 
     def test_sni_strips_trailing_dot(self, net):
         # A trailing dot is a valid FQDN but illegal in the SNI extension.
         sock, ctx, _ = self._make_ssl_sock()
-        KafkaSSLTransport(net, sock, host='broker.example.com.',
-                          ssl_context=ctx, ssl_check_hostname=False)
+        ctx.check_hostname = False
+        KafkaSSLTransport(net, sock, ctx, host='broker.example.com.')
         _, kwargs = ctx.wrap_socket.call_args
         assert kwargs['server_hostname'] == 'broker.example.com'
 
     def test_sni_none_when_host_missing(self, net):
         sock, ctx, _ = self._make_ssl_sock()
-        KafkaSSLTransport(net, sock, host=None, ssl_context=ctx)
+        KafkaSSLTransport(net, sock, ctx, host=None)
         _, kwargs = ctx.wrap_socket.call_args
         assert kwargs['server_hostname'] is None
 
     def test_handshake_not_done_on_connect(self, net):
         sock, ctx, _ = self._make_ssl_sock()
-        KafkaSSLTransport(net, sock, host='broker.example.com', ssl_context=ctx)
+        KafkaSSLTransport(net, sock, ctx, host='broker.example.com')
         _, kwargs = ctx.wrap_socket.call_args
         assert kwargs['do_handshake_on_connect'] is False
 
     def test_provided_ssl_context_is_used(self, net):
         sock, ctx, wrapped = self._make_ssl_sock()
-        t = KafkaSSLTransport(net, sock, host='broker.example.com',
-                              ssl_context=ctx)
+        t = KafkaSSLTransport(net, sock, ctx, host='broker.example.com')
         assert t._ssl_context is ctx
         assert t._sock is wrapped
 
-    def test_config_defaults_and_overrides(self, net):
-        sock, ctx, _ = self._make_ssl_sock()
-        t = KafkaSSLTransport(net, sock, host='h', ssl_context=ctx,
-                              ssl_check_hostname=False)
-        # Explicitly-passed ssl_* keys land in ssl_config...
-        assert t.ssl_config['ssl_check_hostname'] is False
-        assert t.ssl_config['ssl_context'] is ctx
-        # ...unspecified keys keep their defaults.
-        assert t.ssl_config['ssl_cafile'] is None
-        assert t.ssl_config['ssl_check_hostname'] is not None
+    def test_ssl_context_is_required(self, net):
+        # The transport no longer builds a context itself; callers must pass
+        # a pre-built one (via build_ssl_context). Omitting it is a TypeError,
+        # not a silently-default context.
+        sock, _, _ = self._make_ssl_sock()
+        with pytest.raises(TypeError):
+            KafkaSSLTransport(net, sock, host='broker.example.com')  # pylint: disable=E1120
 
 
 class TestBuildSSLContext:
     def test_returns_provided_context(self):
         ctx = MagicMock()
-        config = dict(KafkaSSLTransport.DEFAULT_CONFIG, ssl_context=ctx)
-        assert KafkaSSLTransport._build_ssl_context(config) is ctx
+        config = dict(ssl_context=ctx)
+        assert KafkaSSLTransport.build_ssl_context(config) is ctx
 
     def test_check_hostname_propagates_to_context(self):
-        config = dict(KafkaSSLTransport.DEFAULT_CONFIG, ssl_check_hostname=False)
-        ctx = KafkaSSLTransport._build_ssl_context(config)
+        config = dict(ssl_check_hostname=False)
+        ctx = KafkaSSLTransport.build_ssl_context(config)
         assert ctx.check_hostname is False
 
     def test_check_hostname_true_requires_verification(self):
-        config = dict(KafkaSSLTransport.DEFAULT_CONFIG, ssl_check_hostname=True)
-        ctx = KafkaSSLTransport._build_ssl_context(config)
+        config = dict(ssl_check_hostname=True)
+        ctx = KafkaSSLTransport.build_ssl_context(config)
+        assert ctx.check_hostname is True
+
+    def test_empty_config_builds_default_context(self):
+        # Missing keys fall back to DEFAULT_CONFIG: a real TLS-client context
+        # with hostname checking on. This is the default-build path.
+        ctx = KafkaSSLTransport.build_ssl_context({})
+        assert isinstance(ctx, ssl.SSLContext)
         assert ctx.check_hostname is True
 
 

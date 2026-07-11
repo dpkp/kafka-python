@@ -351,7 +351,7 @@ class MockBroker:
         """Take the broker down, as if the process was killed.
 
         Aborts all live transports with ``error`` and refuses new connections
-        (an attached manager's ``_build_transport`` raises
+        (an attached manager's ``net.create_connection`` raises
         ``KafkaConnectionError``) until :meth:`start` is called. This
         exercises the client's real connection-lost, connect-failure, and
         reconnect-backoff paths.
@@ -501,16 +501,16 @@ class MockBroker:
         """
         broker = self
 
-        async def _mock_build_transport(node, timeout_at=None):
+        async def _mock_create_connection(protocol, host, port, **kwargs):
             if not broker.online:
                 raise Errors.KafkaConnectionError(
                     'connect to %s:%s refused (MockBroker stopped)'
-                    % (node.host, node.port))
+                    % (host, port))
             return MockTransport(
                 manager._net, broker,
-                node_id=node.node_id, host=node.host, port=node.port)
+                node_id=protocol.node_id, host=host, port=port)
 
-        manager._build_transport = _mock_build_transport
+        manager._net.create_connection = _mock_create_connection
 
     def client_factory(self):
         """Return a callable suitable for passing as ``kafka_client=...``
@@ -699,16 +699,16 @@ class MockCluster:
         """
         cluster = self
 
-        async def _mock_build_transport(node, timeout_at=None):
-            broker = cluster._by_addr.get((node.host, node.port))
+        async def _mock_create_connection(protocol, host, port, **kwargs):
+            broker = cluster._by_addr.get((host, port))
             if broker is None or not broker.online:
                 raise Errors.KafkaConnectionError(
-                    'connect to %s:%s refused' % (node.host, node.port))
+                    'connect to %s:%s refused' % (host, port))
             return MockTransport(
                 manager._net, broker,
-                node_id=node.node_id, host=node.host, port=node.port)
+                node_id=protocol.node_id, host=host, port=port)
 
-        manager._build_transport = _mock_build_transport
+        manager._net.create_connection = _mock_create_connection
 
     def client_factory(self):
         """Return a callable suitable for passing as ``kafka_client=...`` to

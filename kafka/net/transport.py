@@ -381,20 +381,21 @@ class KafkaSSLTransport(KafkaTCPTransport):
         'ssl_password': None,
         'ssl_crlfile': None,
     }
-    def __init__(self, net, sock, host=None, **configs):
-        self.ssl_config = copy.copy(self.DEFAULT_CONFIG)
-        for key in self.ssl_config:
-            if key in configs:
-                self.ssl_config[key] = configs[key]
-        self._ssl_context = self._build_ssl_context(self.ssl_config)
+    def __init__(self, net, sock, ssl_context, host=None):
+        self._ssl_context = ssl_context
         server_hostname = host.rstrip('.') if host is not None else None
         sock = self._ssl_context.wrap_socket(
             sock, server_hostname=server_hostname,
             do_handshake_on_connect=False)
         super().__init__(net, sock, host=host)
 
-    @staticmethod
-    def _build_ssl_context(config):
+    @classmethod
+    def build_ssl_context(cls, configs):
+        config = copy.copy(cls.DEFAULT_CONFIG)
+        for key in config:
+            if key in configs:
+                config[key] = configs[key]
+
         if config['ssl_context'] is not None:
             return config['ssl_context']
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
