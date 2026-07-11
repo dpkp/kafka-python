@@ -57,6 +57,7 @@ class KafkaConnectionManager:
         'metric_group_prefix': '',
         'metadata_max_age_ms': 300000,
         'client_dns_lookup': 'use_all_dns_ips',
+        'selector': None,  # deprecated; use net instead
     }
     _VALID_DNS_LOOKUP_MODES = ('use_all_dns_ips', 'resolve_canonical_bootstrap_servers_only')
 
@@ -76,11 +77,16 @@ class KafkaConnectionManager:
                 log.warning('socks5_proxy is deprecated, use proxy_url instead')
                 self.config['proxy_url'] = configs['socks5_proxy']
 
+        if configs.get('selector') is None:
+            self.config.pop('selector')
+        else:
+            log.warning('selector is deprecated, use net instead')
+
         # `net` is the raw backend selector: a NetBackend instance, a backend
         # name ('selector'/'asyncio'), or None to auto-detect / default to the
         # NetworkSelector. Resolved here (not in the legacy compat shim) so the
         # manager remains the durable entry point once compat.py is removed.
-        self._net = resolve_backend(net, configs)
+        self._net = resolve_backend(net, self.config)
         self.cluster = ClusterMetadata(
             bootstrap_servers=self.config['bootstrap_servers'],
             metadata_max_age_ms=self.config['metadata_max_age_ms'],

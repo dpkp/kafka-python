@@ -1,13 +1,12 @@
 import logging
 import os
 import uuid
-import time
 
 import pytest
 
 from kafka import KafkaAdminClient, KafkaConsumer, KafkaProducer
 from kafka.admin import NewTopic
-from kafka.net.compat import KafkaNetClient
+from kafka.net.manager import KafkaConnectionManager
 from kafka.protocol.metadata import MetadataRequest
 from test.testutil import assert_message_count, env_kafka_version, random_string, special_to_underscore
 from test.integration.fixtures import client_params, create_topics
@@ -76,16 +75,20 @@ def test_client(request, sasl_kafka):
     topic_name = special_to_underscore(request.node.name + random_string(4))
     create_topics(sasl_kafka, [topic_name], num_partitions=1)
 
-    client = KafkaNetClient(**client_params(sasl_kafka, 'client'))
-    client._manager.run(client._manager.bootstrap_async)
-    request = MetadataRequest(topics=None, version=1)
-    timeout_at = time.time() + 1
-    future = client.send(None, request)
-    client.poll(future=future, timeout_ms=10000)
-    if not future.is_done:
-        raise RuntimeError("Couldn't fetch topic response from Broker.")
-    elif future.failed():
-        raise future.exception
-    result = future.value
-    assert topic_name in [t[1] for t in result.topics]
-    client.close()
+    # Low-level SASL round-trip via KafkaConnectionManager directly (no compat
+    # shim, no poll()): the started-loop + manager.run(coro) pattern the real
+    # clients use, so it runs on any net backend (selector or asyncio).
+    manager = KafkaConnectionManager(**client_params(sasl_kafka, 'client'))
+    manager._net.start()
+    try:
+        manager.bootstrap(timeout_ms=5000)
+
+        async def fetch_metadata():
+            future = manager.send(MetadataRequest(topics=None, version=1), node_id=None)
+            return await manager.wait_for(future, 10000)
+
+        result = manager.run(fetch_metadata)
+        assert topic_name in [t[1] for t in result.topics]
+    finally:
+        manager.close()
+        manager._net.close()
