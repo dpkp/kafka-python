@@ -323,21 +323,12 @@ class AsyncioBackend:
 
     # --- connection seam --------------------------------------------------
     async def create_connection(self, protocol, host, port, *, ssl=None,
-                                ssl_check_hostname=True, proxy_url=None,
-                                socket_options=(), timeout_at=None):
+                                proxy_url=None, socket_options=(), timeout_at=None):
         if proxy_url is not None:
             raise NotImplementedError(
                 'The asyncio backend does not support proxy_url yet; use the '
                 'default selector backend for SOCKS5/HTTP-CONNECT proxying.')
-        server_hostname = None
-        if ssl is not None:
-            # asyncio verifies the peer hostname via the context; align the
-            # context with ssl_check_hostname and supply the SNI name.
-            try:
-                ssl.check_hostname = ssl_check_hostname
-            except (AttributeError, ValueError):
-                pass
-            server_hostname = host
+        server_hostname = host.rstrip('.') if ssl is not None else None
         adapter = _AsyncioProtocolAdapter()
         connect = self._loop.create_connection(
             lambda: adapter, host, port, ssl=ssl, server_hostname=server_hostname)
