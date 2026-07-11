@@ -164,7 +164,7 @@ def test_produce_request_negotiates_wire_version(sender, broker, manager, produc
     broker.respond_fn(ProduceResponse, _capture(captured))
 
     future = manager.send(produce_request, node_id=0)
-    manager.run(manager.wait_for, future, 5000)
+    manager.wait_for_blocking(future, 5000)
 
     assert captured['api_version'] == produce_version
 
@@ -208,7 +208,7 @@ def test_create_produce_requests_negotiates_wire_version(
         captured = {}
         broker.respond_fn(ProduceResponse, _capture(captured))
         future = manager.send(request, node_id=node)
-        manager.run(manager.wait_for, future, 5000)
+        manager.wait_for_blocking(future, 5000)
         assert captured['api_version'] == produce_version, (
             'node %d: expected v%d got v%s'
             % (node, produce_version, captured.get('api_version')))

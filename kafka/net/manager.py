@@ -440,6 +440,13 @@ class KafkaConnectionManager:
         """
         return await self._net.wait_for(future, timeout_ms)
 
+    def wait_for_blocking(self, future, timeout_ms):
+        try:
+            self.run(self.wait_for, future, timeout_ms, timeout_ms=timeout_ms)
+        except Exception:
+            pass
+        return future
+
     def create_future(self):
         """Create a Future suitable for awaiting on the underlying loop.
 

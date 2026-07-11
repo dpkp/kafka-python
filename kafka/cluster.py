@@ -437,7 +437,7 @@ class ClusterMetadata:
         ``manager.wait_for(future, timeout_ms)``, which resolves it through the
         backend's own awaitable:
             on-loop:  await self._manager.wait_for(cluster.request_update(), t)
-            off-loop: self._net.run(self._manager.wait_for, cluster.request_update(), None)
+            off-loop: self._manager.wait_for_blocking(cluster.request_update(), None)
         Many callers want only the flag+wake side effect and discard the token.
 
         On-loop callers that simply want to await a refresh can instead use the

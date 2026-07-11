@@ -257,11 +257,7 @@ class Fetcher:
                 wakeup.success(None)
         for fut in waited_on:
             fut.add_both(_wake)
-
-        try:
-            self._net.run(self._manager.wait_for, wakeup, timeout_ms, timeout_ms=timeout_ms)
-        except Errors.KafkaTimeoutError:
-            pass
+        self._manager.wait_for_blocking(wakeup, timeout_ms)
 
         records, _ = self.fetched_records(
             max_records, update_offsets=update_offsets)

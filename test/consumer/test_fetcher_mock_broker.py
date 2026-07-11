@@ -123,7 +123,7 @@ class TestKIP320OffsetValidation:
         # the consumer's cluster cache sees the new epoch.
         _broker_metadata(broker, leader_epoch=5)
         manager.cluster.request_update()
-        manager._net.run(manager.wait_for, manager.cluster.request_update(), 1000)
+        manager.wait_for_blocking(manager.cluster.request_update(), 1000)
 
         captured = {}
 
@@ -162,7 +162,7 @@ class TestKIP320OffsetValidation:
 
         # Cluster leader epoch advances to 5; refresh the consumer's cache.
         _broker_metadata(broker, leader_epoch=5)
-        manager._net.run(manager.wait_for, manager.cluster.request_update(), 1000)
+        manager.wait_for_blocking(manager.cluster.request_update(), 1000)
 
         # No truncation (end_offset 100 >= position 50), and the broker
         # reports the requested epoch (3), NOT the current cluster epoch (5).
@@ -211,7 +211,7 @@ class TestKIP320OffsetValidation:
         fetcher._subscriptions.seek(tp, OffsetAndMetadata(50, '', 3))
 
         _broker_metadata(broker, leader_epoch=5)
-        manager._net.run(manager.wait_for, manager.cluster.request_update(), 1000)
+        manager.wait_for_blocking(manager.cluster.request_update(), 1000)
 
         broker.respond(OffsetForLeaderEpochRequest,
                        _ofle_response(error_code=0, leader_epoch=3, end_offset=100))
@@ -425,7 +425,7 @@ class TestKIP392RackAwareFetching:
         assert 0 in requests, 'expected one fetch routed to the leader (node 0)'
         request, _ = requests[0]
         future = manager.send(request, node_id=0)
-        manager.run(manager.wait_for, future, 2000)
+        manager.wait_for_blocking(future, 2000)
 
         assert captured['api_version'] >= 11, (
             'KIP-392 requires FetchRequest v11+; got v%s' % captured.get('api_version'))
@@ -452,7 +452,7 @@ class TestKIP392RackAwareFetching:
                     offline_replicas=[])],
             )])
         # Re-pull metadata so the cluster cache knows about node 5.
-        manager._net.run(manager.wait_for, manager.cluster.request_update(), 2000)
+        manager.wait_for_blocking(manager.cluster.request_update(), 2000)
 
         fetcher._subscriptions.seek(tp, OffsetAndMetadata(0, '', 3))
 
@@ -543,7 +543,7 @@ class TestFetchV12Epoch:
         assert broker.node_id in requests
         request, _ = requests[broker.node_id]
         future = manager.send(request, node_id=broker.node_id)
-        manager.run(manager.wait_for, future, 2000)
+        manager.wait_for_blocking(future, 2000)
 
         assert captured['api_version'] >= 12, (
             'expected Fetch v12+ negotiation; got v%s' % captured.get('api_version'))
@@ -569,7 +569,7 @@ class TestFetchV12Epoch:
         requests = fetcher._create_fetch_requests()
         request, _ = requests[broker.node_id]
         future = manager.send(request, node_id=broker.node_id)
-        manager.run(manager.wait_for, future, 2000)
+        manager.wait_for_blocking(future, 2000)
 
         assert captured['last_fetched_epoch'] == -1
 
@@ -596,7 +596,7 @@ class TestFetchV12Epoch:
         requests = fetcher._create_fetch_requests()
         request, _ = requests[broker.node_id]
         future = manager.send(request, node_id=broker.node_id)
-        manager.run(manager.wait_for, future, 2000)
+        manager.wait_for_blocking(future, 2000)
 
         assert captured['current_leader_epoch'] == -1
         assert captured['last_fetched_epoch'] == 7
@@ -667,7 +667,7 @@ class TestFetchV12Epoch:
                     isr_nodes=[broker.node_id, 7],
                     offline_replicas=[])],
             )])
-        manager._net.run(manager.wait_for, manager.cluster.request_update(), 2000)
+        manager.wait_for_blocking(manager.cluster.request_update(), 2000)
 
         tp = TopicPartition(TOPIC, PARTITION)
         fetcher._subscriptions.seek(tp, OffsetAndMetadata(50, '', 3))
