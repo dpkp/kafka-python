@@ -7,6 +7,7 @@ import time
 
 from .connection import KafkaConnection
 from .metrics import KafkaManagerMetrics
+from kafka.net.backend import resolve_backend
 from kafka.cluster import ClusterMetadata
 import kafka.errors as Errors
 from kafka.net.transport import KafkaSSLTransport
@@ -59,7 +60,7 @@ class KafkaConnectionManager:
     }
     _VALID_DNS_LOOKUP_MODES = ('use_all_dns_ips', 'resolve_canonical_bootstrap_servers_only')
 
-    def __init__(self, net, **configs):
+    def __init__(self, net=None, **configs):
         self.config = copy.copy(self.DEFAULT_CONFIG)
         for key in self.config:
             if key in configs:
@@ -75,7 +76,11 @@ class KafkaConnectionManager:
                 log.warning('socks5_proxy is deprecated, use proxy_url instead')
                 self.config['proxy_url'] = configs['socks5_proxy']
 
-        self._net = net
+        # `net` is the raw backend selector: a NetBackend instance, a backend
+        # name ('selector'/'asyncio'), or None to auto-detect / default to the
+        # NetworkSelector. Resolved here (not in the legacy compat shim) so the
+        # manager remains the durable entry point once compat.py is removed.
+        self._net = resolve_backend(net, configs)
         self.cluster = ClusterMetadata(
             bootstrap_servers=self.config['bootstrap_servers'],
             metadata_max_age_ms=self.config['metadata_max_age_ms'],

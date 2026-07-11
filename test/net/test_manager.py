@@ -19,6 +19,20 @@ def net():
     return NetworkSelector()
 
 
+class TestKafkaConnectionManagerNetResolution:
+    """Backend selection lives on the manager (not the compat shim)."""
+
+    def test_default_resolves_to_selector(self):
+        m = KafkaConnectionManager()
+        assert isinstance(m._net, NetworkSelector)
+
+    def test_explicit_instance_used_as_is(self, net):
+        assert KafkaConnectionManager(net)._net is net
+
+    def test_name_resolves(self):
+        assert isinstance(KafkaConnectionManager('selector')._net, NetworkSelector)
+
+
 class TestKafkaConnectionManagerConfig:
     def test_default_config(self, net):
         m = KafkaConnectionManager(net)
