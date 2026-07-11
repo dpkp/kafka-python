@@ -45,6 +45,10 @@ def coordinator(broker, client, metrics):
     try:
         yield coord
     finally:
+        # Drop any group generation a test left set so close() doesn't fire a
+        # LeaveGroupRequest the MockBroker isn't scripted for (which otherwise
+        # surfaces as teardown ERROR-log noise + an unhandled mock-broker task).
+        coord.reset_generation()
         coord.close(timeout_ms=0)
 
 
@@ -468,7 +472,7 @@ def test_fetch_committed_offsets(mocker, coordinator):
     assert coordinator._send_offset_fetch_request.call_count == 4  # successful, failed, retried+success
 
 
-def test_close(mocker, coordinator):
+def test_close(mocker, net, coordinator):
     mocker.patch.object(coordinator, '_maybe_auto_commit_offsets_sync')
     mocker.patch.object(coordinator, '_handle_leave_group_response')
     mocker.patch.object(coordinator, 'coordinator_unknown', return_value=False)
@@ -476,7 +480,8 @@ def test_close(mocker, coordinator):
     coordinator._generation = Generation(1, 'foobar', b'')
     coordinator.state = MemberState.STABLE
     cli = coordinator._client
-    mocker.patch.object(cli._manager, 'send', return_value=Future().success('foobar'))
+    mocker.patch.object(cli._manager, 'send',
+                        return_value=net.create_future().success('foobar'))
     mocker.patch.object(cli, 'poll')
 
     coordinator.close()
@@ -1352,7 +1357,7 @@ def test_join_group_async_raises_non_retriable(request, broker, seeded_coord):
 
 
 def test_join_group_async_returns_false_on_short_timeout_and_caches_task(
-        request, broker, seeded_coord):
+        request, broker, net, seeded_coord):
     """Short consumer.poll(timeout_ms=N) should return False instead of
     hanging when the broker is slow to respond to JoinGroup; the in-flight
     task is cached so the next poll re-awaits it instead of sending a fresh
@@ -1370,7 +1375,7 @@ def test_join_group_async_returns_false_on_short_timeout_and_caches_task(
     seeded_coord.state = MemberState.UNJOINED
 
     # JoinGroup response future controlled by the test. Hangs until released.
-    join_response_pending = seeded_coord._manager.create_future()  # awaited by slow_join_handler
+    join_response_pending = net.create_future()  # awaited by slow_join_handler
     join_request_count = [0]
 
     async def slow_join_handler(api_key, api_version, correlation_id, request_bytes):
@@ -1456,10 +1461,9 @@ def test_ensure_active_group_sync_facade(request, broker, seeded_coord):
     assert seeded_coord.state == MemberState.STABLE
 
 
-def test_heartbeat(mocker, coordinator):
+def test_heartbeat(mocker, net, coordinator):
     coordinator.coordinator_id = 0
     coordinator.state = MemberState.STABLE
-    net = coordinator._manager._net
 
     assert not coordinator._heartbeat_enabled and not coordinator._heartbeat_closed
 
@@ -1489,7 +1493,7 @@ def test_heartbeat(mocker, coordinator):
     # spin); using side_effect with an async function that awaits the Future
     # forces the suspension we want. The Mock's call_count then verifies the
     # loop fired exactly once.
-    blocked_send = coordinator._manager.create_future()
+    blocked_send = net.create_future()
     async def _hang(*args, **kwargs):
         await blocked_send
     mocker.patch.object(coordinator, '_send_heartbeat_request', side_effect=_hang)
@@ -2336,8 +2340,9 @@ class TestOnCloseRevokesPartitions:
                             return_value=False)
         coordinator.coordinator_id = 0
         cli = coordinator._client
+        net = cli._net
         mocker.patch.object(cli._manager, 'send',
-                            return_value=Future().success('foobar'))
+                            return_value=net.create_future().success('foobar'))
         mocker.patch.object(cli, 'poll')
 
     def test_close_revokes_for_live_group(self, mocker, coordinator):
