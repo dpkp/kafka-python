@@ -375,9 +375,19 @@ class KafkaProducer:
             metrics. Default: 2
         metrics_sample_window_ms (int): The maximum age in milliseconds of
             samples used to compute metrics. Default: 30000
-        selector (selectors.BaseSelector): Provide a specific selector
-            implementation to use for I/O multiplexing.
-            Default: selectors.DefaultSelector
+        net (str or kafka.net.backend.NetBackend): The async backend that runs
+            this client's network I/O event loop. One of: a NetBackend
+            instance; a registered name -- 'selector' (the built-in
+            NetworkSelector) or 'asyncio' (runs I/O on an asyncio loop); or None
+            to auto-detect. Auto-detect selects 'asyncio' when the client is
+            constructed inside a running asyncio event loop (via sniffio, or
+            asyncio's running-loop check), otherwise falls back to 'selector'.
+            Regardless of backend, the loop runs on its own dedicated daemon IO
+            thread and this client's public API stays synchronous (blocking); a
+            native awaitable API is a separate, later phase. Caveat: calling a
+            blocking client method from within your own running asyncio loop
+            will block that loop -- run such calls in a thread executor
+            (e.g. loop.run_in_executor). Default: None.
         sasl_mechanism (str): Authentication mechanism when security_protocol
             is configured for SASL_PLAINTEXT or SASL_SSL. Valid values are:
             PLAIN, GSSAPI, OAUTHBEARER, SCRAM-SHA-256, SCRAM-SHA-512.
@@ -447,7 +457,7 @@ class KafkaProducer:
         'metrics_enabled': True,
         'metrics_num_samples': 2,
         'metrics_sample_window_ms': 30000,
-        'selector': selectors.DefaultSelector,
+        'selector': None,  # deprecated; use net instead
         'sasl_mechanism': None,
         'sasl_plain_username': None,
         'sasl_plain_password': None,
@@ -461,8 +471,6 @@ class KafkaProducer:
         'net': None,
     }
 
-    DEPRECATED_CONFIGS = ()
-
     _COMPRESSORS = {
         'gzip': (has_gzip, LegacyRecordBatchBuilder.CODEC_GZIP),
         'snappy': (has_snappy, LegacyRecordBatchBuilder.CODEC_SNAPPY),
@@ -472,25 +480,19 @@ class KafkaProducer:
     }
 
     def __init__(self, **configs):
+        user_provided_configs = set(configs)
+        extra_configs = user_provided_configs.difference(self.DEFAULT_CONFIG)
+        if extra_configs:
+            raise Errors.KafkaConfigurationError("Unrecognized configs: {}".format(extra_configs))
+
         self.config = copy.copy(self.DEFAULT_CONFIG)
-        user_provided_configs = set(configs.keys())
-        for key in self.config:
-            if key in configs:
-                self.config[key] = configs.pop(key)
+        self.config.pop('selector')
+        self.config.update(configs)
 
         for key in ('key_serializer', 'value_serializer'):
             if self.config[key] is not None and not isinstance(self.config[key], Serializer):
                 warnings.warn('%s does not implement kafka.serializer.Serializer' % (key,), category=DeprecationWarning, stacklevel=3)
                 self.config[key] = SerializeWrapper(self.config[key])
-
-        for key in self.DEPRECATED_CONFIGS:
-            if key in configs:
-                configs.pop(key)
-                warnings.warn('Deprecated Producer config: %s' % (key,), category=DeprecationWarning)
-
-        # Only check for extra config keys in top-level class
-        if configs:
-            raise ValueError('Unrecognized configs: %s' % (configs,))
 
         if self.config['client_id'] is None:
             self.config['client_id'] = 'kafka-python-producer-%s' % \

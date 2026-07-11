@@ -142,9 +142,19 @@ class KafkaAdminClient(
             metadata before the configured timeout. Note that bootstrap is
             called eagerly from __init__().
             Default: 30000
-        selector (selectors.BaseSelector): Provide a specific selector
-            implementation to use for I/O multiplexing.
-            Default: selectors.DefaultSelector
+        net (str or kafka.net.backend.NetBackend): The async backend that runs
+            this client's network I/O event loop. One of: a NetBackend
+            instance; a registered name -- 'selector' (the built-in
+            NetworkSelector) or 'asyncio' (runs I/O on an asyncio loop); or None
+            to auto-detect. Auto-detect selects 'asyncio' when the client is
+            constructed inside a running asyncio event loop (via sniffio, or
+            asyncio's running-loop check), otherwise falls back to 'selector'.
+            Regardless of backend, the loop runs on its own dedicated daemon IO
+            thread and this client's public API stays synchronous (blocking); a
+            native awaitable API is a separate, later phase. Caveat: calling a
+            blocking client method from within your own running asyncio loop
+            will block that loop -- run such calls in a thread executor
+            (e.g. loop.run_in_executor). Default: None.
         metrics (kafka.metrics.Metrics): Optionally provide a metrics
             instance for capturing network IO stats. Default: None.
         metric_group_prefix (str): Prefix for metric names. Default: ''
@@ -194,7 +204,7 @@ class KafkaAdminClient(
         'ssl_crlfile': None,
         'api_version': None,
         'bootstrap_timeout_ms': 30000,
-        'selector': selectors.DefaultSelector,
+        'selector': None,  # deprecated; use net instead
         'sasl_mechanism': None,
         'sasl_plain_username': None,
         'sasl_plain_password': None,
@@ -220,6 +230,7 @@ class KafkaAdminClient(
             raise KafkaConfigurationError("Unrecognized configs: {}".format(extra_configs))
 
         self.config = copy.copy(self.DEFAULT_CONFIG)
+        self.config.pop('selector')
         self.config.update(configs)
 
         # Configure metrics

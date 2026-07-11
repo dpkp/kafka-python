@@ -265,9 +265,19 @@ class KafkaConsumer:
             metrics. Default: 2
         metrics_sample_window_ms (int): The maximum age in milliseconds of
             samples used to compute metrics. Default: 30000
-        selector (selectors.BaseSelector): Provide a specific selector
-            implementation to use for I/O multiplexing.
-            Default: selectors.DefaultSelector
+        net (str or kafka.net.backend.NetBackend): The async backend that runs
+            this client's network I/O event loop. One of: a NetBackend
+            instance; a registered name -- 'selector' (the built-in
+            NetworkSelector) or 'asyncio' (runs I/O on an asyncio loop); or None
+            to auto-detect. Auto-detect selects 'asyncio' when the client is
+            constructed inside a running asyncio event loop (via sniffio, or
+            asyncio's running-loop check), otherwise falls back to 'selector'.
+            Regardless of backend, the loop runs on its own dedicated daemon IO
+            thread and this client's public API stays synchronous (blocking); a
+            native awaitable API is a separate, later phase. Caveat: calling a
+            blocking client method from within your own running asyncio loop
+            will block that loop -- run such calls in a thread executor
+            (e.g. loop.run_in_executor). Default: None.
         exclude_internal_topics (bool): Whether records from internal topics
             (such as offsets) should be exposed to the consumer. If set to True
             the only way to receive records from an internal topic is
@@ -350,7 +360,7 @@ class KafkaConsumer:
         'metrics_num_samples': 2,
         'metrics_sample_window_ms': 30000,
         'metric_group_prefix': 'consumer',
-        'selector': selectors.DefaultSelector,
+        'selector': None,  # deprecated; use net instead
         'exclude_internal_topics': True,
         'sasl_mechanism': None,
         'sasl_plain_username': None,
@@ -373,6 +383,7 @@ class KafkaConsumer:
             raise KafkaConfigurationError("Unrecognized configs: %s" % (extra_configs,))
 
         self.config = copy.copy(self.DEFAULT_CONFIG)
+        self.config.pop('selector') # handled in manager init
         self.config.update(configs)
 
         deprecated = {'smallest': 'earliest', 'largest': 'latest'}
