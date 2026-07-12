@@ -67,13 +67,13 @@ def net():
 
 @pytest.fixture
 def manager(net, broker):
+    broker.attach(net)
     manager = KafkaConnectionManager(
         net,
         bootstrap_servers='%s:%d' % (broker.host, broker.port),
         api_version=broker.broker_version,
         request_timeout_ms=5000,
     )
-    broker.attach(manager)
     try:
         yield manager
     finally:

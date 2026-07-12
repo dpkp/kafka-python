@@ -128,7 +128,7 @@ class TestMockBrokerWithClient:
             request_timeout_ms=5000,
             metadata_max_age_ms=300000,
         )
-        broker.attach(client._manager)
+        broker.attach(client._net)
         return client
 
     def test_bootstrap_through_mock(self):
@@ -303,7 +303,7 @@ class TestMockBrokerWithClient:
             request_timeout_ms=5000,
             metadata_max_age_ms=300000,
         )
-        broker.attach(client._manager)
+        broker.attach(client._net)
         try:
             version = client.check_version(timeout_ms=5000)
             assert version == broker.broker_version

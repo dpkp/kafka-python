@@ -64,7 +64,7 @@ def _make_client(broker):
         request_timeout_ms=5000,
         metadata_max_age_ms=300000,
     )
-    broker.attach(client._manager)
+    broker.attach(client._net)
     # Bootstrap so cluster metadata has the broker node and we have an
     # api_version mapping available for subsequent sends.
     client.check_version(timeout_ms=5000)

@@ -13,8 +13,8 @@ Usage::
     broker.respond(JoinGroupRequest, JoinGroupResponse(version=5, ...))
     broker.respond(SyncGroupRequest, SyncGroupResponse(version=3, ...))
 
-    # Attach to a KafkaConnectionManager so new connections use MockTransport:
-    broker.attach(manager)
+    # Attach to a NetBackend so new connections use MockTransport:
+    broker.attach(net)
 
     # Or use the consumer/client factory fixtures for a one-liner setup.
 
@@ -489,16 +489,16 @@ class MockBroker:
                 response = await response
         return response
 
-    def attach(self, manager):
-        """Monkey-patch a KafkaConnectionManager to route all connections
+    def attach(self, net):
+        """Monkey-patch a NetBackend to route all connections
         through this MockBroker.
 
-        After calling this, any ``manager.get_connection(node_id)`` call will
-        create a KafkaConnection backed by a MockTransport connected to this
+        After calling this, any ``net.create_connection`` call will
+        connect a KafkaConnection to a MockTransport linked with this
         broker, instead of opening a real TCP socket.
 
         Arguments:
-            manager: A ``KafkaConnectionManager`` instance.
+            net: A ``NetBackend`` instance.
         """
         broker = self
 
@@ -508,7 +508,7 @@ class MockBroker:
                     'connect to %s:%s refused (MockBroker stopped)'
                     % (host, port))
             transport = MockTransport(
-                manager._net, broker,
+                net, broker,
                 node_id=protocol.node_id, host=host, port=port)
             # create_connection contract: the backend wires the protocol and
             # cleans up the transport if the conn refuses (closed mid-connect).
@@ -519,7 +519,8 @@ class MockBroker:
                 transport.close()
                 raise
 
-        manager._net.create_connection = _mock_create_connection
+        net.create_connection = _mock_create_connection
+        return net
 
     def client_factory(self):
         """Return a callable suitable for passing as ``kafka_client=...``
@@ -540,7 +541,7 @@ class MockBroker:
         def factory(**kwargs):
             from kafka.net.compat import KafkaNetClient
             client = KafkaNetClient(**kwargs)
-            broker.attach(client._manager)
+            broker.attach(client._net)
             return client
 
         return factory

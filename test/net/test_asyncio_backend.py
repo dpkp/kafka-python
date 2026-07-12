@@ -361,13 +361,13 @@ class TestEndToEndMockBroker:
     def test_bootstrap_and_send(self):
         broker = MockBroker()
         net = AsyncioBackend(client_id='e2e')
+        broker.attach(net)
         manager = KafkaConnectionManager(
             net,
             bootstrap_servers='%s:%d' % (broker.host, broker.port),
             api_version=broker.broker_version,
             request_timeout_ms=5000,
         )
-        broker.attach(manager)
         net.start()
         try:
             manager.bootstrap(timeout_ms=5000)
