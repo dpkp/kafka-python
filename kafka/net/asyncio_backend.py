@@ -459,6 +459,7 @@ class _AsyncioTransport:
     def write(self, data):
         self.last_write = time.monotonic()
         self._t.write(data)
+        return len(data)
 
     def close(self):
         self._t.close()

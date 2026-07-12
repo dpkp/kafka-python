@@ -128,6 +128,7 @@ class MockTransport:
         self._write_buffer.extend(data)
         self.last_write = time.monotonic()
         self._net.call_soon(self._process_requests)
+        return len(data)
 
     def writelines(self, data_list):
         for data in data_list:

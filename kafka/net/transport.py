@@ -95,8 +95,6 @@ class KafkaTCPTransport:
                 return self.abort(error=err)
             log.debug('%s: received %d bytes', self, len(recvd_data))
             self.last_read = time.monotonic()
-            if self._protocol and self._protocol._sensors:
-                self._protocol._sensors.bytes_received.record(len(recvd_data))
             try:
                 self._protocol.data_received(recvd_data)
             except Errors.KafkaProtocolError as e:
@@ -177,6 +175,7 @@ class KafkaTCPTransport:
         if not self._writing:
             self._writing = True
             self._write_task =  self._net.call_soon(self._write_to_sock)
+        return len(data)
 
     def writelines(self, list_of_data):
         """Write a list (or any iterable) of data bytes to the transport."""
@@ -186,6 +185,7 @@ class KafkaTCPTransport:
         if not self._writing:
             self._writing = True
             self._write_task = self._net.call_soon(self._write_to_sock)
+        return sum(len(data) for data in list_of_data)
 
     async def _write_to_sock(self):
         try:
@@ -196,8 +196,6 @@ class KafkaTCPTransport:
                     return self.abort(error=err)
                 log.debug('%s: sent %d bytes', self, total_bytes)
                 self.last_write = time.monotonic()
-                if self._protocol and self._protocol._sensors:
-                    self._protocol._sensors.bytes_sent.record(total_bytes)
         finally:
             self._writing = False
         if self._closed:

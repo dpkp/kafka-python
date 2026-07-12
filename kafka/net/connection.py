@@ -168,7 +168,9 @@ class KafkaConnection:
         # in_flight_requests (len==1), trip the >= check, pause, and never be
         # written to the transport - hanging forever.
         if not self.paused:
-            self.transport.write(self.parser.send_bytes())
+            total_bytes = self.transport.write(self.parser.send_bytes())
+            if self._sensors:
+                self._sensors.bytes_sent.record(total_bytes)
         if len(self.in_flight_requests) >= self.config['max_in_flight_requests_per_connection']:
             self.pause('max_in_flight')
         return future
@@ -193,6 +195,8 @@ class KafkaConnection:
         if self.closed:
             log.debug('%s: Ignoring %d bytes received by closed connection', self, len(data))
             return
+        if self._sensors:
+            self._sensors.bytes_received.record(len(data))
         responses = self.parser.receive_bytes(data)
 
         # augment responses w/ correlation_id, future, and timestamp
@@ -301,7 +305,9 @@ class KafkaConnection:
             if not self.paused and self.parser and self.transport:
                 to_send = self.parser.send_bytes()
                 if to_send:
-                    self.transport.write(to_send)
+                    total_bytes = self.transport.write(to_send)
+                    if self._sensors:
+                        self._sensors.bytes_sent.record(total_bytes)
 
     def pause_writing(self):
         """ Called when the transport's buffer goes over the high-water mark.
