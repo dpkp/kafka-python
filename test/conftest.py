@@ -58,7 +58,11 @@ def client(net, manager, broker):
 
 @pytest.fixture
 def net():
-    return NetworkSelector()
+    backend = NetworkSelector()
+    try:
+        yield backend
+    finally:
+        backend.close()
 
 
 @pytest.fixture
