@@ -499,7 +499,8 @@ class TestClusterMetadataRefresh:
         manager.cluster.config['retry_backoff_ms'] = 10 # reduce loop delay when metadata in progress
 
         response = _make_metadata_response(8)
-        with patch.object(manager, 'send', return_value=Future().success(response)):
+        with patch.object(manager, 'send',
+                          return_value=net.create_future().success(response)):
             f = manager.cluster.request_update()
             # Drive the cluster refresh loop
             net.poll(timeout_ms=100, future=f)

@@ -490,15 +490,16 @@ class NetworkSelector:
     async def create_connection(self, protocol, host, port, *, ssl=None,
                                 proxy_url=None, socket_options=(),
                                 timeout_at=None):
-        """Establish and return a connected transport to host:port.
+        """Establish a connected transport to host:port and wire ``protocol``.
 
         The selector owns the raw socket: DNS + non-blocking connect (with
         optional SOCKS5/HTTP-CONNECT proxy via KafkaNetSocket), then wraps it
-        in a TCP or SSL transport and runs the TLS handshake. ``protocol`` (the
-        KafkaConnection) is not used here -- the caller wires it via
-        ``connection_made()`` after its own "closed during connect" check; it
-        is part of the contract because socket-owning backends (asyncio,
-        Twisted) need it at connect time.
+        in a TCP or SSL transport, runs the TLS handshake, and calls
+        ``protocol.connection_made(transport)`` -- mirroring asyncio/Twisted,
+        which own the socket and wire the protocol at connect time. On any
+        failure (handshake error, or a ``protocol`` that refuses the transport
+        because it closed mid-connect) the transport is closed before raising,
+        so the caller never handles a transport instance directly.
         """
         sock = await _inet_create_connection(self, host, port, socket_options,
                                              proxy_url=proxy_url, timeout_at=timeout_at)
@@ -509,8 +510,13 @@ class NetworkSelector:
         try:
             await transport.handshake()
         except Exception as e:
+            transport.close()
             raise Errors.KafkaConnectionError('Handshake failed: %s' % e)
-        return transport
+        try:
+            protocol.connection_made(transport)
+        except Exception:
+            transport.close()
+            raise
 
     def sleep(self, delay):
         return KernelEvent('_sleep', delay)

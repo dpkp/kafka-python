@@ -41,6 +41,7 @@ def sasl_broker():
 
 @pytest.fixture
 def sasl_manager(net, sasl_broker):
+    sasl_broker.attach(net)
     manager = KafkaConnectionManager(
         net,
         bootstrap_servers='%s:%d' % (sasl_broker.host, sasl_broker.port),
@@ -48,7 +49,6 @@ def sasl_manager(net, sasl_broker):
         request_timeout_ms=5000,
         **SASL_CONFIG,
     )
-    sasl_broker.attach(manager)
     try:
         yield manager
     finally:

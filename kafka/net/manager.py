@@ -236,31 +236,24 @@ class KafkaConnectionManager:
         return self.config['security_protocol'] in ('SSL', 'SASL_SSL')
 
     async def _connect(self, node, conn, reset_backoff_on_connect=True, timeout_at=None):
-        # Tracks ownership of the freshly built transport: while non-None it is
-        # ours to clean up (the connection hasn't taken it over yet), so the
-        # finally clause closes it. Cleared once connection_made() succeeds.
-        transport = None
         try:
-            transport = await self._net.create_connection(
+            await self._net.create_connection(
                 conn, node.host, node.port,
                 ssl=self.ssl_context,
                 proxy_url=self.config['proxy_url'],
                 socket_options=self.config['socket_options'],
                 timeout_at=timeout_at)
-            # The connection (or the whole manager) may have been closed while
-            # we were building the transport. Handing it to connection_made()
-            # would flip the conn back to `initializing` and resurrect a
-            # connection that is already being torn down. Discard
-            # the new transport instead of reviving a dead connection.
-            if conn.closed or self.closed:
-                log.debug('%s: closed during connect; discarding new transport', conn)
-                return
-            conn.connection_made(transport)
-            transport = None  # conn owns cleanup now; skip finally: transport.close()
             # Note: conn.initialize does not currently raise on error;
             # errors are pushed to conn.init_future and raised on await conn
             await conn.initialize(timeout_at=timeout_at)
         except Exception as exc:
+            if conn.closed or self.closed:
+                # A concurrent close() raced the connect (manager / bootstrap
+                # teardown). connection_made() refused to resurrect the conn and
+                # the backend already discarded the transport; don't back off a
+                # connection that is going away.
+                log.debug('%s: closed during connect; discarding', conn)
+                return
             log.error('Connection failed: %s', exc)
             conn.connection_lost(exc)
             self.update_backoff(node.node_id)
@@ -268,9 +261,6 @@ class KafkaConnectionManager:
                                 Errors.AuthorizationError)):
                 self._auth_failures[node.node_id] = exc
             return
-        finally:
-            if transport is not None:
-                transport.close()
 
         if self._sensors:
             self._sensors.connection_created.record()

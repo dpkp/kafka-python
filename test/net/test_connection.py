@@ -471,7 +471,7 @@ class TestKafkaConnectionSasl:
         handshake_response.error_code = 33  # UnsupportedSaslMechanismError
         handshake_response.mechanisms = ['GSSAPI']
 
-        f = Future()
+        f = net.create_future()
         f.success(handshake_response)
         conn._send_request = MagicMock(return_value=f)
 
@@ -496,7 +496,7 @@ class TestKafkaConnectionSasl:
         handshake_response.error_code = 0
         handshake_response.mechanisms = ['GSSAPI', 'SCRAM-SHA-256']
 
-        f = Future()
+        f = net.create_future()
         f.success(handshake_response)
         conn._send_request = MagicMock(return_value=f)
 
