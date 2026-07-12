@@ -1228,7 +1228,12 @@ class KafkaConsumer:
         """
         timeout_ms = self.config['request_timeout_ms'] if timeout_ms is None else timeout_ms
         for tp, ts in timestamps.items():
-            timestamps[tp] = int(ts)
+            try:
+                timestamps[tp] = int(ts)
+            except (ValueError, TypeError, OverflowError):
+                raise ValueError(
+                    "The target timestamp for partition {} is {}. Timestamps "
+                    "must be a valid integer (milliseconds since epoch).".format(tp, ts))
             if ts < 0:
                 raise ValueError(
                     "The target time for partition {} is {}. The target time "
