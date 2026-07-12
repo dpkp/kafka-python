@@ -122,6 +122,12 @@ class KafkaConnectionManager:
             self.broker_version_data = BrokerVersionData(self.config['api_version'])
         self.closed = False
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
     @property
     def broker_version(self):
         if self.broker_version_data is None:
