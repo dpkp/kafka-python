@@ -4,6 +4,7 @@ import threading
 import time
 
 import kafka.errors as Errors
+from kafka.net.backend import resolve_backend
 from kafka.net.manager import KafkaConnectionManager
 
 
@@ -21,11 +22,14 @@ class KafkaNetClient:
         # _lock is still used by the legacy Coordinator (kafka/coordinator/base.py).
         # Remove once Coordinator moves to the IO thread (Phase D).
         self._lock = threading.RLock()
-        # Backend selection (raw `net`: None | NetBackend | name) is resolved by
-        # KafkaConnectionManager, not here -- this compat shim is slated for
-        # removal once callers use the manager directly ("Phase D").
-        self._manager = KafkaConnectionManager(net, **configs) if manager is None else manager
-        self._net = self._manager._net
+        # This legacy shim owns the net's lifecycle explicitly (start / poll /
+        # close), so it resolves + creates the net itself and hands the manager
+        # a ready instance. Passing an instance means the manager does NOT
+        # auto-start/close it (that would break this shim's poll()-driving) --
+        # ownership follows creation. Direct KafkaConnectionManager(net=None)
+        # users get the manager's auto lifecycle instead.
+        self._net = resolve_backend(net, configs)
+        self._manager = KafkaConnectionManager(self._net, **configs) if manager is None else manager
 
     @property
     def cluster(self):

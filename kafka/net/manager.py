@@ -84,8 +84,16 @@ class KafkaConnectionManager:
 
         # `net` is the raw backend selector: a NetBackend instance, a backend
         # name ('selector'/'asyncio'), or None to auto-detect / default to the
-        # NetworkSelector. Resolved here (not in the legacy compat shim) so the
-        # manager remains the durable entry point once compat.py is removed.
+        # NetworkSelector. Resolving here keeps the manager a self-sufficient
+        # entry point (durable once compat.py is removed).
+        #
+        # Ownership: the manager owns the net's lifecycle iff it created it (a
+        # name or None), not when a ready NetBackend instance was passed in.
+        # An owned net is auto-started lazily on first use and closed in
+        # close(); a passed-in instance is left alone (so the unit-test harness,
+        # which passes an unstarted NetworkSelector and drives it via
+        # drain()/poll(), is untouched).
+        self._owns_net = net is None or isinstance(net, str)
         self._net = resolve_backend(net, self.config)
         self.cluster = ClusterMetadata(
             bootstrap_servers=self.config['bootstrap_servers'],
@@ -113,6 +121,12 @@ class KafkaConnectionManager:
         if self.config['api_version'] is not None:
             self.broker_version_data = BrokerVersionData(self.config['api_version'])
         self.closed = False
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
 
     @property
     def broker_version(self):
@@ -187,7 +201,14 @@ class KafkaConnectionManager:
         self._bootstrap_future.add_errback(lambda exc: log.error('Bootstrap failed: %s', exc))
         return self._bootstrap_future
 
+    def _maybe_start(self):
+        """Start an owned net on first use (idempotent; no-op if already
+        running or if the net was passed in / is not owned)."""
+        if self._owns_net:
+            self._net.start()
+
     def bootstrap(self, timeout_ms=None, refresh=True):
+        self._maybe_start()
         self._net.run(self.bootstrap_async, timeout_ms, refresh)
 
     @property
@@ -399,6 +420,12 @@ class KafkaConnectionManager:
             for conn in list(self._conns.values()):
                 conn.close()
             self.cluster.close()
+            # Owned net: the manager created it, so it tears it down too
+            # (idempotent). A passed-in instance is the caller's to close.
+            # Skip when called from the IO thread itself (net.close() would
+            # join that thread) -- same guard the producer's close() uses.
+            if self._owns_net and not self._net.on_io_thread():
+                self._net.close()
 
     async def wait_for(self, future, timeout_ms):
         """Await `future` with a timeout in ms. Raises KafkaTimeoutError on timeout.
@@ -460,4 +487,5 @@ class KafkaConnectionManager:
         If no IO thread is running, falls back to driving the loop on the
         caller thread (legacy behavior).
         """
+        self._maybe_start()
         return self._net.run(coro, *args)
