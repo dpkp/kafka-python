@@ -507,9 +507,17 @@ class MockBroker:
                 raise Errors.KafkaConnectionError(
                     'connect to %s:%s refused (MockBroker stopped)'
                     % (host, port))
-            return MockTransport(
+            transport = MockTransport(
                 manager._net, broker,
                 node_id=protocol.node_id, host=host, port=port)
+            # create_connection contract: the backend wires the protocol and
+            # cleans up the transport if the conn refuses (closed mid-connect).
+            # Nothing is returned -- the conn drives it via conn.transport.
+            try:
+                protocol.connection_made(transport)
+            except Exception:
+                transport.close()
+                raise
 
         manager._net.create_connection = _mock_create_connection
 
@@ -705,9 +713,17 @@ class MockCluster:
             if broker is None or not broker.online:
                 raise Errors.KafkaConnectionError(
                     'connect to %s:%s refused' % (host, port))
-            return MockTransport(
+            transport = MockTransport(
                 manager._net, broker,
                 node_id=protocol.node_id, host=host, port=port)
+            # create_connection contract: the backend wires the protocol and
+            # cleans up the transport if the conn refuses (closed mid-connect).
+            # Nothing is returned -- the conn drives it via conn.transport.
+            try:
+                protocol.connection_made(transport)
+            except Exception:
+                transport.close()
+                raise
 
         manager._net.create_connection = _mock_create_connection
 

@@ -329,99 +329,64 @@ class AsyncioBackend:
                 'The asyncio backend does not support proxy_url yet; use the '
                 'default selector backend for SOCKS5/HTTP-CONNECT proxying.')
         server_hostname = host.rstrip('.') if ssl is not None else None
-        adapter = _AsyncioProtocolAdapter()
+        adapter = _AsyncioProtocolAdapter(protocol, host, port, socket_options)
         connect = self._loop.create_connection(
             lambda: adapter, host, port, ssl=ssl, server_hostname=server_hostname)
         try:
             if timeout_at is not None:
                 connect = asyncio.wait_for(connect, max(0.0, timeout_at - time.monotonic()))
-            aio_transport, _ = await connect
+            await connect
+            if adapter.error is not None:
+                raise adapter.error
         except asyncio.TimeoutError:
             raise Errors.KafkaConnectionError('Connection timed out')
         except Errors.KafkaError:
             raise
         except Exception as exc:  # noqa: BLE001  -- surface any connect error uniformly
             raise Errors.KafkaConnectionError('unable to connect to %s:%s: %s' % (host, port, exc))
+
+
+class _AsyncioProtocolAdapter(asyncio.Protocol):
+    """Thin asyncio.Protocol that wires a KafkaConnection to a wrapped transport."""
+
+    def __init__(self, conn, host, port, socket_options=()):
+        self._conn = conn
+        self._host = host
+        self._port = port
+        self._socket_options = socket_options
+        self.error = None
+        self.transport = None       # the _AsyncioTransport wrapper
+
+    def connection_made(self, aio_transport):
         sock = aio_transport.get_extra_info('socket')
         if sock is not None:
-            for option in socket_options:
+            for option in self._socket_options:
                 try:
                     sock.setsockopt(*option)
                 except OSError:
                     pass
-        return _AsyncioTransport(aio_transport, adapter, host, port)
-
-
-class _AsyncioProtocolAdapter(asyncio.Protocol):
-    """Bridges asyncio's Protocol callbacks to a KafkaConnection.
-
-    asyncio calls ``connection_made`` on this adapter during
-    ``create_connection`` -- before the manager wires the KafkaConnection via
-    ``transport.set_protocol(conn)`` (Option A: the caller runs connection_made
-    after its "closed during connect" check). Reading is paused until wired, so
-    no data is delivered early; a buffer/latched-loss is kept as a safety net.
-    """
-
-    def __init__(self):
-        self._kafka = None          # the KafkaConnection, once wired
-        self._transport = None
-        self._buffer = []
-        self._eof = False
-        self._lost = False
-        self._lost_exc = None
-        self._paused_writing = False
-        self._on_read = None        # bumps the wrapper's last_read
-
-    def connection_made(self, transport):
-        self._transport = transport
-        # Hold off delivery until the KafkaConnection is wired + resumes reading.
-        transport.pause_reading()
+        self.transport = _AsyncioTransport(aio_transport, self._host, self._port)
+        try:
+            self._conn.connection_made(self.transport)
+        except Exception as exc:  # noqa: BLE001  -- conn refused (closed mid-connect)
+            self.error = exc
+            aio_transport.abort()
 
     def data_received(self, data):
-        if self._on_read is not None:
-            self._on_read()
-        if self._kafka is None:
-            self._buffer.append(data)
-        else:
-            self._kafka.data_received(data)
+        self.transport._bump_read()
+        self._conn.data_received(data)
 
     def eof_received(self):
-        if self._kafka is not None:
-            return self._kafka.eof_received()
-        self._eof = True
-        return None
+        return self._conn.eof_received()
 
     def connection_lost(self, exc):
-        if self._kafka is not None:
-            self._kafka.connection_lost(exc)
-        else:
-            self._lost = True
-            self._lost_exc = exc
+        self._conn.connection_lost(exc)
 
     def pause_writing(self):
-        if self._kafka is not None:
-            self._kafka.pause_writing()
-        else:
-            self._paused_writing = True
+        self._conn.pause_writing()
 
     def resume_writing(self):
-        if self._kafka is not None:
-            self._kafka.resume_writing()
-        else:
-            self._paused_writing = False
-
-    def _wire(self, kafka_protocol, on_read):
-        self._kafka = kafka_protocol
-        self._on_read = on_read
-        if self._paused_writing:
-            kafka_protocol.pause_writing()
-        for data in self._buffer:
-            kafka_protocol.data_received(data)
-        self._buffer = []
-        if self._eof:
-            kafka_protocol.eof_received()
-        if self._lost:
-            kafka_protocol.connection_lost(self._lost_exc)
+        self._conn.resume_writing()
 
 
 class _AsyncioTransport:
@@ -433,9 +398,8 @@ class _AsyncioTransport:
     protocol, host/host_port/getPeer, and last_activity for idle sweeping.
     """
 
-    def __init__(self, transport, adapter, host, port):
+    def __init__(self, transport, host, port):
         self._t = transport
-        self._adapter = adapter
         self.host = host
         self._port = port
         self._protocol = None
@@ -454,7 +418,6 @@ class _AsyncioTransport:
 
     def set_protocol(self, protocol):
         self._protocol = protocol
-        self._adapter._wire(protocol, self._bump_read)
 
     def write(self, data):
         self.last_write = time.monotonic()

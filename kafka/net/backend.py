@@ -108,9 +108,14 @@ class Transport(Protocol):
     """The transport surface a backend's ``create_connection`` returns.
 
     The subset of the ``asyncio.Transport`` / Twisted ``ITransport`` surface
-    that ``KafkaConnection`` actually drives. The selector's
-    ``KafkaTCPTransport`` and an asyncio-transport adapter both satisfy it.
+    that ``KafkaConnection`` actually drives (plus ``last_activity``, which the
+    manager reads to sweep idle connections). A backend's ``create_connection``
+    builds one and wires it to the conn. The selector's ``KafkaTCPTransport``
+    and an asyncio-transport adapter both satisfy it.
     """
+
+    # Monotonic timestamp of the last read/write; manager idle-sweeping reads it.
+    last_activity: float
 
     def write(self, data: bytes) -> None: ...
     def close(self) -> None: ...
@@ -177,17 +182,20 @@ class NetBackend(Protocol):
         proxy_url: Optional[str] = None,
         socket_options: Sequence[Any] = (),
         timeout_at: Optional[float] = None,
-    ) -> Transport:
-        """Establish and return a connected :class:`Transport` to ``host:port``.
+    ) -> None:
+        """Establish a connected :class:`Transport` to ``host:port`` and wire it.
 
-        The backend owns DNS, connect, TLS and (where supported) proxying. The
-        *caller* wires the transport to the protocol afterwards via
-        ``protocol.connection_made(transport)`` (so manager-level policy such as
-        the "closed during connect" check runs first). ``protocol`` (a
-        ``KafkaConnection``) is passed because backends that own the socket
-        (asyncio/Twisted) need it at connect time to receive transport events;
-        they buffer inbound data until ``connection_made`` is called. Backends
-        without native proxy support raise when ``proxy_url`` is set.
+        The backend owns DNS, connect, TLS and (where supported) proxying, builds
+        a :class:`Transport`, and wires it to ``protocol`` by calling
+        ``protocol.connection_made(transport)`` itself -- mirroring
+        ``asyncio.loop.create_connection`` / Twisted, which own the socket and
+        wire the protocol at connect time. Nothing is returned: the caller drives
+        the connection through ``protocol`` (``conn.transport``), never a
+        transport handle. ``protocol`` (a ``KafkaConnection``) may *refuse* the
+        transport by raising from ``connection_made`` if it closed mid-connect;
+        on that (or any) failure the backend closes the orphaned transport
+        before propagating. Backends without native proxy support raise when
+        ``proxy_url`` is set.
         """
 
     # --- cross-thread bridge ---------------------------------------------

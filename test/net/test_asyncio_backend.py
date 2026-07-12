@@ -12,6 +12,7 @@ import time
 
 import pytest
 
+import kafka.errors as Errors
 from kafka.net.asyncio_backend import AsyncioBackend, AsyncioFuture
 from kafka.net.backend import NetBackend
 from kafka.net.manager import KafkaConnectionManager
@@ -182,13 +183,20 @@ class _StubProtocol:
     """Minimal KafkaConnection-shaped protocol for transport tests."""
     def __init__(self):
         self.received = bytearray()
-        self.lost = False
+        self.closed = False
+        self.transport = None
+    def connection_made(self, transport):
+        # Mirror KafkaConnection.connection_made: adopt + wire + start reading.
+        # create_connection() calls this itself under the new backend contract.
+        self.transport = transport
+        transport.set_protocol(self)
+        transport.resume_reading()
     def data_received(self, data):
         self.received += data
     def eof_received(self):
         return None
     def connection_lost(self, exc):
-        self.lost = True
+        self.closed = True
     def pause_writing(self):
         pass
     def resume_writing(self):
@@ -225,10 +233,10 @@ class TestCreateConnection:
         proto = _StubProtocol()
 
         async def do():
-            transport = await started_backend.create_connection(proto, host, port)
-            # Wire like manager._connect -> conn.connection_made does.
-            transport.set_protocol(proto)
-            transport.resume_reading()
+            # create_connection wires proto via proto.connection_made() itself
+            # and returns nothing; the transport lives on the conn (proto).
+            await started_backend.create_connection(proto, host, port)
+            transport = proto.transport
             assert transport.host_port() == '%s:%s' % (host, port)
             assert transport.getPeer()[0:2] == (host, port)
             transport.write(b'ping')
@@ -245,8 +253,9 @@ class TestCreateConnection:
             srv.close()
 
     def test_early_data_is_buffered_until_wired(self, started_backend):
-        # Server sends immediately on connect; data must not be lost before
-        # the protocol is wired via set_protocol().
+        # Server sends immediately on connect; data must not be lost. The adapter
+        # buffers between asyncio's connection_made and the wiring done inside
+        # create_connection (proto.connection_made -> set_protocol flushes it).
         srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         srv.bind(('127.0.0.1', 0))
@@ -263,10 +272,9 @@ class TestCreateConnection:
         proto = _StubProtocol()
 
         async def do():
-            transport = await started_backend.create_connection(proto, host, port)
-            await started_backend.sleep(0.05)  # let early bytes arrive (buffered)
-            transport.set_protocol(proto)      # wiring flushes the buffer
-            transport.resume_reading()
+            # create_connection wires proto (flushing any early-buffered bytes).
+            await started_backend.create_connection(proto, host, port)
+            transport = proto.transport
             for _ in range(100):
                 if proto.received:
                     break
@@ -288,6 +296,30 @@ class TestCreateConnection:
 
         with pytest.raises(Exception):  # KafkaConnectionError
             started_backend.run(do)
+
+    def test_connection_made_refusal_is_raised(self, started_backend):
+        # A conn that closed mid-connect refuses the transport by raising from
+        # connection_made. create_connection must surface that exception (not
+        # swallow it) and not leak the transport.
+        srv, host, port = _echo_server()
+
+        class _RefusingProtocol(_StubProtocol):
+            def connection_made(self, transport):
+                self.transport = transport
+                raise Errors.KafkaConnectionError('Connection closed during connect')
+
+        proto = _RefusingProtocol()
+
+        async def do():
+            await started_backend.create_connection(proto, host, port)
+
+        try:
+            with pytest.raises(Errors.KafkaConnectionError, match='closed during connect'):
+                started_backend.run(do)
+            # The transport was aborted, so it is closing (not leaked).
+            assert proto.transport.is_closing()
+        finally:
+            srv.close()
 
     def test_proxy_url_raises(self, started_backend):
         async def do():

@@ -438,9 +438,15 @@ class TestKafkaConnectionManagerConnectRace:
         transport = MagicMock()
 
         async def fake_create_connection(protocol, host, port, **kwargs):
-            # Simulate a concurrent close landing mid-connect.
+            # Simulate a concurrent close landing mid-connect, then the new
+            # create_connection contract: the backend wires the protocol (which
+            # refuses, since the conn closed) and cleans up the transport.
             conn.close()
-            return transport
+            try:
+                protocol.connection_made(transport)
+            except Exception:
+                transport.close()
+                raise
 
         with patch.object(net, 'create_connection',
                           side_effect=fake_create_connection):
