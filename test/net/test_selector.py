@@ -947,10 +947,9 @@ class TestRunBridgeBackstop:
     """
 
     @staticmethod
-    def _wedge(net):
+    def _wedge(net, release):
         """Occupy the single IO thread until released; returns (wedged, release)."""
         wedged = threading.Event()
-        release = threading.Event()
 
         async def wedge():
             wedged.set()
@@ -958,7 +957,6 @@ class TestRunBridgeBackstop:
 
         net.call_soon_threadsafe(wedge)
         assert wedged.wait(timeout=1.0), 'IO thread never entered the wedge'
-        return release
 
     def _run_in_thread(self, net, coro, **kw):
         outcome = {}
@@ -985,8 +983,9 @@ class TestRunBridgeBackstop:
         async def work():
             return 'ok'
 
+        release = threading.Event()
         try:
-            release = self._wedge(net)
+            self._wedge(net, release)
             th, outcome = self._run_in_thread(net, work)  # no timeout_ms
             assert not th.is_alive(), 'run() hung past the default deadline (#3121)'
             assert isinstance(outcome.get('exc'), KafkaTimeoutError), (
@@ -1005,8 +1004,9 @@ class TestRunBridgeBackstop:
         async def work():
             return 'ok'
 
+        release = threading.Event()
         try:
-            release = self._wedge(net)
+            self._wedge(net, release)
             th, outcome = self._run_in_thread(net, work, timeout_ms=100)
             assert not th.is_alive()
             assert isinstance(outcome.get('exc'), KafkaTimeoutError)
