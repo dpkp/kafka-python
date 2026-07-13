@@ -63,6 +63,11 @@ class KafkaAdminClient(
             20% below and 20% above the computed value. Default: 30000.
         request_timeout_ms (int): Client request timeout in milliseconds.
             Default: 30000.
+        default_api_timeout_ms (int): Default timeout in milliseconds for
+            blocking client APIs that do not take an explicit timeout. Bounds
+            the whole operation and serves as a liveness backstop so a stalled
+            IO loop cannot hang the calling thread indefinitely. Should be >=
+            request_timeout_ms. Default: 60000.
         connections_max_idle_ms: Close idle connections after the number of
             milliseconds specified by this config. The broker closes idle
             connections after connections.max.idle.ms, so this avoids hitting
@@ -183,6 +188,7 @@ class KafkaAdminClient(
         'bootstrap_servers': 'localhost',
         'client_id': 'kafka-python-' + __version__,
         'request_timeout_ms': 30000,
+        'default_api_timeout_ms': 60000,
         'connections_max_idle_ms': 9 * 60 * 1000,
         'reconnect_backoff_ms': 50,
         'reconnect_backoff_max_ms': 30000,

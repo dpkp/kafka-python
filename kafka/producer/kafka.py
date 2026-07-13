@@ -280,6 +280,11 @@ class KafkaProducer:
             errors. Default: 100.
         request_timeout_ms (int): Client request timeout in milliseconds.
             Default: 30000.
+        default_api_timeout_ms (int): Default timeout in milliseconds for
+            blocking client APIs that do not take an explicit timeout. Bounds
+            the whole operation and serves as a liveness backstop so a stalled
+            IO loop cannot hang the calling thread indefinitely. Should be >=
+            request_timeout_ms. Default: 60000.
         receive_message_max_bytes (int): Maximum allowed network frame size.
             Used to avoid OOM when decoding malformed network message header.
             Default: 100_000_000.
@@ -435,6 +440,7 @@ class KafkaProducer:
         'client_dns_lookup': 'use_all_dns_ips',
         'retry_backoff_ms': 100,
         'request_timeout_ms': 30000,
+        'default_api_timeout_ms': 60000,
         'receive_message_max_bytes': 100_000_000,
         'receive_buffer_bytes': None,
         'send_buffer_bytes': None,

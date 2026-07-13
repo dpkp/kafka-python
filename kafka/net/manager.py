@@ -28,6 +28,7 @@ class KafkaConnectionManager:
         'reconnect_backoff_ms': 50,
         'reconnect_backoff_max_ms': 30000,
         'request_timeout_ms': 30000,
+        'default_api_timeout_ms': 60000,
         'socket_connection_setup_timeout_ms': 10000,
         'socket_connection_setup_timeout_max_ms': 30000,
         'socket_options': [
@@ -467,7 +468,7 @@ class KafkaConnectionManager:
         """
         return self._net.call_soon_with_future(coro, *args)
 
-    def run(self, coro, *args):
+    def run(self, coro, *args, timeout_ms=None):
         """Schedules coro on the event loop, blocks until complete, returns value or raises.
 
         If an IO thread is running (via start()), the caller thread blocks on
@@ -476,6 +477,10 @@ class KafkaConnectionManager:
 
         If no IO thread is running, falls back to driving the loop on the
         caller thread (legacy behavior).
+
+        The blocking wait is bounded by ``timeout_ms`` (or the backend's
+        ``default_api_timeout_ms`` when None) plus a grace margin; see
+        :meth:`NetworkSelector.run`.
         """
         self._maybe_start()
-        return self._net.run(coro, *args)
+        return self._net.run(coro, *args, timeout_ms=timeout_ms)

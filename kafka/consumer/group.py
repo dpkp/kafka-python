@@ -103,6 +103,11 @@ class KafkaConsumer:
             message on a certain partition. Default: 1048576.
         request_timeout_ms (int): Client request timeout in milliseconds.
             Default: 305000.
+        default_api_timeout_ms (int): Default timeout in milliseconds for
+            blocking client APIs that do not take an explicit timeout (e.g.
+            commit()). Bounds the whole operation and serves as a liveness
+            backstop so a stalled IO loop cannot hang the calling thread
+            indefinitely. Should be >= request_timeout_ms. Default: 60000.
         retry_backoff_ms (int): Milliseconds to backoff when retrying on
             errors. Default: 100.
         reconnect_backoff_ms (int): The amount of time in milliseconds to
@@ -320,6 +325,7 @@ class KafkaConsumer:
         'fetch_max_bytes': 52428800,
         'max_partition_fetch_bytes': 1 * 1024 * 1024,
         'request_timeout_ms': 30000,
+        'default_api_timeout_ms': 60000,
         'retry_backoff_ms': 100,
         'reconnect_backoff_ms': 50,
         'reconnect_backoff_max_ms': 30000,

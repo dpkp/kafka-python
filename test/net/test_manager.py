@@ -46,6 +46,20 @@ class TestKafkaConnectionManagerConfig:
         m = KafkaConnectionManager(net, reconnect_backoff_ms=100)
         assert m.config['reconnect_backoff_ms'] == 100
 
+    def test_default_api_timeout_ms_default(self, net):
+        m = KafkaConnectionManager(net)
+        assert m.config['default_api_timeout_ms'] == 60000
+
+    def test_default_api_timeout_ms_flows_to_net_backend(self):
+        # net=None -> the manager constructs its own backend from config, so the
+        # user-supplied default_api_timeout_ms must reach it (issue #3121).
+        m = KafkaConnectionManager(default_api_timeout_ms=12345)
+        try:
+            assert m.config['default_api_timeout_ms'] == 12345
+            assert m._net.config['default_api_timeout_ms'] == 12345
+        finally:
+            m.close()
+
     def test_initial_state(self, net):
         manager = KafkaConnectionManager(net)
         assert manager._conns == {}
