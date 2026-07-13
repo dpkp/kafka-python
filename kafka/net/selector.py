@@ -207,6 +207,18 @@ class NetworkSelector:
         # When True, raise RuntimeError on slow tasks instead of just warning.
         # Useful in tests so livelocks fail loudly.
         'raise_on_slow_task': False,
+        # Default operation deadline for a cross-thread run() call that does not
+        # pass its own timeout_ms. Bounds the caller's blocking wait so a stalled
+        # IO loop (e.g. a synchronous rebalance listener/assignor or a blocking
+        # DNS lookup on the IO thread) cannot hang the caller indefinitely.
+        # Mirrors the Java client's default.api.timeout.ms.
+        'default_api_timeout_ms': 60000,
+        # Extra slack added on top of the operation deadline before run()'s
+        # cross-thread wait gives up. The coroutine enforces the operation
+        # deadline itself on a healthy loop; this margin ensures that self-timeout
+        # (and its unwind/retry-backoff) resolves and wins the race, so the
+        # backstop only trips when the loop genuinely isn't running the coroutine.
+        'bridge_grace_ms': 5000,
     }
 
     def __init__(self, **configs):
@@ -313,7 +325,26 @@ class NetworkSelector:
             state['exception'] = exc
             event.set()
 
-    def run(self, coro, *args):
+    def _bridge_deadline_secs(self, timeout_ms):
+        """Wall-clock ceiling for a cross-thread run() wait, in seconds.
+
+        The operation deadline defaults to ``default_api_timeout_ms`` when the
+        caller passes ``timeout_ms=None``; ``bridge_grace_ms`` is added so the
+        coroutine's own (equal) deadline wins the race on a healthy loop.
+        """
+        op_ms = timeout_ms if timeout_ms is not None else self.config['default_api_timeout_ms']
+        return (op_ms + self.config['bridge_grace_ms']) / 1000
+
+    def _bridge_timeout(self, coro, timeout_ms):
+        op_ms = timeout_ms if timeout_ms is not None else self.config['default_api_timeout_ms']
+        name = getattr(coro, '__name__', None) or repr(coro)
+        return Errors.KafkaTimeoutError(
+            'net.run(%s) did not complete within %d ms (+%d ms grace). The IO '
+            'event loop may be stalled by blocking work on the IO thread '
+            '(e.g. a synchronous rebalance listener/assignor).'
+            % (name, op_ms, self.config['bridge_grace_ms']))
+
+    def run(self, coro, *args, timeout_ms=None):
         """Schedules coro on the event loop, blocks until complete, returns value or raises.
 
         If an IO thread is running (via start()), the caller thread blocks on
@@ -322,12 +353,20 @@ class NetworkSelector:
 
         If no IO thread is running, falls back to driving the loop on the
         caller thread (legacy behavior).
+
+        The blocking wait is always bounded: if the coroutine does not complete
+        within ``timeout_ms`` (or ``default_api_timeout_ms`` when None), plus a
+        grace margin, KafkaTimeoutError is raised. This is a liveness backstop
+        for a stalled IO loop; the coroutine itself is left running (see #3121).
         """
         if self._closed:
             raise RuntimeError('NetworkSelector closed!')
+        deadline_secs = self._bridge_deadline_secs(timeout_ms)
         if self._io_thread is None:
             future = self.call_soon_with_future(coro, *args)
-            self.poll(future=future)
+            self.poll(timeout_ms=deadline_secs * 1000, future=future)
+            if not future.is_done:
+                raise self._bridge_timeout(coro, timeout_ms)
             if future.exception is not None:
                 raise future.exception
             return future.value
@@ -359,7 +398,11 @@ class NetworkSelector:
         with self._pending_waiters_lock:
             self._pending_waiters[event] = state
         self.call_soon_threadsafe(waiter)
-        event.wait()
+        if not event.wait(timeout=deadline_secs):
+            # Loop never ran the coroutine to completion within the deadline.
+            # Leave the waiter registered: if the coroutine later finishes, its
+            # `finally` pops _pending_waiters and sets the (now-ignored) event.
+            raise self._bridge_timeout(coro, timeout_ms)
         if state['exception'] is not None:
             raise state['exception']  # pylint: disable=E0702
         return state['value']

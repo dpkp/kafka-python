@@ -932,3 +932,131 @@ class TestSlowTaskMonitor:
         # Restore and verify the lock was released so the next poll succeeds.
         net._poll_once = orig
         net.poll(timeout_ms=10)  # would raise 'Concurrent access' if leaked
+
+
+class TestRunBridgeBackstop:
+    """Issue #3121: NetworkSelector.run() must bound its cross-thread wait so a
+    stalled IO loop can't hang a caller thread forever.
+
+    The original bug: run() blocked on a bare event.wait() with no timeout, so a
+    user-thread commit()/poll() hung indefinitely whenever the IO loop stopped
+    making progress (a blocking sync rebalance listener/assignor, or a blocking
+    DNS lookup on the IO thread). run() now bounds the wait by timeout_ms (or
+    default_api_timeout_ms when None) plus a grace margin, and raises
+    KafkaTimeoutError as a liveness backstop.
+    """
+
+    @staticmethod
+    def _wedge(net, release):
+        """Occupy the single IO thread until released; returns (wedged, release)."""
+        wedged = threading.Event()
+
+        async def wedge():
+            wedged.set()
+            release.wait(timeout=5.0)  # safety cap so the suite can't hang
+
+        net.call_soon_threadsafe(wedge)
+        assert wedged.wait(timeout=1.0), 'IO thread never entered the wedge'
+
+    def _run_in_thread(self, net, coro, **kw):
+        outcome = {}
+
+        def caller():
+            start = time.monotonic()
+            try:
+                outcome['value'] = net.run(coro, **kw)
+            except BaseException as exc:  # noqa: B036 - record whatever surfaces
+                outcome['exc'] = exc
+            outcome['elapsed'] = time.monotonic() - start
+
+        th = threading.Thread(target=caller, daemon=True)
+        th.start()
+        th.join(timeout=2.0)
+        return th, outcome
+
+    def test_default_deadline_bounds_wedged_loop(self):
+        """With no explicit timeout_ms, run() is still bounded by
+        default_api_timeout_ms (+grace) -- the core #3121 fix."""
+        net = NetworkSelector(default_api_timeout_ms=100, bridge_grace_ms=100)
+        net.start()
+
+        async def work():
+            return 'ok'
+
+        release = threading.Event()
+        try:
+            self._wedge(net, release)
+            th, outcome = self._run_in_thread(net, work)  # no timeout_ms
+            assert not th.is_alive(), 'run() hung past the default deadline (#3121)'
+            assert isinstance(outcome.get('exc'), KafkaTimeoutError), (
+                'expected KafkaTimeoutError, got: %r' % outcome)
+            assert 0.15 <= outcome['elapsed'] < 2.0
+            assert 'may be stalled' in str(outcome['exc'])
+        finally:
+            release.set()
+            net.close()
+
+    def test_explicit_timeout_bounds_wedged_loop(self):
+        """An explicit timeout_ms is honored even when the loop is wedged."""
+        net = NetworkSelector(default_api_timeout_ms=60000, bridge_grace_ms=100)
+        net.start()
+
+        async def work():
+            return 'ok'
+
+        release = threading.Event()
+        try:
+            self._wedge(net, release)
+            th, outcome = self._run_in_thread(net, work, timeout_ms=100)
+            assert not th.is_alive()
+            assert isinstance(outcome.get('exc'), KafkaTimeoutError)
+            assert 0.15 <= outcome['elapsed'] < 2.0
+        finally:
+            release.set()
+            net.close()
+
+    def test_healthy_loop_returns_value(self):
+        """The backstop must not perturb the normal path."""
+        net = NetworkSelector(default_api_timeout_ms=100, bridge_grace_ms=100)
+        net.start()
+
+        async def work():
+            return 42
+
+        try:
+            assert net.run(work) == 42
+        finally:
+            net.close()
+
+    def test_healthy_loop_propagates_coroutine_exception(self):
+        """A coroutine that raises surfaces its own exception, not the backstop's
+        generic timeout -- the backstop only fires on non-completion."""
+        net = NetworkSelector(default_api_timeout_ms=100, bridge_grace_ms=100)
+        net.start()
+
+        async def boom():
+            raise ValueError('from coroutine')
+
+        try:
+            with pytest.raises(ValueError, match='from coroutine'):
+                net.run(boom)
+        finally:
+            net.close()
+
+    def test_no_io_thread_fallback_honors_deadline(self):
+        """The no-IO-thread fallback path (drives the loop inline) also bounds
+        the wait -- previously it called poll(future=...) with no timeout."""
+        net = NetworkSelector(default_api_timeout_ms=100, bridge_grace_ms=50)
+        never = net.create_future()  # never resolved
+
+        async def waits_forever():
+            return await never
+
+        try:
+            start = time.monotonic()
+            with pytest.raises(KafkaTimeoutError):
+                net.run(waits_forever)  # no start() -> fallback path
+            elapsed = time.monotonic() - start
+            assert 0.1 <= elapsed < 2.0
+        finally:
+            net.close()

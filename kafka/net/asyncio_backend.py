@@ -94,6 +94,12 @@ class AsyncioBackend:
         self._io_thread = None
         self._closed = False
         self._client_id = configs.get('client_id') or 'kafka-python'
+        # See NetworkSelector: default operation deadline + grace margin for the
+        # cross-thread run() liveness backstop (#3121).
+        self._default_api_timeout_ms = configs.get('default_api_timeout_ms') or 60000
+        self._bridge_grace_ms = configs.get('bridge_grace_ms')
+        if self._bridge_grace_ms is None:
+            self._bridge_grace_ms = 5000
         # Strong refs to live tasks (asyncio only holds weak refs, so bare
         # tasks can be GC'd mid-flight); mirrors NetworkSelector._pending_tasks.
         self._pending = set()
@@ -287,7 +293,7 @@ class AsyncioBackend:
         return future
 
     # --- cross-thread bridge ---------------------------------------------
-    def run(self, coro, *args):
+    def run(self, coro, *args, timeout_ms=None):
         if self._closed:
             raise RuntimeError('AsyncioBackend closed!')
         if self._io_thread is None:
@@ -299,6 +305,8 @@ class AsyncioBackend:
                 "(or another IO-thread callback) calls a blocking consumer/admin API. "
                 "Use AsyncConsumerRebalanceListener and await the async variant, "
                 "or move the blocking work to a worker thread.")
+        op_ms = timeout_ms if timeout_ms is not None else self._default_api_timeout_ms
+        deadline_secs = (op_ms + self._bridge_grace_ms) / 1000
         event = threading.Event()
         state = {'value': None, 'exception': None}
 
@@ -316,7 +324,15 @@ class AsyncioBackend:
         with self._pending_waiters_lock:
             self._pending_waiters[event] = state
         self.call_soon(waiter)
-        event.wait()
+        if not event.wait(timeout=deadline_secs):
+            # Loop never ran the coroutine to completion; leave the waiter
+            # registered (its finally pops it) and surface a liveness timeout.
+            name = getattr(coro, '__name__', None) or repr(coro)
+            raise Errors.KafkaTimeoutError(
+                'net.run(%s) did not complete within %d ms (+%d ms grace). The '
+                'IO event loop may be stalled by blocking work on the IO thread '
+                '(e.g. a synchronous rebalance listener/assignor).'
+                % (name, op_ms, self._bridge_grace_ms))
         if state['exception'] is not None:
             raise state['exception']  # pylint: disable=raising-bad-type
         return state['value']

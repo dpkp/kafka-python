@@ -28,6 +28,7 @@ class KafkaConnectionManager:
         'reconnect_backoff_ms': 50,
         'reconnect_backoff_max_ms': 30000,
         'request_timeout_ms': 30000,
+        'default_api_timeout_ms': 60000,
         'socket_connection_setup_timeout_ms': 10000,
         'socket_connection_setup_timeout_max_ms': 30000,
         'socket_options': [
@@ -71,6 +72,11 @@ class KafkaConnectionManager:
             raise ValueError(
                 "client_dns_lookup must be one of %s; got %r"
                 % (self._VALID_DNS_LOOKUP_MODES, self.config['client_dns_lookup']))
+
+        if self.config['default_api_timeout_ms'] < self.config['request_timeout_ms']:
+            raise Errors.KafkaConfigurationError(
+                "default_api_timeout_ms (%s) must be >= request_timeout_ms (%s)"
+                % (self.config['default_api_timeout_ms'], self.config['request_timeout_ms']))
 
         if configs.get('socks5_proxy') is not None:
             if self.config['proxy_url'] is None:
@@ -467,7 +473,7 @@ class KafkaConnectionManager:
         """
         return self._net.call_soon_with_future(coro, *args)
 
-    def run(self, coro, *args):
+    def run(self, coro, *args, timeout_ms=None):
         """Schedules coro on the event loop, blocks until complete, returns value or raises.
 
         If an IO thread is running (via start()), the caller thread blocks on
@@ -476,6 +482,10 @@ class KafkaConnectionManager:
 
         If no IO thread is running, falls back to driving the loop on the
         caller thread (legacy behavior).
+
+        The blocking wait is bounded by ``timeout_ms`` (or the backend's
+        ``default_api_timeout_ms`` when None) plus a grace margin; see
+        :meth:`NetworkSelector.run`.
         """
         self._maybe_start()
-        return self._net.run(coro, *args)
+        return self._net.run(coro, *args, timeout_ms=timeout_ms)

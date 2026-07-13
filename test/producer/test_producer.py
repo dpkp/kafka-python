@@ -6,10 +6,18 @@ from unittest.mock import MagicMock
 import pytest
 
 from kafka import KafkaProducer
+from kafka.errors import KafkaConfigurationError
 from kafka.partitioner import Partitioner, StickyPartitioner
 from kafka.producer.transaction_manager import TransactionManager, ProducerIdAndEpoch
 
 from test.mock_broker import MockBroker
+
+
+def test_default_api_timeout_smaller_than_request_timeout_raises():
+    # Validation runs before any network/bootstrap, so no broker is needed.
+    with pytest.raises(KafkaConfigurationError):
+        KafkaProducer(bootstrap_servers='localhost:9092', api_version=(0, 9),
+                      request_timeout_ms=70000, default_api_timeout_ms=60000)
 
 
 def _mock_producer(**configs):

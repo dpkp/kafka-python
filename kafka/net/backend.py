@@ -199,8 +199,13 @@ class NetBackend(Protocol):
         """
 
     # --- cross-thread bridge ---------------------------------------------
-    def run(self, coro: Any, *args: Any) -> Any:
+    def run(self, coro: Any, *args: Any, timeout_ms: Optional[float] = None) -> Any:
         """Schedule ``coro`` on the loop, block the calling thread, return/raise.
+
+        The blocking wait is bounded: if the coroutine does not complete within
+        ``timeout_ms`` (or the backend's ``default_api_timeout_ms`` when None),
+        plus a grace margin, ``KafkaTimeoutError`` is raised as a liveness
+        backstop against a stalled IO loop.
 
         Raises ``RuntimeError`` if called from the IO thread itself.
         """
