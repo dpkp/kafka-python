@@ -495,6 +495,11 @@ class KafkaProducer:
         self.config.pop('selector')
         self.config.update(configs)
 
+        if self.config['default_api_timeout_ms'] < self.config['request_timeout_ms']:
+            raise Errors.KafkaConfigurationError(
+                "default_api_timeout_ms ({}) must be >= request_timeout_ms ({})."
+                .format(self.config['default_api_timeout_ms'], self.config['request_timeout_ms']))
+
         for key in ('key_serializer', 'value_serializer'):
             if self.config[key] is not None and not isinstance(self.config[key], Serializer):
                 warnings.warn('%s does not implement kafka.serializer.Serializer' % (key,), category=DeprecationWarning, stacklevel=3)

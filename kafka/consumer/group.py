@@ -409,6 +409,12 @@ class KafkaConsumer:
                 "fetch_max_wait_ms ({})."
                 .format(connections_max_idle_ms, request_timeout_ms, fetch_max_wait_ms))
 
+        default_api_timeout_ms = self.config['default_api_timeout_ms']
+        if default_api_timeout_ms < request_timeout_ms:
+            raise KafkaConfigurationError(
+                "default_api_timeout_ms ({}) must be >= request_timeout_ms ({})."
+                .format(default_api_timeout_ms, request_timeout_ms))
+
         # fetch_max_bytes (KIP-74) is a soft cap the broker applies to the
         # *record data* in a FetchResponse body, not to the whole frame. The
         # frame also carries the response header + per-topic/per-partition

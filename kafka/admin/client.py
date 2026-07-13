@@ -239,6 +239,11 @@ class KafkaAdminClient(
         self.config.pop('selector')
         self.config.update(configs)
 
+        if self.config['default_api_timeout_ms'] < self.config['request_timeout_ms']:
+            raise KafkaConfigurationError(
+                "default_api_timeout_ms ({}) must be >= request_timeout_ms ({})."
+                .format(self.config['default_api_timeout_ms'], self.config['request_timeout_ms']))
+
         # Configure metrics
         metrics_tags = {'client-id': self.config['client_id']}
         metric_config = MetricConfig(samples=self.config['metrics_num_samples'],

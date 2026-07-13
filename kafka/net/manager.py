@@ -73,6 +73,11 @@ class KafkaConnectionManager:
                 "client_dns_lookup must be one of %s; got %r"
                 % (self._VALID_DNS_LOOKUP_MODES, self.config['client_dns_lookup']))
 
+        if self.config['default_api_timeout_ms'] < self.config['request_timeout_ms']:
+            raise Errors.KafkaConfigurationError(
+                "default_api_timeout_ms (%s) must be >= request_timeout_ms (%s)"
+                % (self.config['default_api_timeout_ms'], self.config['request_timeout_ms']))
+
         if configs.get('socks5_proxy') is not None:
             if self.config['proxy_url'] is None:
                 log.warning('socks5_proxy is deprecated, use proxy_url instead')
