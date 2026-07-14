@@ -679,8 +679,8 @@ class KafkaConsumer:
         message read if a consumer is restarted, the committed offset should be
         the next message your application should consume, i.e.: last_offset + 1.
 
-        Blocks until either the commit succeeds or an unrecoverable error is
-        encountered (in which case it is thrown to the caller).
+        Blocks until the commit succeeds, an unrecoverable error is encountered
+        (in which case it is thrown to the caller), or the timeout expires.
 
         Currently only supports kafka-topic offset storage (not zookeeper).
 
@@ -688,10 +688,14 @@ class KafkaConsumer:
             offsets (dict, optional): {TopicPartition: OffsetAndMetadata} dict
                 to commit with the configured group_id. Defaults to currently
                 consumed offsets for all subscribed partitions.
+            timeout_ms (numeric, optional): Maximum time in milliseconds to
+                block. Defaults to default_api_timeout_ms.
 
         Raises:
             IncompatibleBrokerVersion: if broker version < 0.8.1
             IllegalStateError: if group_id is None
+            KafkaTimeoutError: if the commit does not complete within timeout_ms
+                (default default_api_timeout_ms).
         """
         if self.config['api_version'] < (0, 8, 1):
             raise Errors.IncompatibleBrokerVersion('Requires >= Kafka 0.8.1')
@@ -734,6 +738,8 @@ class KafkaConsumer:
             partition (TopicPartition): The partition to check.
             metadata (bool, optional): If True, return OffsetAndMetadata struct
                 instead of offset int. Default: False.
+            timeout_ms (numeric, optional): Maximum time in milliseconds to
+                block. Defaults to default_api_timeout_ms.
 
         Returns:
             The last committed offset (int or OffsetAndMetadata), or None if there was no prior commit.
@@ -742,7 +748,8 @@ class KafkaConsumer:
             IncompatibleBrokerVersion: if broker version < 0.8.1
             IllegalStateError: if group_id is None
             TypeError: if partition is not TopicPartition
-            KafkaTimeoutError: if timeout_ms provided
+            KafkaTimeoutError: if the offsets are not fetched within timeout_ms
+                (default default_api_timeout_ms).
             BrokerResponseError: if OffsetFetchRequest raises an error.
         """
         if self.config['api_version'] < (0, 8, 1):
@@ -1218,14 +1225,15 @@ class KafkaConsumer:
         partition. ``None`` will also be returned for the partition if there
         are no messages in it.
 
-        Note: This method may block indefinitely if the partition does not exist
-            and no timeout_ms provided.
+        Note: This method blocks up to timeout_ms (default
+            default_api_timeout_ms) if the partition does not exist.
 
         Arguments:
             timestamps (dict): ``{TopicPartition: int}`` mapping from partition
                 to the timestamp to look up. Unit should be milliseconds since
                 beginning of the epoch (midnight Jan 1, 1970 (UTC))
             timeout_ms (int, optional): Milliseconds to block fetching offsets.
+                Defaults to default_api_timeout_ms.
 
         Returns:
             ``{TopicPartition: OffsetAndTimestamp}``: mapping from partition
@@ -1236,9 +1244,10 @@ class KafkaConsumer:
             ValueError: If the target timestamp is negative
             UnsupportedVersionError: If the broker does not support looking
                 up the offsets by timestamp.
-            KafkaTimeoutError: If fetch failed in request_timeout_ms
+            KafkaTimeoutError: if the offsets are not fetched within timeout_ms
+                (default default_api_timeout_ms)
         """
-        timeout_ms = self.config['request_timeout_ms'] if timeout_ms is None else timeout_ms
+        timeout_ms = self.config['default_api_timeout_ms'] if timeout_ms is None else timeout_ms
         for tp, ts in timestamps.items():
             timestamps[tp] = int(ts)
             if ts < 0:
@@ -1253,13 +1262,14 @@ class KafkaConsumer:
         This method does not change the current consumer position of the
         partitions.
 
-        Note: This method may block indefinitely if the partition does not exist
-            and no timeout_ms provided.
+        Note: This method blocks up to timeout_ms (default
+            default_api_timeout_ms) if the partition does not exist.
 
         Arguments:
             partitions (list): List of TopicPartition instances to fetch
                 offsets for.
             timeout_ms (int, optional): Milliseconds to block fetching offsets.
+                Defaults to default_api_timeout_ms.
 
         Returns:
             ``{TopicPartition: int}``: The earliest available offsets for the
@@ -1268,9 +1278,10 @@ class KafkaConsumer:
         Raises:
             UnsupportedVersionError: If the broker does not support looking
                 up the offsets by timestamp.
-            KafkaTimeoutError: If fetch failed in timeout_ms.
+            KafkaTimeoutError: if not completed within timeout_ms (default
+                default_api_timeout_ms).
         """
-        timeout_ms = self.config['request_timeout_ms'] if timeout_ms is None else timeout_ms
+        timeout_ms = self.config['default_api_timeout_ms'] if timeout_ms is None else timeout_ms
         offsets = self._fetcher.beginning_offsets(partitions, timeout_ms)
         return offsets
 
@@ -1282,13 +1293,14 @@ class KafkaConsumer:
         This method does not change the current consumer position of the
         partitions.
 
-        Note: This method may block indefinitely if the partition does not exist
-            and no timeout_ms provided.
+        Note: This method blocks up to timeout_ms (default
+            default_api_timeout_ms) if the partition does not exist.
 
         Arguments:
             partitions (list): List of TopicPartition instances to fetch
                 offsets for.
             timeout_ms (int, optional): Milliseconds to block fetching offsets.
+                Defaults to default_api_timeout_ms.
 
         Returns:
             ``{TopicPartition: int}``: The end offsets for the given partitions.
@@ -1296,9 +1308,10 @@ class KafkaConsumer:
         Raises:
             UnsupportedVersionError: If the broker does not support looking
                 up the offsets by timestamp.
-            KafkaTimeoutError: If fetch failed in timeout_ms
+            KafkaTimeoutError: if not completed within timeout_ms (default
+                default_api_timeout_ms).
         """
-        timeout_ms = self.config['request_timeout_ms'] if timeout_ms is None else timeout_ms
+        timeout_ms = self.config['default_api_timeout_ms'] if timeout_ms is None else timeout_ms
         offsets = self._fetcher.end_offsets(partitions, timeout_ms)
         return offsets
 

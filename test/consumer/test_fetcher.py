@@ -642,7 +642,7 @@ def _capture_wakeup(fetcher, mocker):
     without blocking, mirroring net.run(manager.wait_for, wakeup, timeout)."""
     captured = {}
 
-    def fake_run(coro, *args):
+    def fake_run(coro, *args, timeout_ms=None):
         captured['wakeup'] = args[0]
         return None
 
@@ -674,8 +674,10 @@ def test_fetch_records_no_stall_when_response_arrives_before_wait(fetcher, topic
 
     outcome = {'stalled': None}
 
-    def realistic_run(coro, wakeup, timeout_ms):
-        # Stand-in for net.run(manager.wait_for, wakeup, timeout_ms).
+    def realistic_run(coro, wakeup, wait_timeout_ms, timeout_ms=None):
+        # Stand-in for net.run(manager.wait_for, wakeup, wait_timeout_ms,
+        # timeout_ms=...). The positional wait_for timeout and the run() backstop
+        # kwarg carry the same value.
         if wakeup.is_done:
             outcome['stalled'] = False
             # Emulate the IO thread having buffered the response that
