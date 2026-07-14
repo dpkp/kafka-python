@@ -349,7 +349,8 @@ class ClusterAdminMixin:
             dict of {feature_name: 'OK' | error message}
         """
         return self._manager.run(self._async_update_features,
-                                 feature_updates, validate_only, timeout_ms)
+                                 feature_updates, validate_only, timeout_ms,
+                                 timeout_ms=timeout_ms)
 
 
 class UpdateFeatureType(EnumHelper, IntEnum):

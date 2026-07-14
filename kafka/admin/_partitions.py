@@ -212,7 +212,9 @@ class PartitionAdminMixin:
         Returns:
             dict {topicPartition -> metadata}
         """
-        return self._manager.run(self._async_delete_records, records_to_delete, timeout_ms, partition_leader_id)
+        return self._manager.run(self._async_delete_records, records_to_delete,
+                                 timeout_ms, partition_leader_id,
+                                 timeout_ms=timeout_ms)
 
     def _get_all_topic_partitions(self, topics=None):
         return [
@@ -386,7 +388,8 @@ class PartitionAdminMixin:
             ``'removing_replicas'`` (each a list of broker IDs).
         """
         return self._manager.run(
-            self._async_list_partition_reassignments, topic_partitions, timeout_ms)
+            self._async_list_partition_reassignments, topic_partitions, timeout_ms,
+            timeout_ms=timeout_ms)
 
     async def _async_describe_topic_partitions(self, topics, response_partition_limit, cursor):
         _Topic = DescribeTopicPartitionsRequest.TopicRequest
@@ -573,7 +576,8 @@ class PartitionAdminMixin:
                 of ListOffsetsRequest compatible with the requested specs.
         """
         return self._manager.run(
-            self._async_list_partition_offsets, topic_partition_specs, isolation_level, timeout_ms)
+            self._async_list_partition_offsets, topic_partition_specs, isolation_level, timeout_ms,
+            timeout_ms=timeout_ms)
 
 
 class NewPartitions:
