@@ -67,7 +67,7 @@ class TestKafkaConnectionCheckApiVersions:
     def _make_conn(self, net, **kwargs):
         conn = KafkaConnection(net, node_id='test-0', **kwargs)
         transport = MagicMock()
-        transport.getPeer.return_value = ('127.0.0.1', 9092)
+        transport.get_peer.return_value = ('127.0.0.1', 9092)
         conn.transport = transport
         conn.initializing = True
         return conn
@@ -264,7 +264,7 @@ class TestKafkaConnectionSendRequest:
         connection.initializing = False
         connection.connected = True
         transport = MagicMock()
-        transport.getPeer.return_value = ('127.0.0.1', 9092, 0, 0)
+        transport.get_peer.return_value = ('127.0.0.1', 9092, 0, 0)
         connection.transport = transport
         connection.parser = MagicMock()
         cid = [0]
@@ -310,7 +310,7 @@ class TestKafkaConnectionConnectionLifecycle:
     def test_connection_made(self, connection):
         transport = MagicMock()
         transport.get_protocol.return_value = None
-        transport.getPeer.return_value = ('127.0.0.1', 9092)
+        transport.get_peer.return_value = ('127.0.0.1', 9092)
         connection.connection_made(transport)
         assert connection.transport is transport
         assert connection.initializing is True
@@ -350,7 +350,7 @@ class TestKafkaConnectionConnectionLifecycle:
     def test_init_complete_drains_buffer(self, net):
         proto = KafkaConnection(net, node_id='test')
         transport = MagicMock()
-        transport.getPeer.return_value = ('127.0.0.1', 9092, 0, 0)
+        transport.get_peer.return_value = ('127.0.0.1', 9092, 0, 0)
         proto.transport = transport
         request = MagicMock()
         request.API_VERSION = 1
@@ -458,7 +458,7 @@ class TestKafkaConnectionSasl:
                                security_protocol='SASL_PLAINTEXT',
                                sasl_mechanism='PLAIN')
         transport = MagicMock()
-        transport.getPeer.return_value = ('127.0.0.1', 9092)
+        transport.get_peer.return_value = ('127.0.0.1', 9092)
         conn.transport = transport
         conn.initializing = True
 
@@ -483,7 +483,7 @@ class TestKafkaConnectionSasl:
                                security_protocol='SASL_PLAINTEXT',
                                sasl_mechanism='PLAIN')
         transport = MagicMock()
-        transport.getPeer.return_value = ('127.0.0.1', 9092)
+        transport.get_peer.return_value = ('127.0.0.1', 9092)
         conn.transport = transport
         conn.initializing = True
 
@@ -510,7 +510,7 @@ class TestKafkaConnectionSasl:
                                sasl_plain_username='user',
                                sasl_plain_password='pass')
         transport = MagicMock()
-        transport.getPeer.return_value = ('127.0.0.1', 9092)
+        transport.get_peer.return_value = ('127.0.0.1', 9092)
         conn.transport = transport
         conn.initializing = True
 
@@ -550,7 +550,7 @@ class TestKafkaConnectionSasl:
                                sasl_plain_username='user',
                                sasl_plain_password='wrong')
         transport = MagicMock()
-        transport.getPeer.return_value = ('127.0.0.1', 9092)
+        transport.get_peer.return_value = ('127.0.0.1', 9092)
         conn.transport = transport
         conn.initializing = True
 
@@ -620,7 +620,7 @@ class TestKafkaConnectionSasl:
             sasl_plain_username='user', sasl_plain_password='pass')
         transport = MagicMock()
         transport.host = 'kafka.example.com'
-        transport.getPeer.return_value = ('10.0.0.1', 9092)
+        transport.get_peer.return_value = ('10.0.0.1', 9092)
         conn.transport = transport
         conn.initializing = True
 
@@ -634,7 +634,7 @@ class TestKafkaConnectionSasl:
             sasl_plain_username='user', sasl_plain_password='pass')
         transport = MagicMock()
         transport.host = None
-        transport.getPeer.return_value = ('10.0.0.1', 9092)
+        transport.get_peer.return_value = ('10.0.0.1', 9092)
         conn.transport = transport
         conn.initializing = True
 

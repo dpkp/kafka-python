@@ -411,7 +411,7 @@ class _AsyncioTransport:
     Wraps an asyncio transport + its protocol adapter and exposes the surface
     KafkaConnection / the manager drive (a superset of the NetBackend Transport
     protocol): write/close/abort/is_closing, pause/resume_reading, set/get
-    protocol, host/host_port/getPeer, and last_activity for idle sweeping.
+    protocol, host/host_port/get_peer, and last_activity for idle sweeping.
     """
 
     def __init__(self, transport, host, port):
@@ -461,7 +461,7 @@ class _AsyncioTransport:
         except (RuntimeError, AttributeError):
             pass
 
-    def getPeer(self):
+    def get_peer(self):
         peer = self._t.get_extra_info('peername')
         return peer if peer is not None else (self.host, self._port)
 

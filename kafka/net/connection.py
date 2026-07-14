@@ -283,7 +283,7 @@ class KafkaConnection:
         self.initializing = True
         self.transport.resume_reading()
         try:
-            log_prefix = 'node=%s[%s:%s]' % (self.node_id, *self.transport.getPeer()[0:2])
+            log_prefix = 'node=%s[%s:%s]' % (self.node_id, *self.transport.get_peer()[0:2])
         except Exception:
             log.exception('Failed to build connection log_prefix')
             log_prefix = ''
@@ -456,7 +456,7 @@ class KafkaConnection:
         # Prefer the configured hostname (stored on the transport) so that
         # mechanisms like GSSAPI construct service principals against the
         # user-supplied name, not whichever IP getaddrinfo handed us.
-        sasl_host = self.transport.host if self.transport.host else self.transport.getPeer()[0]
+        sasl_host = self.transport.host if self.transport.host else self.transport.get_peer()[0]
         mechanism = get_sasl_mechanism(self.config['sasl_mechanism'])(
             host=sasl_host, **self.config)
 

@@ -191,7 +191,7 @@ class TestSaslReauthenticationUnit:
 
         conn = KafkaConnection(net, node_id='test', **SASL_CONFIG)
         transport = MagicMock()
-        transport.getPeer.return_value = ('127.0.0.1', 9092)
+        transport.get_peer.return_value = ('127.0.0.1', 9092)
         transport.host = 'broker'
         conn.transport = transport
         conn.initializing = True

@@ -159,7 +159,7 @@ class MockTransport:
     def getHost(self):
         return (self._host, 0)
 
-    def getPeer(self):
+    def get_peer(self):
         return (self._host, self._port)
 
     def host_port(self):

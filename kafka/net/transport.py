@@ -294,7 +294,7 @@ class KafkaTCPTransport:
         """
         return self._sock.getsockname()
 
-    def getPeer(self):
+    def get_peer(self):
         """Get the remote address of this connection.
 
         Treat this method with caution. It is the unfortunate result of the CGI and Jabber standards,

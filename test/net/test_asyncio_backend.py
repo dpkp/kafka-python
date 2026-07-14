@@ -238,7 +238,7 @@ class TestCreateConnection:
             await started_backend.create_connection(proto, host, port)
             transport = proto.transport
             assert transport.host_port() == '%s:%s' % (host, port)
-            assert transport.getPeer()[0:2] == (host, port)
+            assert transport.get_peer()[0:2] == (host, port)
             transport.write(b'ping')
             for _ in range(100):
                 if proto.received:
