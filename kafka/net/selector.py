@@ -333,6 +333,8 @@ class NetworkSelector:
         coroutine's own (equal) deadline wins the race on a healthy loop.
         """
         op_ms = timeout_ms if timeout_ms is not None else self.config['default_api_timeout_ms']
+        if op_ms >= threading.TIMEOUT_MAX:
+            return None
         return (op_ms + self.config['bridge_grace_ms']) / 1000
 
     def _bridge_timeout(self, coro, timeout_ms):
@@ -364,7 +366,7 @@ class NetworkSelector:
         deadline_secs = self._bridge_deadline_secs(timeout_ms)
         if self._io_thread is None:
             future = self.call_soon_with_future(coro, *args)
-            self.poll(timeout_ms=deadline_secs * 1000, future=future)
+            self.poll(future=future, timeout_ms=deadline_secs * 1000 if deadline_secs is not None else None)
             if not future.is_done:
                 raise self._bridge_timeout(coro, timeout_ms)
             if future.exception is not None:
