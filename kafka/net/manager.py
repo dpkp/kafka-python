@@ -215,7 +215,7 @@ class KafkaConnectionManager:
 
     def bootstrap(self, timeout_ms=None, refresh=True):
         self._maybe_start()
-        self._net.run(self.bootstrap_async, timeout_ms, refresh)
+        self._net.run(self.bootstrap_async, timeout_ms, refresh, timeout_ms=timeout_ms)
 
     @property
     def bootstrapped(self):

@@ -1,7 +1,10 @@
+from unittest.mock import PropertyMock
+
 import pytest
 
 from kafka import ConsumerGroupMetadata, KafkaConsumer, TopicPartition
-from kafka.errors import KafkaConfigurationError, IllegalStateError
+from kafka.errors import KafkaConfigurationError, IllegalStateError, KafkaTimeoutError
+from kafka.future import Future
 from kafka.util import Timer
 
 
@@ -24,6 +27,32 @@ def test_default_api_timeout_smaller_than_request_timeout_raises():
     with pytest.raises(KafkaConfigurationError):
         KafkaConsumer(bootstrap_servers='localhost:9092', api_version=(0, 9),
                       request_timeout_ms=70000, default_api_timeout_ms=60000)
+
+
+def test_fetch_all_topic_metadata_restores_flag_on_timeout(mocker):
+    """_fetch_all_topic_metadata must restore need_all_topic_metadata even when
+    the bounded metadata wait times out (issue #3121). Otherwise a timed-out
+    topics()/partitions_for_topic() would leave the consumer permanently
+    fetching all-topic metadata."""
+    consumer = KafkaConsumer(api_version=(0, 10, 0))
+    run_mock = mocker.patch.object(consumer._net, 'run')
+    try:
+        original = consumer._cluster.need_all_topic_metadata
+        # Skip the in-progress branch so the try/finally block is exercised.
+        mocker.patch.object(type(consumer._cluster), 'metadata_refresh_in_progress',
+                            new_callable=PropertyMock, return_value=False)
+        mocker.patch.object(consumer._cluster, 'request_update', return_value=Future())
+        run_mock.side_effect = KafkaTimeoutError('boom')
+
+        with pytest.raises(KafkaTimeoutError):
+            consumer.topics(timeout_ms=100)
+
+        assert consumer._cluster.need_all_topic_metadata == original
+    finally:
+        # Let close() no-op through the mocked run() instead of raising.
+        run_mock.side_effect = None
+        run_mock.return_value = None
+        consumer.close()
 
 
 def test_subscription_copy():

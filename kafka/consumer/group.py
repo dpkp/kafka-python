@@ -763,31 +763,44 @@ class KafkaConsumer:
             return None
         return committed[partition] if metadata else committed[partition].offset
 
-    def _fetch_all_topic_metadata(self):
+    def _fetch_all_topic_metadata(self, timeout_ms=None):
         """A blocking call that fetches topic metadata for all topics in the
         cluster that the user is authorized to view.
         """
+        if timeout_ms is None:
+            timeout_ms = self.config['default_api_timeout_ms']
+        timer = Timer(timeout_ms)
         if self._cluster.metadata_refresh_in_progress:
             future = self._cluster.request_update()
-            self._net.run(self._manager.wait_for, future, None)
+            self._net.run(self._manager.wait_for, future, timer.timeout_ms, timeout_ms=timer.timeout_ms)
         stash = self._cluster.need_all_topic_metadata
-        self._cluster.need_all_topic_metadata = True
-        future = self._cluster.request_update()
-        self._net.run(self._manager.wait_for, future, None)
-        self._cluster.need_all_topic_metadata = stash
+        try:
+            self._cluster.need_all_topic_metadata = True
+            future = self._cluster.request_update()
+            self._net.run(self._manager.wait_for, future, timer.timeout_ms, timeout_ms=timer.timeout_ms)
+        finally:
+            self._cluster.need_all_topic_metadata = stash
 
-    def topics(self):
+    def topics(self, timeout_ms=None):
         """Get all topics the user is authorized to view.
         This will always issue a remote call to the cluster to fetch the latest
         information.
 
+        Arguments:
+            timeout_ms (numeric, optional): Maximum time in milliseconds to
+                block. Defaults to default_api_timeout_ms.
+
         Returns:
             set: topics
+
+        Raises:
+            KafkaTimeoutError: if topic metadata is not fetched within
+                timeout_ms (default default_api_timeout_ms).
         """
-        self._fetch_all_topic_metadata()
+        self._fetch_all_topic_metadata(timeout_ms=timeout_ms)
         return self._cluster.topics()
 
-    def partitions_for_topic(self, topic):
+    def partitions_for_topic(self, topic, timeout_ms=None):
         """This method first checks the local metadata cache for information
         about the topic. If the topic is not found (either because the topic
         does not exist, the user is not authorized to view the topic, or the
@@ -796,13 +809,19 @@ class KafkaConsumer:
 
         Arguments:
             topic (str): Topic to check.
+            timeout_ms (numeric, optional): Maximum time in milliseconds to
+                block. Defaults to default_api_timeout_ms.
 
         Returns:
             set: Partition ids
+
+        Raises:
+            KafkaTimeoutError: if topic metadata is not fetched within
+                timeout_ms (default default_api_timeout_ms).
         """
         partitions = self._cluster.partitions_for_topic(topic)
         if partitions is None:
-            self._fetch_all_topic_metadata()
+            self._fetch_all_topic_metadata(timeout_ms=timeout_ms)
             partitions = self._cluster.partitions_for_topic(topic)
         return partitions or set()
 

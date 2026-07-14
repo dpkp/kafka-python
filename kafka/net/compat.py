@@ -6,6 +6,7 @@ import time
 import kafka.errors as Errors
 from kafka.net.backend import resolve_backend
 from kafka.net.manager import KafkaConnectionManager
+from kafka.util import Timer
 
 
 log = logging.getLogger(__name__)
@@ -105,14 +106,15 @@ class KafkaNetClient:
         return self._manager.broker_version
 
     def check_version(self, node_id=None, timeout_ms=10000):
+        timer = Timer(timeout_ms)
         if not self._manager.bootstrapped:
-            self._manager.bootstrap(timeout_ms)
+            self._manager.bootstrap(timer.timeout_ms)
         if node_id is None:
             return self._manager.broker_version
         async def _check_version(broker_id, timeout_ms):
             conn = await self._manager.get_connection(broker_id, timeout_ms=timeout_ms)
             return conn.broker_version
-        return self._net.run(_check_version, node_id, timeout_ms)
+        return self._net.run(_check_version, node_id, timer.timeout_ms, timeout_ms=timer.timeout_ms)
 
     # Request sending
 
