@@ -557,6 +557,23 @@ def test_commit_offsets_sync(mocker, coordinator, offsets):
     assert ret == 'fizzbuzz'
 
 
+def test_commit_offsets_sync_forwards_operation_timeout_to_run(coordinator, offsets, mocker):
+    """Facade wiring (#3121): commit_offsets_sync resolves None ->
+    default_api_timeout_ms and forwards the operation deadline to net.run()'s
+    backstop kwarg, so an explicit long timeout is not cut short by the default
+    bridge deadline."""
+    run = mocker.patch.object(coordinator._net, 'run', return_value=None)
+
+    # Explicit timeout is forwarded as run()'s backstop.
+    coordinator.commit_offsets_sync(offsets, timeout_ms=123000)
+    assert run.call_args.kwargs['timeout_ms'] == 123000
+
+    # No timeout -> default_api_timeout_ms (not request_timeout_ms).
+    run.reset_mock()
+    coordinator.commit_offsets_sync(offsets)
+    assert run.call_args.kwargs['timeout_ms'] == coordinator.config['default_api_timeout_ms']
+
+
 @pytest.mark.parametrize(
     'api_version,group_id,enable,error,has_auto_commit,commit_offsets,warn,exc', [
         ((0, 8, 0), 'foobar', True, None, False, False, True, False),

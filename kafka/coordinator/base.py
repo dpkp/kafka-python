@@ -106,6 +106,7 @@ class BaseCoordinator(ABC):
         'heartbeat_interval_ms': 3000,
         'max_poll_interval_ms': 300000,
         'request_timeout_ms': 30000,
+        'default_api_timeout_ms': 60000,
         'retry_backoff_ms': 100,
         'api_version': (0, 10, 1),
         'metrics': None,
@@ -331,11 +332,14 @@ class BaseCoordinator(ABC):
 
         Keyword Arguments:
             timeout_ms (numeric, optional): Maximum number of milliseconds to
-                block waiting to find coordinator. Default: None.
+                block waiting to find coordinator. Defaults to
+                default_api_timeout_ms.
 
         Returns: True is coordinator found before timeout_ms, else False
         """
-        return self._net.run(self.ensure_coordinator_ready_async, timeout_ms)
+        if timeout_ms is None:
+            timeout_ms = self.config['default_api_timeout_ms']
+        return self._net.run(self.ensure_coordinator_ready_async, timeout_ms, timeout_ms=timeout_ms)
 
     async def ensure_coordinator_ready_async(self, timeout_ms=None):
         """Async variant of :meth:`ensure_coordinator_ready`.
@@ -450,11 +454,13 @@ class BaseCoordinator(ABC):
 
         Keyword Arguments:
             timeout_ms (numeric, optional): Maximum number of milliseconds to
-                block waiting to join group. Default: None.
+                block waiting to join group. Defaults to default_api_timeout_ms.
 
         Returns: True if group initialized before timeout_ms, else False
         """
-        return self._net.run(self.ensure_active_group_async, timeout_ms)
+        if timeout_ms is None:
+            timeout_ms = self.config['default_api_timeout_ms']
+        return self._net.run(self.ensure_active_group_async, timeout_ms, timeout_ms=timeout_ms)
 
     async def ensure_active_group_async(self, timeout_ms=None):
         """Async variant of :meth:`ensure_active_group`."""
@@ -1048,7 +1054,9 @@ class BaseCoordinator(ABC):
 
     def maybe_leave_group(self, reason=None, timeout_ms=None):
         """Leave the current group and reset local generation/member_id."""
-        return self._net.run(self.maybe_leave_group_async, reason, timeout_ms)
+        if timeout_ms is None:
+            timeout_ms = self.config['default_api_timeout_ms']
+        return self._net.run(self.maybe_leave_group_async, reason, timeout_ms, timeout_ms=timeout_ms)
 
     async def maybe_leave_group_async(self, reason=None, timeout_ms=None):
         if not self._use_group_apis:

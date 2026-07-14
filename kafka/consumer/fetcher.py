@@ -93,6 +93,7 @@ class Fetcher:
         'metrics': None,
         'metric_group_prefix': 'consumer',
         'request_timeout_ms': 30000,
+        'default_api_timeout_ms': 60000,
         'retry_backoff_ms': 100,
         'enable_incremental_fetch_sessions': True,
         'isolation_level': 'read_uncommitted',
@@ -258,7 +259,7 @@ class Fetcher:
             fut.add_both(_wake)
 
         try:
-            self._net.run(self._manager.wait_for, wakeup, timeout_ms)
+            self._net.run(self._manager.wait_for, wakeup, timeout_ms, timeout_ms=timeout_ms)
         except Errors.KafkaTimeoutError:
             pass
 
@@ -395,7 +396,8 @@ class Fetcher:
             timestamps: {TopicPartition: int} dict with timestamps to fetch
                 offsets by. -1 for the latest available, -2 for the earliest
                 available. Otherwise timestamp is treated as epoch milliseconds.
-            timeout_ms (int, optional): The maximum time in milliseconds to block.
+            timeout_ms (int, optional): Maximum time in milliseconds to block.
+                Defaults to default_api_timeout_ms.
 
         Returns:
             {TopicPartition: OffsetAndTimestamp or None}: Mapping of partition to
@@ -404,9 +406,12 @@ class Fetcher:
                 will be None.
 
         Raises:
-            KafkaTimeoutError if timeout_ms provided
+            KafkaTimeoutError: if not completed within timeout_ms (default
+                default_api_timeout_ms).
         """
-        offsets = self._net.run(self._fetch_offsets_by_times_async, timestamps, timeout_ms)
+        if timeout_ms is None:
+            timeout_ms = self.config['default_api_timeout_ms']
+        offsets = self._net.run(self._fetch_offsets_by_times_async, timestamps, timeout_ms, timeout_ms=timeout_ms)
         for tp in timestamps:
             if tp not in offsets:
                 offsets[tp] = None
@@ -481,13 +486,15 @@ class Fetcher:
 
         Arguments:
             partitions ([TopicPartition]): List of partitions for list offsets.
-            timeout_ms (int, optional): The maximum time in milliseconds to block.
+            timeout_ms (int, optional): Maximum time in milliseconds to block.
+                Defaults to default_api_timeout_ms.
 
         Returns:
             {TopicPartition: int}: Mapping of partition to retrieved offset.
 
         Raises:
-            KafkaTimeoutError if timeout_ms provided.
+            KafkaTimeoutError: if not completed within timeout_ms (default
+                default_api_timeout_ms).
         """
         return self.beginning_or_end_offset(
             partitions, OffsetSpec.EARLIEST, timeout_ms)
@@ -500,13 +507,15 @@ class Fetcher:
 
         Arguments:
             partitions ([TopicPartition]): List of partitions for list offsets.
-            timeout_ms (int, optional): The maximum time in milliseconds to block.
+            timeout_ms (int, optional): Maximum time in milliseconds to block.
+                Defaults to default_api_timeout_ms.
 
         Returns:
             {TopicPartition: int}: Mapping of partition to retrieved offset.
 
         Raises:
-            KafkaTimeoutError if timeout_ms provided.
+            KafkaTimeoutError: if not completed within timeout_ms (default
+                default_api_timeout_ms).
         """
         return self.beginning_or_end_offset(
             partitions, OffsetSpec.LATEST, timeout_ms)
@@ -522,7 +531,8 @@ class Fetcher:
             timestamp (int or OffsetSpec): OffsetSpec.LATEST (-1) for the latest
                 available, OffsetSpec.EARLIEST (-2) for the earliest available.
                 Otherwise timestamp is treated as epoch milliseconds.
-            timeout_ms (int, optional): The maximum time in milliseconds to block.
+            timeout_ms (int, optional): Maximum time in milliseconds to block.
+                Defaults to default_api_timeout_ms.
 
         Returns:
             {TopicPartition: int}: Mapping of partition to retrieved offset.
@@ -530,10 +540,13 @@ class Fetcher:
         Raises:
             UnsupportedVersionError if broker does not support any compatible
                 ListOffsetsRequest api version.
-            KafkaTimeoutError if timeout_ms provided.
+            KafkaTimeoutError: if not completed within timeout_ms (default
+                default_api_timeout_ms).
         """
         timestamps = dict([(tp, timestamp) for tp in partitions])
-        offsets = self._net.run(self._fetch_offsets_by_times_async, timestamps, timeout_ms)
+        if timeout_ms is None:
+            timeout_ms = self.config['default_api_timeout_ms']
+        offsets = self._net.run(self._fetch_offsets_by_times_async, timestamps, timeout_ms, timeout_ms=timeout_ms)
         for tp in timestamps:
             offsets[tp] = offsets[tp].offset
         return offsets

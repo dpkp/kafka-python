@@ -622,7 +622,9 @@ class ConsumerCoordinator(BaseCoordinator):
 
     def refresh_committed_offsets_if_needed(self, timeout_ms=None):
         """Fetch committed offsets for assigned partitions."""
-        return self._net.run(self.refresh_committed_offsets_if_needed_async, timeout_ms)
+        if timeout_ms is None:
+            timeout_ms = self.config['default_api_timeout_ms']
+        return self._net.run(self.refresh_committed_offsets_if_needed_async, timeout_ms, timeout_ms=timeout_ms)
 
     async def refresh_committed_offsets_if_needed_async(self, timeout_ms=None):
         missing_fetch_positions = set(self._subscription.missing_fetch_positions())
@@ -640,16 +642,21 @@ class ConsumerCoordinator(BaseCoordinator):
 
         Arguments:
             partitions (list of TopicPartition): partitions to fetch
+            timeout_ms (numeric, optional): Maximum time in milliseconds to
+                block. Defaults to default_api_timeout_ms.
 
         Returns:
             dict: {TopicPartition: OffsetAndMetadata}
 
         Raises:
-            KafkaTimeoutError if timeout_ms provided
+            KafkaTimeoutError: if the offsets are not fetched within timeout_ms
+                (default default_api_timeout_ms).
         """
         if not partitions:
             return {}
-        return self._net.run(self.fetch_committed_offsets_async, partitions, timeout_ms)
+        if timeout_ms is None:
+            timeout_ms = self.config['default_api_timeout_ms']
+        return self._net.run(self.fetch_committed_offsets_async, partitions, timeout_ms, timeout_ms=timeout_ms)
 
     async def fetch_committed_offsets_async(self, partitions, timeout_ms=None):
         """Async variant of :meth:`fetch_committed_offsets`."""
@@ -815,13 +822,17 @@ class ConsumerCoordinator(BaseCoordinator):
     def commit_offsets_sync(self, offsets, timeout_ms=None):
         """Commit specific offsets synchronously.
 
-        This method will retry until the commit completes successfully or an
-        unrecoverable error is encountered.
+        This method retries until the commit completes successfully, an
+        unrecoverable error is encountered, or the timeout expires.
 
         Arguments:
             offsets (dict {TopicPartition: OffsetAndMetadata}): what to commit
+            timeout_ms (numeric, optional): Maximum time in milliseconds to
+                block. Defaults to default_api_timeout_ms.
 
-        Raises error on failure
+        Raises:
+            KafkaTimeoutError: if the commit does not complete within timeout_ms
+                (default default_api_timeout_ms).
         """
         if not self._use_offset_apis:
             raise Errors.UnsupportedVersionError('OffsetCommitRequest requires 0.8.1+ broker')
@@ -829,14 +840,19 @@ class ConsumerCoordinator(BaseCoordinator):
            not all(map(lambda v: isinstance(v, OffsetAndMetadata), offsets.values())):
             raise TypeError('offsets must be dict[TopicPartition, OffsetAndMetadata]')
         self._invoke_completed_offset_commit_callbacks()
-        return self._net.run(self._commit_offsets_sync_async, offsets, timeout_ms)
+        # Resolve the all-in API deadline once (default default_api_timeout_ms)
+        # and bound both the coroutine's own Timer and the cross-thread run()
+        # backstop from the same value (#3121).
+        if timeout_ms is None:
+            timeout_ms = self.config['default_api_timeout_ms']
+        return self._net.run(self._commit_offsets_sync_async, offsets, timeout_ms,
+                             timeout_ms=timeout_ms)
 
     async def _commit_offsets_sync_async(self, offsets, timeout_ms=None):
         if not offsets:
             return
-        # Default to request_timeout_ms, matching offsets_by_times / _reset_offsets_async
         if timeout_ms is None:
-            timeout_ms = self.config['request_timeout_ms']
+            timeout_ms = self.config['default_api_timeout_ms']
         timer = Timer(timeout_ms)
         while True:
             await self.ensure_coordinator_ready_async(timeout_ms=timer.timeout_ms)
