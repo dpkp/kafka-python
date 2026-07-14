@@ -832,7 +832,9 @@ class ConsumerCoordinator(BaseCoordinator):
 
         Raises:
             KafkaTimeoutError: if the commit does not complete within timeout_ms
-                (default default_api_timeout_ms).
+                (default default_api_timeout_ms). Note that a timeout does not
+                guarantee the commit did not happen -- it may still take effect
+                on the broker after this call returns.
         """
         if not self._use_offset_apis:
             raise Errors.UnsupportedVersionError('OffsetCommitRequest requires 0.8.1+ broker')

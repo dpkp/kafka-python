@@ -340,11 +340,17 @@ class NetworkSelector:
     def _bridge_timeout(self, coro, timeout_ms):
         op_ms = timeout_ms if timeout_ms is not None else self.config['default_api_timeout_ms']
         name = getattr(coro, '__name__', None) or repr(coro)
-        return Errors.KafkaTimeoutError(
+        exc = Errors.KafkaTimeoutError(
             'net.run(%s) did not complete within %d ms (+%d ms grace). The IO '
             'event loop may be stalled by blocking work on the IO thread '
             '(e.g. a synchronous rebalance listener/assignor).'
             % (name, op_ms, self.config['bridge_grace_ms']))
+        # A caught KafkaTimeoutError is otherwise invisible; surface the stall so
+        # operators can see it. The coroutine keeps running until it completes or
+        # hits its own deadline, so any side effects (e.g. an offset commit) may
+        # still take effect (see the late-completion warning in run()).
+        log.warning('%s', exc)
+        return exc
 
     def run(self, coro, *args, timeout_ms=None):
         """Schedules coro on the event loop, blocks until complete, returns value or raises.
@@ -359,7 +365,12 @@ class NetworkSelector:
         The blocking wait is always bounded: if the coroutine does not complete
         within ``timeout_ms`` (or ``default_api_timeout_ms`` when None), plus a
         grace margin, KafkaTimeoutError is raised. This is a liveness backstop
-        for a stalled IO loop; the coroutine itself is left running (see #3121).
+        for a stalled IO loop; the coroutine itself is **not cancelled** -- it
+        keeps running until it completes or hits its own deadline (see #3121).
+        Consequently a timeout does not guarantee the operation did not happen:
+        a side-effecting coroutine (e.g. an offset commit) may still take effect
+        after the caller has seen the timeout. Such late completions are logged
+        at WARNING.
         """
         if self._closed:
             raise RuntimeError('NetworkSelector closed!')
@@ -382,6 +393,7 @@ class NetworkSelector:
         elif self._exception:
             raise self._exception from None
 
+        coro_name = getattr(coro, '__name__', None) or repr(coro)
         event = threading.Event()
         state = {'value': None, 'exception': None}
         async def waiter():
@@ -396,6 +408,18 @@ class NetworkSelector:
             finally:
                 with self._pending_waiters_lock:
                     self._pending_waiters.pop(event, None)
+                    abandoned = state.get('abandoned', False)
+                # The caller already gave up (backstop timeout) but the coroutine
+                # ran to completion anyway -- make the late outcome visible, since
+                # a late success means its side effects took effect after the
+                # caller saw a timeout.
+                if abandoned:
+                    if state['exception'] is None:
+                        log.warning('net.run(%s) completed successfully after the caller '
+                                    'timed out; its side effects took effect late.', coro_name)
+                    else:
+                        log.warning('net.run(%s) failed after the caller timed out: %s',
+                                    coro_name, state['exception'])
                 event.set()
         with self._pending_waiters_lock:
             self._pending_waiters[event] = state
@@ -403,7 +427,10 @@ class NetworkSelector:
         if not event.wait(timeout=deadline_secs):
             # Loop never ran the coroutine to completion within the deadline.
             # Leave the waiter registered: if the coroutine later finishes, its
-            # `finally` pops _pending_waiters and sets the (now-ignored) event.
+            # `finally` pops _pending_waiters and (seeing 'abandoned') logs the
+            # late outcome before setting the (now-ignored) event.
+            with self._pending_waiters_lock:
+                state['abandoned'] = True
             raise self._bridge_timeout(coro, timeout_ms)
         if state['exception'] is not None:
             raise state['exception']  # pylint: disable=E0702

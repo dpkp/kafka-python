@@ -695,7 +695,9 @@ class KafkaConsumer:
             IncompatibleBrokerVersion: if broker version < 0.8.1
             IllegalStateError: if group_id is None
             KafkaTimeoutError: if the commit does not complete within timeout_ms
-                (default default_api_timeout_ms).
+                (default default_api_timeout_ms). Note that a timeout does not
+                guarantee the commit did not happen -- it may still take effect
+                on the broker after this call returns.
         """
         if self.config['api_version'] < (0, 8, 1):
             raise Errors.IncompatibleBrokerVersion('Requires >= Kafka 0.8.1')
