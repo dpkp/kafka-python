@@ -1060,3 +1060,58 @@ class TestRunBridgeBackstop:
             assert 0.1 <= elapsed < 2.0
         finally:
             net.close()
+
+    def test_backstop_fire_logs_warning(self, caplog):
+        """A caught KafkaTimeoutError is otherwise invisible; the backstop logs
+        a WARNING naming the coroutine so a stall is observable."""
+        net = NetworkSelector(default_api_timeout_ms=100, bridge_grace_ms=100)
+        net.start()
+
+        async def work():
+            return 'ok'
+
+        release = threading.Event()
+        try:
+            self._wedge(net, release)
+            with caplog.at_level('WARNING', logger='kafka.net.selector'):
+                th, outcome = self._run_in_thread(net, work)
+            assert isinstance(outcome.get('exc'), KafkaTimeoutError)
+            assert any('did not complete within' in r.message and 'work' in r.message
+                       for r in caplog.records), (
+                'expected a backstop WARNING, got: %r'
+                % [r.message for r in caplog.records])
+        finally:
+            release.set()
+            net.close()
+
+    def test_late_completion_of_abandoned_coroutine_logs(self, caplog):
+        """After the caller times out, if the coroutine still runs to completion
+        its late outcome is logged -- a late success means its side effects took
+        effect after the caller saw a timeout."""
+        net = NetworkSelector(default_api_timeout_ms=100, bridge_grace_ms=100)
+        net.start()
+
+        async def work():
+            return 'ok'
+
+        release = threading.Event()
+        try:
+            self._wedge(net, release)
+            with caplog.at_level('WARNING', logger='kafka.net.selector'):
+                th, outcome = self._run_in_thread(net, work)  # caller times out
+                assert isinstance(outcome.get('exc'), KafkaTimeoutError)
+                # Release the wedge so the abandoned coroutine now completes.
+                release.set()
+                deadline = time.monotonic() + 2.0
+                while time.monotonic() < deadline:
+                    if any('after the caller timed out' in r.message
+                           for r in caplog.records):
+                        break
+                    time.sleep(0.01)
+            assert any('completed successfully after the caller timed out' in r.message
+                       and 'work' in r.message for r in caplog.records), (
+                'expected a late-completion WARNING, got: %r'
+                % [r.message for r in caplog.records])
+        finally:
+            release.set()
+            net.close()
