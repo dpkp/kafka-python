@@ -4,7 +4,7 @@ import threading
 import time
 
 import kafka.errors as Errors
-from kafka.net.backend import resolve_backend
+from kafka.net.backends import resolve_backend
 from kafka.net.manager import KafkaConnectionManager
 from kafka.util import Timer
 

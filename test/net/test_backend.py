@@ -1,4 +1,4 @@
-"""Conformance tests for the NetBackend contract (kafka/net/backend.py).
+"""Conformance tests for the NetBackend contract (kafka/net/backends/abstract.py).
 
 NetworkSelector is the reference implementation; these pin that it satisfies
 the NetBackend Protocol structurally and that the shared lifecycle helper
@@ -10,7 +10,7 @@ import threading
 
 import pytest
 
-from kafka.net.backend import (
+from kafka.net.backends.abstract import (
     NetBackend, NetTransport, resolve_backend, register_backend, _BACKENDS,
 )
 from kafka.net.selector import NetworkSelector
@@ -168,7 +168,7 @@ class TestResolveBackend:
     def test_autodetect_falls_back_for_unknown_framework(self, monkeypatch):
         # A detected-but-unregistered framework (e.g. trio, no backend) falls
         # back to the default selector rather than erroring.
-        import kafka.net.backend as backend_mod
+        import kafka.net.backends.abstract as backend_mod
         monkeypatch.setattr(backend_mod, '_detect_async_library', lambda: 'trio')
         assert isinstance(resolve_backend(None, {}), NetworkSelector)
 

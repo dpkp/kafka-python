@@ -14,7 +14,7 @@ import pytest
 
 import kafka.errors as Errors
 from kafka.net.asyncio_backend import AsyncioBackend, AsyncioFuture
-from kafka.net.backend import NetBackend
+from kafka.net.backends import NetBackend
 from kafka.net.manager import KafkaConnectionManager
 from kafka.protocol.metadata import MetadataRequest
 from test.mock_broker import MockBroker

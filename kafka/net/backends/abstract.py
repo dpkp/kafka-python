@@ -307,7 +307,3 @@ def resolve_backend(net, config):
     if name is None or name not in _BACKENDS:
         name = 'selector'
     return _BACKENDS[name](**config)
-
-
-register_backend_lazy('selector', 'kafka.net.selector', 'NetworkSelector')
-register_backend_lazy('asyncio', 'kafka.net.asyncio_backend', 'AsyncioBackend')
