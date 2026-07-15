@@ -7,6 +7,7 @@ import pytest
 
 import kafka.errors as Errors
 from kafka.future import Future
+from kafka.net.backend import NetTransport, NetProtocol
 from kafka.net.backend.selector import NetworkSelector, TaskState
 from kafka.net.backend.transport import KafkaSSLTransport, KafkaTCPTransport
 
@@ -308,63 +309,47 @@ class TestKafkaSSLTransport:
     hostname verification is disabled.
     """
 
-    def _make_ssl_sock(self):
-        # wrap_socket returns a wrapped socket; give it the peer/name accessors
-        # that KafkaTCPTransport.__init__ pokes at via str()/repr helpers.
-        wrapped = _make_mock_sock()
-        sock = _make_mock_sock()
-        ctx = MagicMock()
-        ctx.wrap_socket.return_value = wrapped
-        return sock, ctx, wrapped
-
     def test_sni_sent_when_check_hostname_true(self, net):
-        sock, ctx, _ = self._make_ssl_sock()
+        ctx = MagicMock()
         ctx.check_hostname = True
-        KafkaSSLTransport(net, sock, ctx, host='broker.example.com')
-        _, kwargs = ctx.wrap_socket.call_args
+        KafkaSSLTransport(net, ctx, host='broker.example.com')
+        _, kwargs = ctx.wrap_bio.call_args
         assert kwargs['server_hostname'] == 'broker.example.com'
 
     def test_sni_sent_when_check_hostname_false(self, net):
         # The bug: SNI used to be suppressed when verification was disabled.
-        sock, ctx, _ = self._make_ssl_sock()
+        ctx = MagicMock()
         ctx.check_hostname = False
-        KafkaSSLTransport(net, sock, ctx, host='broker.example.com')
-        _, kwargs = ctx.wrap_socket.call_args
+        KafkaSSLTransport(net, ctx, host='broker.example.com')
+        _, kwargs = ctx.wrap_bio.call_args
         assert kwargs['server_hostname'] == 'broker.example.com'
 
     def test_sni_strips_trailing_dot(self, net):
         # A trailing dot is a valid FQDN but illegal in the SNI extension.
-        sock, ctx, _ = self._make_ssl_sock()
+        ctx = MagicMock()
         ctx.check_hostname = False
-        KafkaSSLTransport(net, sock, ctx, host='broker.example.com.')
-        _, kwargs = ctx.wrap_socket.call_args
+        KafkaSSLTransport(net, ctx, host='broker.example.com.')
+        _, kwargs = ctx.wrap_bio.call_args
         assert kwargs['server_hostname'] == 'broker.example.com'
 
     def test_sni_none_when_host_missing(self, net):
-        sock, ctx, _ = self._make_ssl_sock()
-        KafkaSSLTransport(net, sock, ctx, host=None)
-        _, kwargs = ctx.wrap_socket.call_args
+        ctx = MagicMock()
+        KafkaSSLTransport(net, ctx, host=None)
+        _, kwargs = ctx.wrap_bio.call_args
         assert kwargs['server_hostname'] is None
 
-    def test_handshake_not_done_on_connect(self, net):
-        sock, ctx, _ = self._make_ssl_sock()
-        KafkaSSLTransport(net, sock, ctx, host='broker.example.com')
-        _, kwargs = ctx.wrap_socket.call_args
-        assert kwargs['do_handshake_on_connect'] is False
-
     def test_provided_ssl_context_is_used(self, net):
-        sock, ctx, wrapped = self._make_ssl_sock()
-        t = KafkaSSLTransport(net, sock, ctx, host='broker.example.com')
+        ctx = MagicMock()
+        t = KafkaSSLTransport(net, ctx, host='broker.example.com')
         assert t._ssl_context is ctx
-        assert t._sock is wrapped
 
-    def test_ssl_context_is_required(self, net):
-        # The transport no longer builds a context itself; callers must pass
-        # a pre-built one (via build_ssl_context). Omitting it is a TypeError,
-        # not a silently-default context.
-        sock, _, _ = self._make_ssl_sock()
-        with pytest.raises(TypeError):
-            KafkaSSLTransport(net, sock, host='broker.example.com')  # pylint: disable=E1120
+    def test_ssl_wrapper_transport(self, net, socketpair):
+        rsock, wsock = socketpair
+        t = KafkaTCPTransport(net, wsock)
+        ssl_wrapper = KafkaSSLTransport(net, KafkaSSLTransport.build_ssl_context({}))
+        ssl_wrapper.connection_made(t)
+        assert isinstance(ssl_wrapper, NetTransport)
+        assert isinstance(ssl_wrapper, NetProtocol)
 
 
 class TestBuildSSLContext:
