@@ -18,7 +18,7 @@ from kafka.net.backends.asyncio_backend import AsyncioBackend, AsyncioFuture
 from kafka.net.manager import KafkaConnectionManager
 from kafka.protocol.metadata import MetadataRequest
 from test.mock_broker import MockBroker
-from test.net.test_net_backend_future import NetBackendFutureContract
+from test.net.backends.test_net_backend_future import NetBackendFutureContract
 
 
 @pytest.fixture
