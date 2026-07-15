@@ -57,13 +57,13 @@ class NetBackendFuture(Protocol):
     A pluggable async backend (the kafka.net.backend selector, asyncio, Twisted, ...)
     returns its own future type from ``create_future()``. Core loop coroutines
     touch it only through this surface, so the type is interchangeable across
-    backend. The selector's ``SelectorFuture`` is the reference implementation:
+    backends. The selector's ``SelectorFuture`` is the reference implementation:
     it subclasses the thread-safe ``kafka.future.Future`` (the portable callback
     core) and adds ``__await__``. A plain ``Future`` is deliberately NOT a
     NetBackendFuture -- it has no ``__await__`` -- so awaiting a cross-thread
     handoff future fails loudly instead of silently working on one backend.
 
-    Pinned semantics -- the three axes where backend could otherwise diverge:
+    Pinned semantics -- the three axes where backends could otherwise diverge:
 
     1. **Resolution thread.** A future from ``create_future()`` is created and
        resolved (``success`` / ``failure``) on the loop/IO thread only.
@@ -235,7 +235,7 @@ class NetBackend(Protocol):
 # --- backend selection ----------------------------------------------------
 
 # name -> factory(**config) -> NetBackend. Populated by register_backend();
-# 'selector' is always available, 'asyncio' registers itself in Step 4.
+# 'selector' and 'asyncio' are lazily registered in kafka/net/backend/__init__.py.
 _BACKENDS = {}
 
 
@@ -302,7 +302,7 @@ def resolve_backend(net, config):
                             'or None; got %r' % (net,))
         return net
     # net is None: auto-detect, else default. Auto-detected-but-unregistered
-    # backend fall back silently (an explicit name would have raised above).
+    # backends fall back silently (an explicit name would have raised above).
     name = _detect_async_library()
     if name is None or name not in _BACKENDS:
         name = 'selector'
