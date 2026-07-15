@@ -39,7 +39,7 @@ class TestFutureNotAwaitable:
     __await__ lives on the backend future (e.g. SelectorFuture from
     create_future()), not the base, so awaiting a handoff Future fails loudly.
     The backend futures' await behavior is covered by test_selector.py and the
-    BackendFuture conformance suite."""
+    NetBackendFuture conformance suite."""
 
     def test_no_dunder_await(self):
         assert not hasattr(Future(), '__await__')

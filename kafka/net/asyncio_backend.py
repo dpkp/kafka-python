@@ -23,7 +23,7 @@ class AsyncioFuture(Future):
 
     Inherits ``kafka.future.Future``'s callback core and overrides only
     ``__await__`` to bridge to an ``asyncio.Future`` so an asyncio Task can
-    await it. Per the BackendFuture contract this is created and resolved on
+    await it. Per the NetBackendFuture contract this is created and resolved on
     the loop thread only; a fresh asyncio.Future is minted per awaiter, so
     fan-out (multiple awaiters / callbacks) is preserved.
     """

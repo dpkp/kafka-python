@@ -1,7 +1,7 @@
 """Tests for the asyncio NetBackend (kafka/net/asyncio_backend.py).
 
 Covers backend-specific behavior (lifecycle, timers, cross-thread run), reuses
-the shared BackendFuture conformance suite against the asyncio-backed future,
+the shared NetBackendFuture conformance suite against the asyncio-backed future,
 and drives a real protocol round-trip through a MockBroker on a started
 AsyncioBackend -- the both-backends coverage for the async paths.
 """
@@ -18,7 +18,7 @@ from kafka.net.backend import NetBackend
 from kafka.net.manager import KafkaConnectionManager
 from kafka.protocol.metadata import MetadataRequest
 from test.mock_broker import MockBroker
-from test.net.test_backend_future import BackendFutureContract
+from test.net.test_net_backend_future import NetBackendFutureContract
 
 
 @pytest.fixture
@@ -158,8 +158,8 @@ class TestCreateFuture:
         assert not fut.is_done
 
 
-class TestAsyncioBackendFuture(BackendFutureContract):
-    """Reuse the shared BackendFuture conformance suite for the asyncio future."""
+class TestAsyncioNetBackendFuture(NetBackendFutureContract):
+    """Reuse the shared NetBackendFuture conformance suite for the asyncio future."""
 
     @pytest.fixture(autouse=True)
     def _net(self):
