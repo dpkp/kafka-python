@@ -7,7 +7,7 @@ import pytest
 
 from kafka.errors import KafkaTimeoutError
 from kafka.future import Future
-from kafka.net.selector import (
+from kafka.net.backend.selector import (
     KernelEvent,
     NetworkSelector,
     Task,
@@ -813,7 +813,7 @@ class TestSlowTaskMonitor:
             done.success(True)
 
         net.call_soon(hog)
-        with caplog.at_level('WARNING', logger='kafka.net.selector'):
+        with caplog.at_level('WARNING', logger='kafka.net.backend.selector'):
             net.poll(timeout_ms=1000, future=done)
         assert any('blocking the event loop' in rec.message for rec in caplog.records), (
             'expected slow-task warning, got: %r'
@@ -828,7 +828,7 @@ class TestSlowTaskMonitor:
             done.success(True)
 
         net.call_soon(quick)
-        with caplog.at_level('WARNING', logger='kafka.net.selector'):
+        with caplog.at_level('WARNING', logger='kafka.net.backend.selector'):
             net.poll(timeout_ms=1000, future=done)
         assert not any('blocking the event loop' in rec.message for rec in caplog.records)
 
@@ -841,7 +841,7 @@ class TestSlowTaskMonitor:
             done.success(True)
 
         net.call_soon(hog)
-        with caplog.at_level('WARNING', logger='kafka.net.selector'):
+        with caplog.at_level('WARNING', logger='kafka.net.backend.selector'):
             net.poll(timeout_ms=1000, future=done)
         assert not any('blocking the event loop' in rec.message for rec in caplog.records)
 
@@ -1073,7 +1073,7 @@ class TestRunBridgeBackstop:
         release = threading.Event()
         try:
             self._wedge(net, release)
-            with caplog.at_level('WARNING', logger='kafka.net.selector'):
+            with caplog.at_level('WARNING', logger='kafka.net.backend.selector'):
                 th, outcome = self._run_in_thread(net, work)
             assert isinstance(outcome.get('exc'), KafkaTimeoutError)
             assert any('did not complete within' in r.message and 'work' in r.message
@@ -1097,7 +1097,7 @@ class TestRunBridgeBackstop:
         release = threading.Event()
         try:
             self._wedge(net, release)
-            with caplog.at_level('WARNING', logger='kafka.net.selector'):
+            with caplog.at_level('WARNING', logger='kafka.net.backend.selector'):
                 th, outcome = self._run_in_thread(net, work)  # caller times out
                 assert isinstance(outcome.get('exc'), KafkaTimeoutError)
                 # Release the wedge so the abandoned coroutine now completes.

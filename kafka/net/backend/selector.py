@@ -11,8 +11,8 @@ import time
 
 import kafka.errors as Errors
 from kafka.future import Future
-from kafka.net.inet import create_connection as _inet_create_connection
-from kafka.net.transport import KafkaSSLTransport, KafkaTCPTransport
+from kafka.net.backend.inet import create_connection as _inet_create_connection
+from kafka.net.backend.transport import KafkaSSLTransport, KafkaTCPTransport
 from kafka.version import __version__
 
 

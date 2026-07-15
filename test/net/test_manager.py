@@ -7,16 +7,11 @@ import pytest
 
 from kafka.cluster import ClusterMetadata
 from kafka.future import Future
-from kafka.net.selector import NetworkSelector
-from kafka.net.manager import KafkaConnectionManager
+from kafka.net.backend.selector import NetworkSelector
 from kafka.net.connection import KafkaConnection
+from kafka.net.manager import KafkaConnectionManager
 import kafka.errors as Errors
 from kafka.protocol.broker_version_data import BrokerVersionData
-
-
-@pytest.fixture
-def net():
-    return NetworkSelector()
 
 
 class TestKafkaConnectionManagerNetResolution:
@@ -541,7 +536,7 @@ class TestKafkaConnectionManagerRun:
         for as long as the wrapper Future is pending.
         """
         import gc
-        from kafka.net.selector import NetworkSelector
+        from kafka.net.backend.selector import NetworkSelector
 
         # Force a GC cycle on every _poll_once entry to deterministically
         # trigger the orphan-collection race that was masking timeouts in CI.

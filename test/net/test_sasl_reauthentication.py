@@ -6,7 +6,6 @@ import pytest
 import kafka.errors as Errors
 from kafka.net.connection import KafkaConnection
 from kafka.net.manager import KafkaConnectionManager
-from kafka.net.selector import NetworkSelector
 from kafka.protocol.sasl import (
     SaslAuthenticateRequest,
     SaslAuthenticateResponse,
@@ -23,15 +22,6 @@ SASL_CONFIG = {
     'sasl_plain_username': 'user',
     'sasl_plain_password': 'pass',
 }
-
-
-@pytest.fixture
-def net():
-    sel = NetworkSelector()
-    try:
-        yield sel
-    finally:
-        sel.close()
 
 
 @pytest.fixture

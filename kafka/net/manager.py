@@ -10,7 +10,7 @@ from .metrics import KafkaManagerMetrics
 from kafka.net.backend import resolve_backend
 from kafka.cluster import ClusterMetadata
 import kafka.errors as Errors
-from kafka.net.transport import KafkaSSLTransport
+from kafka.net.backend.transport import KafkaSSLTransport
 from kafka.net.wakeup_notifier import WakeupNotifier
 from kafka.protocol.broker_version_data import BrokerVersionData
 from kafka.version import __version__

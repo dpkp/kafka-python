@@ -15,13 +15,7 @@ import time
 import pytest
 
 from kafka.future import Future
-from kafka.net.selector import NetworkSelector
 from kafka.net.wakeup_notifier import WakeupNotifier
-
-
-@pytest.fixture
-def net():
-    return NetworkSelector()
 
 
 @pytest.fixture
@@ -168,7 +162,7 @@ class TestWakeupNotifier:
         assert elapsed < 0.5, (
             'second cycle should wake immediately; took %.3fs' % elapsed)
 
-    def test_no_lost_wakeup_under_concurrent_notify_stress(self):
+    def test_no_lost_wakeup_under_concurrent_notify_stress(self, net):
         """Probabilistic regression guard for the coalescing path: a consumer
         coroutine awaits the notifier every iteration (max race exposure) and
         drains a shared queue; many cross-thread producers append work and
@@ -181,7 +175,6 @@ class TestWakeupNotifier:
         that. With the latch + coalescing correct, it finishes in milliseconds.
         """
         import collections
-        net = NetworkSelector()
         net.start()
         try:
             notifier = WakeupNotifier(net)

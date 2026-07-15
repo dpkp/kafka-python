@@ -1,4 +1,4 @@
-"""Conformance tests for the NetBackend contract (kafka/net/backend.py).
+"""Conformance tests for the NetBackend contract (kafka/net/backend/abstract.py).
 
 NetworkSelector is the reference implementation; these pin that it satisfies
 the NetBackend Protocol structurally and that the shared lifecycle helper
@@ -10,11 +10,11 @@ import threading
 
 import pytest
 
-from kafka.net.backend import (
+from kafka.net.backend.abstract import (
     NetBackend, NetTransport, resolve_backend, register_backend, _BACKENDS,
 )
-from kafka.net.selector import NetworkSelector
-from kafka.net.transport import KafkaTCPTransport
+from kafka.net.backend.selector import NetworkSelector
+from kafka.net.backend.transport import KafkaTCPTransport
 
 
 # The full contract surface, kept here so a missing/renamed method fails loudly.
@@ -120,7 +120,7 @@ class TestResolveBackend:
 
     def test_asyncio_name_resolves(self):
         # net='asyncio' lazily imports + registers the asyncio backend.
-        from kafka.net.asyncio_backend import AsyncioBackend
+        from kafka.net.backend.asyncio_backend import AsyncioBackend
         b = resolve_backend('asyncio', {'client_id': 'x'})
         assert isinstance(b, AsyncioBackend)
         b.close()
@@ -156,7 +156,7 @@ class TestResolveBackend:
     def test_autodetect_asyncio_in_loop_returns_asyncio_backend(self):
         # In a running asyncio loop with no explicit net, auto-detect lazily
         # registers + selects the asyncio backend (Phase-1: still own thread).
-        from kafka.net.asyncio_backend import AsyncioBackend
+        from kafka.net.backend.asyncio_backend import AsyncioBackend
 
         async def main():
             return resolve_backend(None, {'client_id': 'auto'})
@@ -168,7 +168,7 @@ class TestResolveBackend:
     def test_autodetect_falls_back_for_unknown_framework(self, monkeypatch):
         # A detected-but-unregistered framework (e.g. trio, no backend) falls
         # back to the default selector rather than erroring.
-        import kafka.net.backend as backend_mod
+        import kafka.net.backend.abstract as backend_mod
         monkeypatch.setattr(backend_mod, '_detect_async_library', lambda: 'trio')
         assert isinstance(resolve_backend(None, {}), NetworkSelector)
 

@@ -5,13 +5,13 @@ event loop: the surface that ``KafkaProducer`` / ``KafkaConsumer`` /
 ``KafkaAdminClient`` (and the manager, cluster, connection, coordinator,
 fetcher, sender) reach for through ``self._net`` / ``manager._net``.
 
-``NetworkSelector`` (``kafka/net/selector.py``) is the reference
+``NetworkSelector`` (``kafka/net/backend/selector.py``) is the reference
 implementation; an asyncio backend (and eventually Twisted) implements the
 same surface so it can be swapped in via ``net=`` without touching core code.
 
 The :class:`NetBackendFuture` contract is the surface of the
 loop-awaitable futures a backend hands out from ``net.create_future()``. The
-selector's implementation is ``kafka.net.selector.SelectorFuture``; an asyncio
+selector's implementation is ``kafka.net.backend.selector.SelectorFuture``; an asyncio
 (and eventually Twisted) backend supplies its own.
 
 Networking is a **connection seam**, not fd-readiness. asyncio and Twisted own
@@ -27,7 +27,7 @@ Three things are intentionally **not** part of the contract:
 
 * ``wait_read`` / ``wait_write`` / ``unregister_event`` -- the low-level
   fd-readiness primitives. They are the *selector's* private mechanism (used
-  only inside ``kafka/net/transport.py`` + ``inet.py``, zero core callers) and
+  only inside ``kafka/net/backend/transport.py`` + ``inet.py``, zero core callers) and
   do not port to asyncio/Twisted. The connection seam replaces them.
 * ``poll(timeout_ms, future=...)`` -- the legacy single-tick driver. Its only
   remaining caller is the ``KafkaNetClient`` compat shim
@@ -54,7 +54,7 @@ from typing import Any, Callable, Optional, Protocol, Sequence, Tuple, runtime_c
 class NetBackendFuture(Protocol):
     """Contract for the awaitable futures returned by ``net.create_future()``.
 
-    A pluggable async backend (the kafka.net selector, asyncio, Twisted, ...)
+    A pluggable async backend (the kafka.net.backend selector, asyncio, Twisted, ...)
     returns its own future type from ``create_future()``. Core loop coroutines
     touch it only through this surface, so the type is interchangeable across
     backends. The selector's ``SelectorFuture`` is the reference implementation:
@@ -235,7 +235,7 @@ class NetBackend(Protocol):
 # --- backend selection ----------------------------------------------------
 
 # name -> factory(**config) -> NetBackend. Populated by register_backend();
-# 'selector' is always available, 'asyncio' registers itself in Step 4.
+# 'selector' and 'asyncio' are lazily registered in kafka/net/backend/__init__.py.
 _BACKENDS = {}
 
 
@@ -307,7 +307,3 @@ def resolve_backend(net, config):
     if name is None or name not in _BACKENDS:
         name = 'selector'
     return _BACKENDS[name](**config)
-
-
-register_backend_lazy('selector', 'kafka.net.selector', 'NetworkSelector')
-register_backend_lazy('asyncio', 'kafka.net.asyncio_backend', 'AsyncioBackend')
