@@ -93,7 +93,7 @@ driving the protocol layer directly from the REPL.
 - :mod:`~kafka.net.connection` - per-broker async
   connection: state machine, request/response correlation, and SASL
   handshake.
-- :mod:`~kafka.net.transport` - Async socket I/O with write buffering,
+- :mod:`~kafka.net.backend.transport` - Async socket I/O with write buffering,
   pause/resume hooks, and the asyncio-shaped protocol callback surface.
 - :mod:`~kafka.net.http_connect` - Tunnels broker connections through
   an HTTP CONNECT proxy (RFC 7231).
@@ -106,7 +106,7 @@ driving the protocol layer directly from the REPL.
 
    manager <net/manager>
    connection <net/connection>
-   transport <net/transport>
+   transport <net/backend/transport>
    http_connect <net/http_connect>
    socks5 <net/socks5>
 
