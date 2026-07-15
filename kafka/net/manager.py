@@ -7,7 +7,7 @@ import time
 
 from .connection import KafkaConnection
 from .metrics import KafkaManagerMetrics
-from kafka.net.backends import resolve_backend
+from kafka.net.backend import resolve_backend
 from kafka.cluster import ClusterMetadata
 import kafka.errors as Errors
 from kafka.net.transport import KafkaSSLTransport

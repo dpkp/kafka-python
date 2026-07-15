@@ -11,8 +11,8 @@ reuses the same mixin with an asyncio-driven subclass.
 import pytest
 
 from kafka.future import Future
-from kafka.net.backends import NetBackendFuture
-from kafka.net.backends.selector import NetworkSelector
+from kafka.net.backend import NetBackendFuture
+from kafka.net.backend.selector import NetworkSelector
 
 
 class NetBackendFutureContract:

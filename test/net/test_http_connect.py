@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from kafka.net.http_connect import HttpConnectProxy
-from kafka.net.backends.inet import KafkaNetSocket
+from kafka.net.backend.inet import KafkaNetSocket
 
 
 _FAKE_PROXY_ADDR = (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, '', ('1.2.3.4', 8080))

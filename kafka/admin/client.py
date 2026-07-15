@@ -147,7 +147,7 @@ class KafkaAdminClient(
             metadata before the configured timeout. Note that bootstrap is
             called eagerly from __init__().
             Default: 30000
-        net (str or kafka.net.backends.NetBackend): The async backend that runs
+        net (str or kafka.net.backend.NetBackend): The async backend that runs
             this client's network I/O event loop. One of: a NetBackend
             instance; a registered name -- 'selector' (the built-in
             NetworkSelector) or 'asyncio' (runs I/O on an asyncio loop); or None

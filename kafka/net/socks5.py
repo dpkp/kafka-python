@@ -6,7 +6,7 @@ import struct
 from urllib.parse import urlparse
 
 from kafka.errors import KafkaConnectionError
-from kafka.net.backends.inet import KafkaNetSocket
+from kafka.net.backend.inet import KafkaNetSocket
 
 
 log = logging.getLogger(__name__)

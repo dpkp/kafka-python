@@ -5,13 +5,13 @@ event loop: the surface that ``KafkaProducer`` / ``KafkaConsumer`` /
 ``KafkaAdminClient`` (and the manager, cluster, connection, coordinator,
 fetcher, sender) reach for through ``self._net`` / ``manager._net``.
 
-``NetworkSelector`` (``kafka/net/backends/selector.py``) is the reference
+``NetworkSelector`` (``kafka/net/backend/selector.py``) is the reference
 implementation; an asyncio backend (and eventually Twisted) implements the
 same surface so it can be swapped in via ``net=`` without touching core code.
 
 The :class:`NetBackendFuture` contract is the surface of the
 loop-awaitable futures a backend hands out from ``net.create_future()``. The
-selector's implementation is ``kafka.net.backends.selector.SelectorFuture``; an asyncio
+selector's implementation is ``kafka.net.backend.selector.SelectorFuture``; an asyncio
 (and eventually Twisted) backend supplies its own.
 
 Networking is a **connection seam**, not fd-readiness. asyncio and Twisted own
@@ -54,16 +54,16 @@ from typing import Any, Callable, Optional, Protocol, Sequence, Tuple, runtime_c
 class NetBackendFuture(Protocol):
     """Contract for the awaitable futures returned by ``net.create_future()``.
 
-    A pluggable async backend (the kafka.net.backends selector, asyncio, Twisted, ...)
+    A pluggable async backend (the kafka.net.backend selector, asyncio, Twisted, ...)
     returns its own future type from ``create_future()``. Core loop coroutines
     touch it only through this surface, so the type is interchangeable across
-    backends. The selector's ``SelectorFuture`` is the reference implementation:
+    backend. The selector's ``SelectorFuture`` is the reference implementation:
     it subclasses the thread-safe ``kafka.future.Future`` (the portable callback
     core) and adds ``__await__``. A plain ``Future`` is deliberately NOT a
     NetBackendFuture -- it has no ``__await__`` -- so awaiting a cross-thread
     handoff future fails loudly instead of silently working on one backend.
 
-    Pinned semantics -- the three axes where backends could otherwise diverge:
+    Pinned semantics -- the three axes where backend could otherwise diverge:
 
     1. **Resolution thread.** A future from ``create_future()`` is created and
        resolved (``success`` / ``failure``) on the loop/IO thread only.
@@ -302,7 +302,7 @@ def resolve_backend(net, config):
                             'or None; got %r' % (net,))
         return net
     # net is None: auto-detect, else default. Auto-detected-but-unregistered
-    # backends fall back silently (an explicit name would have raised above).
+    # backend fall back silently (an explicit name would have raised above).
     name = _detect_async_library()
     if name is None or name not in _BACKENDS:
         name = 'selector'

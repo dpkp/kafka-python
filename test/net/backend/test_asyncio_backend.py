@@ -1,9 +1,9 @@
-"""Tests for the asyncio NetBackend (kafka/net/backends/asyncio_backend.py).
+"""Tests for the asyncio NetBackend (kafka/net/backend/asyncio_backend.py).
 
 Covers backend-specific behavior (lifecycle, timers, cross-thread run), reuses
 the shared NetBackendFuture conformance suite against the asyncio-backed future,
 and drives a real protocol round-trip through a MockBroker on a started
-AsyncioBackend -- the both-backends coverage for the async paths.
+AsyncioBackend -- the both-backend coverage for the async paths.
 """
 import asyncio
 import socket
@@ -13,12 +13,12 @@ import time
 import pytest
 
 import kafka.errors as Errors
-from kafka.net.backends import NetBackend
-from kafka.net.backends.asyncio_backend import AsyncioBackend, AsyncioFuture
+from kafka.net.backend import NetBackend
+from kafka.net.backend.asyncio_backend import AsyncioBackend, AsyncioFuture
 from kafka.net.manager import KafkaConnectionManager
 from kafka.protocol.metadata import MetadataRequest
 from test.mock_broker import MockBroker
-from test.net.backends.test_net_backend_future import NetBackendFutureContract
+from test.net.backend.test_net_backend_future import NetBackendFutureContract
 
 
 @pytest.fixture

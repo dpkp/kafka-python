@@ -11,7 +11,7 @@ import time
 
 import kafka.errors as Errors
 from kafka.future import Future
-from kafka.net.backends.inet import create_connection as _inet_create_connection
+from kafka.net.backend.inet import create_connection as _inet_create_connection
 from kafka.net.transport import KafkaSSLTransport, KafkaTCPTransport
 from kafka.version import __version__
 
@@ -43,7 +43,7 @@ def _initialize_coro(maybe_coro):
 
 
 class SelectorFuture(Future):
-    """The NetworkSelector's loop-awaitable future (see backends.NetBackendFuture).
+    """The NetworkSelector's loop-awaitable future (see backend.NetBackendFuture).
 
     ``kafka.future.Future`` is the thread-safe callback/handoff core with no
     ``__await__``; ``SelectorFuture`` adds it: ``yield self`` suspends the
@@ -297,7 +297,7 @@ class NetworkSelector:
         The clean form of the ``current_thread() is _io_thread`` identity
         check; callers use it to avoid blocking the loop on itself (e.g. a
         producer ``close()`` invoked from a produce callback). Part of the
-        NetBackend contract so alternate backends can answer it their own way.
+        NetBackend contract so alternate backend can answer it their own way.
         """
         return self._io_thread is not None and threading.current_thread() is self._io_thread
 
@@ -550,9 +550,9 @@ class NetworkSelector:
         return task
 
     def create_future(self):
-        """Create a loop-awaitable future (see backends.NetBackendFuture).
+        """Create a loop-awaitable future (see backend.NetBackendFuture).
 
-        Portability seam for pluggable backends: core coroutines call this
+        Portability seam for pluggable backend: core coroutines call this
         instead of constructing ``Future`` directly, so an alternate backend
         (asyncio, Twisted) can return its own awaitable type. The selector's
         native awaitable is ``SelectorFuture`` (a ``Future`` with ``__await__``).

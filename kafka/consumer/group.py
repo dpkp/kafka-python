@@ -270,7 +270,7 @@ class KafkaConsumer:
             metrics. Default: 2
         metrics_sample_window_ms (int): The maximum age in milliseconds of
             samples used to compute metrics. Default: 30000
-        net (str or kafka.net.backends.NetBackend): The async backend that runs
+        net (str or kafka.net.backend.NetBackend): The async backend that runs
             this client's network I/O event loop. One of: a NetBackend
             instance; a registered name -- 'selector' (the built-in
             NetworkSelector) or 'asyncio' (runs I/O on an asyncio loop); or None

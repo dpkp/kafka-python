@@ -4,7 +4,7 @@ Runs a private ``asyncio`` event loop on a dedicated daemon thread, mirroring
 ``NetworkSelector``'s threading model, and implements the ``NetBackend``
 contract on top of asyncio primitives. Selected via ``net='asyncio'`` or
 auto-detected when constructed inside a running asyncio loop (see
-``kafka.net.backends.resolve_backend``).
+``kafka.net.backend.resolve_backend``).
 
 Phase 1 preserves the synchronous public API: ``run()`` blocks the calling
 thread on the loop thread; it does not run on the caller's own loop.

@@ -6,7 +6,7 @@ from .mock_broker import MockBroker
 from kafka.cluster import ClusterMetadata
 from kafka.net.compat import KafkaNetClient
 from kafka.net.manager import KafkaConnectionManager
-from kafka.net.backends.selector import NetworkSelector
+from kafka.net.backend.selector import NetworkSelector
 from kafka.protocol.metadata import MetadataResponse
 
 
