@@ -7,7 +7,7 @@ import pytest
 
 from kafka.errors import KafkaTimeoutError
 from kafka.future import Future
-from kafka.net.selector import (
+from kafka.net.backends.selector import (
     KernelEvent,
     NetworkSelector,
     Task,

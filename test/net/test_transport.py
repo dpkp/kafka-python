@@ -7,7 +7,7 @@ import pytest
 
 import kafka.errors as Errors
 from kafka.future import Future
-from kafka.net.selector import NetworkSelector, TaskState
+from kafka.net.backends.selector import NetworkSelector, TaskState
 from kafka.net.transport import KafkaSSLTransport, KafkaTCPTransport
 
 

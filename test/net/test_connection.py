@@ -6,18 +6,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from kafka.future import Future
-from kafka.net.selector import NetworkSelector
 from kafka.net.connection import KafkaConnection
 from kafka.net.transport import KafkaTCPTransport
 from kafka.protocol.broker_version_data import BrokerVersionData
 from kafka.protocol.metadata import ApiVersionsRequest
 from kafka.protocol.parser import KafkaProtocol
 import kafka.errors as Errors
-
-
-@pytest.fixture
-def net():
-    return NetworkSelector()
 
 
 @pytest.fixture

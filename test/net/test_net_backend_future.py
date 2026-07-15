@@ -12,7 +12,7 @@ import pytest
 
 from kafka.future import Future
 from kafka.net.backends import NetBackendFuture
-from kafka.net.selector import NetworkSelector
+from kafka.net.backends.selector import NetworkSelector
 
 
 class NetBackendFutureContract:

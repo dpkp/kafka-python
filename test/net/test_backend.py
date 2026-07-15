@@ -13,7 +13,7 @@ import pytest
 from kafka.net.backends.abstract import (
     NetBackend, NetTransport, resolve_backend, register_backend, _BACKENDS,
 )
-from kafka.net.selector import NetworkSelector
+from kafka.net.backends.selector import NetworkSelector
 from kafka.net.transport import KafkaTCPTransport
 
 
