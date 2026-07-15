@@ -27,7 +27,7 @@ Three things are intentionally **not** part of the contract:
 
 * ``wait_read`` / ``wait_write`` / ``unregister_event`` -- the low-level
   fd-readiness primitives. They are the *selector's* private mechanism (used
-  only inside ``kafka/net/transport.py`` + ``inet.py``, zero core callers) and
+  only inside ``kafka/net/backend/transport.py`` + ``inet.py``, zero core callers) and
   do not port to asyncio/Twisted. The connection seam replaces them.
 * ``poll(timeout_ms, future=...)`` -- the legacy single-tick driver. Its only
   remaining caller is the ``KafkaNetClient`` compat shim

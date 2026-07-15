@@ -7,7 +7,7 @@ import pytest
 
 from kafka.future import Future
 from kafka.net.connection import KafkaConnection
-from kafka.net.transport import KafkaTCPTransport
+from kafka.net.backend.transport import KafkaTCPTransport
 from kafka.protocol.broker_version_data import BrokerVersionData
 from kafka.protocol.metadata import ApiVersionsRequest
 from kafka.protocol.parser import KafkaProtocol

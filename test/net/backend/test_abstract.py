@@ -14,7 +14,7 @@ from kafka.net.backend.abstract import (
     NetBackend, NetTransport, resolve_backend, register_backend, _BACKENDS,
 )
 from kafka.net.backend.selector import NetworkSelector
-from kafka.net.transport import KafkaTCPTransport
+from kafka.net.backend.transport import KafkaTCPTransport
 
 
 # The full contract surface, kept here so a missing/renamed method fails loudly.
