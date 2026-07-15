@@ -95,8 +95,6 @@ driving the protocol layer directly from the REPL.
   handshake.
 - :mod:`~kafka.net.transport` - Async socket I/O with write buffering,
   pause/resume hooks, and the asyncio-shaped protocol callback surface.
-- :mod:`~kafka.net.inet` - DNS lookup + non-blocking connect, plus a
-  URL-scheme registry that resolves ``proxy_url`` to socket factories.
 - :mod:`~kafka.net.http_connect` - Tunnels broker connections through
   an HTTP CONNECT proxy (RFC 7231).
 - :mod:`~kafka.net.socks5` - SOCKS5 client with optional username/password
@@ -109,7 +107,6 @@ driving the protocol layer directly from the REPL.
    manager <net/manager>
    connection <net/connection>
    transport <net/transport>
-   inet <net/inet>
    http_connect <net/http_connect>
    socks5 <net/socks5>
 
