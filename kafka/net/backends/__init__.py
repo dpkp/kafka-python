@@ -4,4 +4,4 @@ from .abstract import (
 )
 
 register_backend_lazy('selector', 'kafka.net.selector', 'NetworkSelector')
-register_backend_lazy('asyncio', 'kafka.net.asyncio_backend', 'AsyncioBackend')
+register_backend_lazy('asyncio', 'kafka.net.backends.asyncio_backend', 'AsyncioBackend')

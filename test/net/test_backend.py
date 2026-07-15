@@ -120,7 +120,7 @@ class TestResolveBackend:
 
     def test_asyncio_name_resolves(self):
         # net='asyncio' lazily imports + registers the asyncio backend.
-        from kafka.net.asyncio_backend import AsyncioBackend
+        from kafka.net.backends.asyncio_backend import AsyncioBackend
         b = resolve_backend('asyncio', {'client_id': 'x'})
         assert isinstance(b, AsyncioBackend)
         b.close()
@@ -156,7 +156,7 @@ class TestResolveBackend:
     def test_autodetect_asyncio_in_loop_returns_asyncio_backend(self):
         # In a running asyncio loop with no explicit net, auto-detect lazily
         # registers + selects the asyncio backend (Phase-1: still own thread).
-        from kafka.net.asyncio_backend import AsyncioBackend
+        from kafka.net.backends.asyncio_backend import AsyncioBackend
 
         async def main():
             return resolve_backend(None, {'client_id': 'auto'})
