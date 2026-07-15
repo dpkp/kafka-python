@@ -193,8 +193,6 @@ class _StubProtocol:
         transport.resume_reading()
     def data_received(self, data):
         self.received += data
-    def eof_received(self):
-        return None
     def connection_lost(self, exc):
         self.closed = True
     def pause_writing(self):

@@ -221,15 +221,6 @@ class KafkaConnection:
             self.unpause('max_in_flight')
         self._reauth.on_response_processed()
 
-    def eof_received(self):
-        """ Called when the other end calls write_eof() or equivalent.
-
-        If this returns a false value (including None), the transport
-        will close itself.  If it returns a true value, closing the
-        transport is up to the protocol.
-        """
-        return False
-
     def connection_lost(self, exc):
         """ Called when the connection is lost or closed.
 

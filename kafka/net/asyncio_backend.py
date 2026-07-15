@@ -392,9 +392,6 @@ class _AsyncioProtocolAdapter(asyncio.Protocol):
         self.transport._bump_read()
         self._conn.data_received(data)
 
-    def eof_received(self):
-        return self._conn.eof_received()
-
     def connection_lost(self, exc):
         self._conn.connection_lost(exc)
 
