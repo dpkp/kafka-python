@@ -104,8 +104,8 @@ class BackendFuture(Protocol):
 
 
 @runtime_checkable
-class Transport(Protocol):
-    """The transport surface a backend's ``create_connection`` returns.
+class NetTransport(Protocol):
+    """The transport surface used by NetProtocol / NetBackend.
 
     The subset of the ``asyncio.Transport`` / Twisted ``ITransport`` surface
     that ``KafkaConnection`` actually drives (plus ``last_activity``, which the
@@ -113,8 +113,7 @@ class Transport(Protocol):
     builds one and wires it to the conn. The selector's ``KafkaTCPTransport``
     and an asyncio-transport adapter both satisfy it.
     """
-
-    # Monotonic timestamp of the last read/write; manager idle-sweeping reads it.
+    # Monotonic timestamp of the last read/write; used for idle-sweeping
     last_activity: float
 
     def write(self, data: bytes) -> None: ...
@@ -124,6 +123,20 @@ class Transport(Protocol):
     def pause_reading(self) -> None: ...
     def resume_reading(self) -> None: ...
     def host_port(self) -> Tuple[str, int]: ...
+    def get_protocol(self) -> 'NetProtocol': ...
+    def set_protocol(self, protocol: 'NetProtocol') -> None: ...
+
+
+@runtime_checkable
+class NetProtocol(Protocol):
+    # Monotonic timestamp of the last read/write; used for idle-sweeping
+    last_activity: float
+
+    def connection_made(self, transport: NetTransport) -> None: ...
+    def data_received(self, data: bytes) -> None: ...
+    def connection_lost(self, exc: Any = None) -> None: ...
+    def pause_writing(self) -> None: ...
+    def resume_writing(self) -> None: ...
 
 
 @runtime_checkable
@@ -174,7 +187,7 @@ class NetBackend(Protocol):
     # --- connection seam --------------------------------------------------
     async def create_connection(
         self,
-        protocol: Any,
+        protocol: NetProtocol,
         host: str,
         port: int,
         *,
