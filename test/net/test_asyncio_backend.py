@@ -1,7 +1,7 @@
 """Tests for the asyncio NetBackend (kafka/net/asyncio_backend.py).
 
 Covers backend-specific behavior (lifecycle, timers, cross-thread run), reuses
-the shared BackendFuture conformance suite against the asyncio-backed future,
+the shared NetBackendFuture conformance suite against the asyncio-backed future,
 and drives a real protocol round-trip through a MockBroker on a started
 AsyncioBackend -- the both-backends coverage for the async paths.
 """
@@ -18,7 +18,7 @@ from kafka.net.backend import NetBackend
 from kafka.net.manager import KafkaConnectionManager
 from kafka.protocol.metadata import MetadataRequest
 from test.mock_broker import MockBroker
-from test.net.test_backend_future import BackendFutureContract
+from test.net.test_net_backend_future import NetBackendFutureContract
 
 
 @pytest.fixture
@@ -158,8 +158,8 @@ class TestCreateFuture:
         assert not fut.is_done
 
 
-class TestAsyncioBackendFuture(BackendFutureContract):
-    """Reuse the shared BackendFuture conformance suite for the asyncio future."""
+class TestAsyncioNetBackendFuture(NetBackendFutureContract):
+    """Reuse the shared NetBackendFuture conformance suite for the asyncio future."""
 
     @pytest.fixture(autouse=True)
     def _net(self):
@@ -193,8 +193,6 @@ class _StubProtocol:
         transport.resume_reading()
     def data_received(self, data):
         self.received += data
-    def eof_received(self):
-        return None
     def connection_lost(self, exc):
         self.closed = True
     def pause_writing(self):
@@ -238,7 +236,7 @@ class TestCreateConnection:
             await started_backend.create_connection(proto, host, port)
             transport = proto.transport
             assert transport.host_port() == '%s:%s' % (host, port)
-            assert transport.getPeer()[0:2] == (host, port)
+            assert transport.get_peer()[0:2] == (host, port)
             transport.write(b'ping')
             for _ in range(100):
                 if proto.received:

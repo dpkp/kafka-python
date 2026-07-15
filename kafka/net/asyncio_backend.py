@@ -23,7 +23,7 @@ class AsyncioFuture(Future):
 
     Inherits ``kafka.future.Future``'s callback core and overrides only
     ``__await__`` to bridge to an ``asyncio.Future`` so an asyncio Task can
-    await it. Per the BackendFuture contract this is created and resolved on
+    await it. Per the NetBackendFuture contract this is created and resolved on
     the loop thread only; a fresh asyncio.Future is minted per awaiter, so
     fan-out (multiple awaiters / callbacks) is preserved.
     """
@@ -392,9 +392,6 @@ class _AsyncioProtocolAdapter(asyncio.Protocol):
         self.transport._bump_read()
         self._conn.data_received(data)
 
-    def eof_received(self):
-        return self._conn.eof_received()
-
     def connection_lost(self, exc):
         self._conn.connection_lost(exc)
 
@@ -411,7 +408,7 @@ class _AsyncioTransport:
     Wraps an asyncio transport + its protocol adapter and exposes the surface
     KafkaConnection / the manager drive (a superset of the NetBackend Transport
     protocol): write/close/abort/is_closing, pause/resume_reading, set/get
-    protocol, host/host_port/getPeer, and last_activity for idle sweeping.
+    protocol, host/host_port/get_peer, and last_activity for idle sweeping.
     """
 
     def __init__(self, transport, host, port):
@@ -461,7 +458,7 @@ class _AsyncioTransport:
         except (RuntimeError, AttributeError):
             pass
 
-    def getPeer(self):
+    def get_peer(self):
         peer = self._t.get_extra_info('peername')
         return peer if peer is not None else (self.host, self._port)
 

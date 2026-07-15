@@ -43,7 +43,7 @@ def _initialize_coro(maybe_coro):
 
 
 class SelectorFuture(Future):
-    """The NetworkSelector's loop-awaitable future (see backend.BackendFuture).
+    """The NetworkSelector's loop-awaitable future (see backend.NetBackendFuture).
 
     ``kafka.future.Future`` is the thread-safe callback/handoff core with no
     ``__await__``; ``SelectorFuture`` adds it: ``yield self`` suspends the
@@ -550,7 +550,7 @@ class NetworkSelector:
         return task
 
     def create_future(self):
-        """Create a loop-awaitable future (see backend.BackendFuture).
+        """Create a loop-awaitable future (see backend.NetBackendFuture).
 
         Portability seam for pluggable backends: core coroutines call this
         instead of constructing ``Future`` directly, so an alternate backend

@@ -130,12 +130,6 @@ class MockTransport:
         self._net.call_soon(self._process_requests)
         return len(data)
 
-    def writelines(self, data_list):
-        for data in data_list:
-            self._write_buffer.extend(data)
-        self.last_write = time.monotonic()
-        self._net.call_soon(self._process_requests)
-
     def close(self):
         if not self._closed:
             self._closed = True
@@ -150,16 +144,7 @@ class MockTransport:
                 self._protocol.connection_lost(error)
                 self._protocol = None
 
-    def can_write_eof(self):
-        return False
-
-    def write_eof(self):
-        pass
-
-    def getHost(self):
-        return (self._host, 0)
-
-    def getPeer(self):
+    def get_peer(self):
         return (self._host, self._port)
 
     def host_port(self):

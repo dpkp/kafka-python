@@ -107,12 +107,6 @@ class TestKafkaTCPTransport:
         with pytest.raises(RuntimeError):
             t.write(b'hello')
 
-    def test_writelines(self, net):
-        sock = _make_mock_sock()
-        t = KafkaTCPTransport(net, sock)
-        t.writelines([b'hello', b'world'])
-        assert len(t._write_buffer) == 2
-
     def test_close_marks_closed(self, net):
         sock = _make_mock_sock()
         t = KafkaTCPTransport(net, sock)
@@ -223,17 +217,6 @@ class TestKafkaTCPTransport:
         assert t._sock is None
         proto.connection_lost.assert_called_once_with(err)
 
-    def test_can_write_eof(self, net):
-        sock = _make_mock_sock()
-        t = KafkaTCPTransport(net, sock)
-        assert t.can_write_eof()
-
-    def test_write_eof_sets_flag(self, net):
-        sock = _make_mock_sock()
-        t = KafkaTCPTransport(net, sock)
-        t.write_eof()
-        assert not t._write
-
     def test_end_to_end_write_read(self, net, socketpair):
         rsock, wsock = socketpair
         t = KafkaTCPTransport(net, wsock)
@@ -249,50 +232,6 @@ class TestKafkaTCPTransport:
         net.call_soon(reader)
         net.poll(timeout_ms=1000, future=f)
         assert received == [b'hello world']
-
-    def test_write_eof_empty_buffer_shuts_down_immediately(self, net):
-        # Fast path: nothing buffered, so write_eof half-closes right away.
-        sock = _make_mock_sock()
-        t = KafkaTCPTransport(net, sock)
-        t.write_eof()
-        sock.shutdown.assert_called_once_with(socket.SHUT_WR)
-
-    def test_write_eof_defers_shutdown_until_buffer_flushed(self, net):
-        # With data still buffered, write_eof must NOT shut down the write side
-        # yet -- doing so would discard the unflushed bytes (the latent bug).
-        sock = _make_mock_sock()
-        t = KafkaTCPTransport(net, sock)
-        t.write(b'pending')
-        t.write_eof()
-        assert not t._write
-        assert t._write_buffer  # still buffered
-        sock.shutdown.assert_not_called()
-
-    def test_write_eof_flushes_buffered_data_then_shuts_write(self, net, socketpair):
-        # Regression: data buffered before write_eof() must be fully delivered
-        # to the peer, and only then is the write side shut down (peer sees EOF).
-        rsock, wsock = socketpair
-        t = KafkaTCPTransport(net, wsock)
-        t.write(b'hello world')  # buffered; _write_to_sock scheduled
-        t.write_eof()            # half-close requested -- flush must win
-        assert t._write_buffer
-
-        f = Future()
-        received = []
-        async def reader():
-            while True:
-                await net.wait_read(rsock)
-                data = rsock.recv(1024)
-                received.append(data)
-                if data == b'':  # EOF => peer shut down its write side
-                    break
-            f.success(True)
-        net.call_soon(reader)
-        net.poll(timeout_ms=1000, future=f)
-
-        assert b''.join(received) == b'hello world'
-        assert received[-1] == b''  # shutdown(SHUT_WR) happened after the flush
-        assert not t._write_buffer
 
     def test_close_empty_buffer_closes_immediately(self, net):
         # Fast path: nothing buffered, so close() tears down synchronously.
@@ -346,12 +285,6 @@ class TestKafkaTCPTransport:
         assert b''.join(received) == b'goodbye world'
         assert t._sock is None  # _write_to_sock flushed then _close()d
         proto.connection_lost.assert_called_once_with(None)
-
-    def test_writeSequence(self, net):
-        sock = _make_mock_sock()
-        t = KafkaTCPTransport(net, sock)
-        t.writeSequence([b'a', b'b'])
-        assert len(t._write_buffer) == 2
 
     def test_str_with_tcp_socket(self, net):
         sock = _make_mock_sock()

@@ -32,7 +32,6 @@ class KafkaTCPTransport:
     def last_activity(self):
         return max(self.last_write, self.last_read)
 
-    # AsyncIO
     def is_closing(self):
         """Return True if the transport is closing or closed."""
         return self._closed
@@ -128,39 +127,6 @@ class KafkaTCPTransport:
         recvd_data = b''.join(recvd)
         return recvd_data, err
 
-    """Interface for write-only transports."""
-
-    def set_write_buffer_limits(self, high=None, low=None):
-        """Set the high- and low-water limits for write flow control.
-
-        These two values control when to call the protocol's
-        pause_writing() and resume_writing() methods.  If specified,
-        the low-water limit must be less than or equal to the
-        high-water limit.  Neither value can be negative.
-
-        The defaults are implementation-specific.  If only the
-        high-water limit is given, the low-water limit defaults to an
-        implementation-specific value less than or equal to the
-        high-water limit.  Setting high to zero forces low to zero as
-        well, and causes pause_writing() to be called whenever the
-        buffer becomes non-empty.  Setting low to zero causes
-        resume_writing() to be called only once the buffer is empty.
-        Use of zero for either limit is generally sub-optimal as it
-        reduces opportunities for doing I/O and computation
-        concurrently.
-        """
-        raise NotImplementedError
-
-    def get_write_buffer_size(self):
-        """Return the current size of the write buffer."""
-        raise NotImplementedError
-
-    def get_write_buffer_limits(self):
-        """Get the high and low watermarks for write flow control.
-        Return a tuple (low, high) where low and high are
-        positive number of bytes."""
-        raise NotImplementedError
-
     def write(self, data):
         """Write some data bytes to the transport.
 
@@ -176,16 +142,6 @@ class KafkaTCPTransport:
             self._writing = True
             self._write_task =  self._net.call_soon(self._write_to_sock)
         return len(data)
-
-    def writelines(self, list_of_data):
-        """Write a list (or any iterable) of data bytes to the transport."""
-        if not self._write or self._closed:
-            raise RuntimeError('Transport closed for writes')
-        self._write_buffer.extend(list_of_data)
-        if not self._writing:
-            self._writing = True
-            self._write_task = self._net.call_soon(self._write_to_sock)
-        return sum(len(data) for data in list_of_data)
 
     async def _write_to_sock(self):
         try:
@@ -229,22 +185,6 @@ class KafkaTCPTransport:
                     return total_bytes, Errors.KafkaConnectionError(e)
         return total_bytes, None
 
-    def write_eof(self):
-        """Close the write end after flushing buffered data.
-
-        (This is like typing ^D into a UNIX program reading from stdin.)
-
-        Data may still be received.
-        """
-        log.debug('%s: write_eof', self)
-        self._write = False
-        if not self._write_buffer:
-            self._sock.shutdown(socket.SHUT_WR)
-
-    def can_write_eof(self):
-        """Return True if this transport supports write_eof(), False if not."""
-        return True
-
     def abort(self, error=None):
         """Close the transport immediately.
 
@@ -282,19 +222,7 @@ class KafkaTCPTransport:
         if proto is not None:
             proto.connection_lost(error)
 
-  # Twisted
-    def abortConnection(self):
-        """Close the connection abruptly."""
-        return self.abort()
-
-    def getHost(self):
-        """Similar to getPeer, but returns an address describing this side of the connection.
-
-        Returns IPv4Address or IPv6Address.
-        """
-        return self._sock.getsockname()
-
-    def getPeer(self):
+    def get_peer(self):
         """Get the remote address of this connection.
 
         Treat this method with caution. It is the unfortunate result of the CGI and Jabber standards,
@@ -304,49 +232,6 @@ class KafkaTCPTransport:
         Returns IPv4Address or IPv6Address.
         """
         return self._sock.getpeername()
-
-    def getTcpKeepAlive(self):
-        """Return if SO_KEEPALIVE is enabled."""
-        return self._sock.getsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE)
-
-    def getTcpNoDelay(self):
-        """Return if TCP_NODELAY is enabled."""
-        return self._sock.getsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY)
-
-    def loseWriteConnection(self):
-        """Half-close the write side of a TCP connection."""
-        return self.write_eof()
-
-    def setTcpKeepAlive(self, enabled):
-        """Enable/disable SO_KEEPALIVE."""
-        return self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, enabled)
-
-    def setTcpNoDelay(self, enabled):
-        """Enable/disable TCP_NODELAY."""
-        return self._sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, enabled)
-
-    def loseConnection(self):
-        """Close my connection, after writing all pending data.
-
-        Note that if there is a registered producer on a transport it will not be closed until the producer has been unregistered.
-        """
-        return self.close()
-
-    #def write(self, data):
-    #    """Write some data to the physical connection, in sequence, in a non-blocking fashion.
-    #
-    #    If possible, make sure that it is all written. No data will ever be lost,
-    #    although (obviously) the connection may be closed before it all gets through.
-    #    """
-    #    pass
-
-    def writeSequence(self, data):
-        """Write an iterable of byte strings to the physical connection.
-
-        If possible, make sure that all of the data is written to the socket at once,
-        without first copying it all into a single byte string.
-        """
-        return self.writelines(data)
 
     async def handshake(self):
         log.info('%s: connected to %s', self, self._sock)

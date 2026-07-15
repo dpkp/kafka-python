@@ -9,7 +9,7 @@ fetcher, sender) reach for through ``self._net`` / ``manager._net``.
 implementation; an asyncio backend (and eventually Twisted) implements the
 same surface so it can be swapped in via ``net=`` without touching core code.
 
-The :class:`BackendFuture` contract is the surface of the
+The :class:`NetBackendFuture` contract is the surface of the
 loop-awaitable futures a backend hands out from ``net.create_future()``. The
 selector's implementation is ``kafka.net.selector.SelectorFuture``; an asyncio
 (and eventually Twisted) backend supplies its own.
@@ -43,7 +43,7 @@ Method families:
 * **Timing** -- ``sleep`` (backend-specific awaitable; core coroutines await it).
 * **Connection** -- ``create_connection`` (returns a :class:`Transport`).
 * **Cross-thread bridge** -- ``run`` (schedule on the loop, block the caller).
-* **Future factory** -- ``create_future`` (see ``BackendFuture``).
+* **Future factory** -- ``create_future`` (see ``NetBackendFuture``).
 * **Cross-thread wake** -- ``wakeup``.
 """
 import importlib
@@ -51,7 +51,7 @@ from typing import Any, Callable, Optional, Protocol, Sequence, Tuple, runtime_c
 
 
 @runtime_checkable
-class BackendFuture(Protocol):
+class NetBackendFuture(Protocol):
     """Contract for the awaitable futures returned by ``net.create_future()``.
 
     A pluggable async backend (the kafka.net selector, asyncio, Twisted, ...)
@@ -60,7 +60,7 @@ class BackendFuture(Protocol):
     backends. The selector's ``SelectorFuture`` is the reference implementation:
     it subclasses the thread-safe ``kafka.future.Future`` (the portable callback
     core) and adds ``__await__``. A plain ``Future`` is deliberately NOT a
-    BackendFuture -- it has no ``__await__`` -- so awaiting a cross-thread
+    NetBackendFuture -- it has no ``__await__`` -- so awaiting a cross-thread
     handoff future fails loudly instead of silently working on one backend.
 
     Pinned semantics -- the three axes where backends could otherwise diverge:
@@ -93,19 +93,19 @@ class BackendFuture(Protocol):
     exception: Any
 
     def __await__(self): ...
-    def success(self, value: Any) -> 'BackendFuture': ...
-    def failure(self, e: Any) -> 'BackendFuture': ...
-    def add_callback(self, f: Callable, *args: Any, **kwargs: Any) -> 'BackendFuture': ...
-    def add_errback(self, f: Callable, *args: Any, **kwargs: Any) -> 'BackendFuture': ...
-    def add_both(self, f: Callable, *args: Any, **kwargs: Any) -> 'BackendFuture': ...
-    def chain(self, future: 'BackendFuture') -> 'BackendFuture': ...
+    def success(self, value: Any) -> 'NetBackendFuture': ...
+    def failure(self, e: Any) -> 'NetBackendFuture': ...
+    def add_callback(self, f: Callable, *args: Any, **kwargs: Any) -> 'NetBackendFuture': ...
+    def add_errback(self, f: Callable, *args: Any, **kwargs: Any) -> 'NetBackendFuture': ...
+    def add_both(self, f: Callable, *args: Any, **kwargs: Any) -> 'NetBackendFuture': ...
+    def chain(self, future: 'NetBackendFuture') -> 'NetBackendFuture': ...
     def succeeded(self) -> bool: ...
     def failed(self) -> bool: ...
 
 
 @runtime_checkable
-class Transport(Protocol):
-    """The transport surface a backend's ``create_connection`` returns.
+class NetTransport(Protocol):
+    """The transport surface used by NetProtocol / NetBackend.
 
     The subset of the ``asyncio.Transport`` / Twisted ``ITransport`` surface
     that ``KafkaConnection`` actually drives (plus ``last_activity``, which the
@@ -113,8 +113,7 @@ class Transport(Protocol):
     builds one and wires it to the conn. The selector's ``KafkaTCPTransport``
     and an asyncio-transport adapter both satisfy it.
     """
-
-    # Monotonic timestamp of the last read/write; manager idle-sweeping reads it.
+    # Monotonic timestamp of the last read/write; used for idle-sweeping
     last_activity: float
 
     def write(self, data: bytes) -> None: ...
@@ -124,6 +123,20 @@ class Transport(Protocol):
     def pause_reading(self) -> None: ...
     def resume_reading(self) -> None: ...
     def host_port(self) -> Tuple[str, int]: ...
+    def get_protocol(self) -> 'NetProtocol': ...
+    def set_protocol(self, protocol: 'NetProtocol') -> None: ...
+
+
+@runtime_checkable
+class NetProtocol(Protocol):
+    # Monotonic timestamp of the last read/write; used for idle-sweeping
+    last_activity: float
+
+    def connection_made(self, transport: NetTransport) -> None: ...
+    def data_received(self, data: bytes) -> None: ...
+    def connection_lost(self, exc: Any = None) -> None: ...
+    def pause_writing(self) -> None: ...
+    def resume_writing(self) -> None: ...
 
 
 @runtime_checkable
@@ -155,7 +168,7 @@ class NetBackend(Protocol):
     def call_soon_threadsafe(self, callback: Any) -> Any:
         """``call_soon`` from another thread; wakes the loop."""
 
-    def call_soon_with_future(self, coro: Any, *args: Any) -> BackendFuture:
+    def call_soon_with_future(self, coro: Any, *args: Any) -> NetBackendFuture:
         """Schedule ``coro`` and return a future that resolves with its result."""
 
     def call_at(self, when: float, task: Any) -> Any:
@@ -174,7 +187,7 @@ class NetBackend(Protocol):
     # --- connection seam --------------------------------------------------
     async def create_connection(
         self,
-        protocol: Any,
+        protocol: NetProtocol,
         host: str,
         port: int,
         *,
@@ -211,8 +224,8 @@ class NetBackend(Protocol):
         """
 
     # --- future factory ---------------------------------------------------
-    def create_future(self) -> BackendFuture:
-        """Create a loop-awaitable future (see ``BackendFuture``)."""
+    def create_future(self) -> NetBackendFuture:
+        """Create a loop-awaitable future (see ``NetBackendFuture``)."""
 
     # --- misc -------------------------------------------------------------
     def wakeup(self) -> None:

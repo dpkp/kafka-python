@@ -1,6 +1,6 @@
-"""Conformance suite for the BackendFuture contract (kafka/future.py).
+"""Conformance suite for the NetBackendFuture contract (kafka/future.py).
 
-``BackendFutureContract`` is a reusable, backend-agnostic test mixin: it
+``NetBackendFutureContract`` is a reusable, backend-agnostic test mixin: it
 pins the contract that every backend's ``create_future()`` must satisfy
 (callback core, fan-out, await semantics). A backend provides two hooks --
 ``make_future()`` (a fresh pending future) and ``drive(coros)`` (run the
@@ -11,11 +11,11 @@ reuses the same mixin with an asyncio-driven subclass.
 import pytest
 
 from kafka.future import Future
-from kafka.net.backend import BackendFuture
+from kafka.net.backend import NetBackendFuture
 from kafka.net.selector import NetworkSelector
 
 
-class BackendFutureContract:
+class NetBackendFutureContract:
     # --- hooks a backend must provide -------------------------------------
     def make_future(self):
         raise NotImplementedError
@@ -26,7 +26,7 @@ class BackendFutureContract:
 
     # --- typing / identity ------------------------------------------------
     def test_satisfies_protocol(self):
-        assert isinstance(self.make_future(), BackendFuture)
+        assert isinstance(self.make_future(), NetBackendFuture)
 
     # --- callback core (no loop needed) -----------------------------------
     def test_success_fires_callback(self):
@@ -147,7 +147,7 @@ class BackendFutureContract:
         assert caught == ['nope']
 
 
-class TestNetworkSelectorBackendFuture(BackendFutureContract):
+class TestNetworkSelectorNetBackendFuture(NetBackendFutureContract):
     """The selector backend: create_future() returns a SelectorFuture, driven
     synchronously via NetworkSelector.drain() (no IO thread needed)."""
 
@@ -168,16 +168,16 @@ class TestNetworkSelectorBackendFuture(BackendFutureContract):
         self.net.drain()
 
 
-class TestBackendFutureTypeEnforcement:
-    """A backend's create_future() result satisfies BackendFuture -- covered by
-    TestNetworkSelectorBackendFuture.test_satisfies_protocol above. Here we pin
+class TestNetBackendFutureTypeEnforcement:
+    """A backend's create_future() result satisfies NetBackendFuture -- covered by
+    TestNetworkSelectorNetBackendFuture.test_satisfies_protocol above. Here we pin
     the negative: the plain thread-safe Future (a cross-thread handoff)
     deliberately does NOT (no __await__), which turns 'awaited a handoff future'
     into a loud error rather than a silent backend-specific bug."""
 
     def test_plain_future_is_not_backend_future(self):
-        assert not isinstance(Future(), BackendFuture)
+        assert not isinstance(Future(), NetBackendFuture)
         assert not hasattr(Future(), '__await__')
 
     def test_non_future_is_not_backend_future(self):
-        assert not isinstance(object(), BackendFuture)
+        assert not isinstance(object(), NetBackendFuture)

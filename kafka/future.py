@@ -19,7 +19,7 @@ class Future:
     selector), which subclasses ``Future`` and adds ``__await__``. Keeping
     ``__await__`` off the base makes the invariant type-enforced -- awaiting a
     plain handoff ``Future`` raises immediately rather than silently working on
-    one backend and breaking on another. See ``kafka.net.backend.BackendFuture``
+    one backend and breaking on another. See ``kafka.net.backend.NetBackendFuture``
     for the awaitable contract.
     """
     __slots__ = ('is_done', 'value', 'exception', '_callbacks', '_errbacks', '_lock')

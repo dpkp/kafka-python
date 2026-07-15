@@ -11,7 +11,7 @@ import threading
 import pytest
 
 from kafka.net.backend import (
-    NetBackend, Transport, resolve_backend, register_backend, _BACKENDS,
+    NetBackend, NetTransport, resolve_backend, register_backend, _BACKENDS,
 )
 from kafka.net.selector import NetworkSelector
 from kafka.net.transport import KafkaTCPTransport
@@ -59,15 +59,15 @@ class TestNetBackendContract:
             assert hasattr(net, name), name  # still present on the selector impl
 
 
-class TestTransportContract:
+class TestNetTransportContract:
     def test_kafkatcptransport_satisfies_transport(self):
-        # Method-presence check against the Transport protocol (no socket needed).
+        # Method-presence check against the NetTransport protocol (no socket needed).
         for name in ('write', 'close', 'abort', 'is_closing',
                      'pause_reading', 'resume_reading', 'host_port'):
             assert callable(getattr(KafkaTCPTransport, name)), name
 
     def test_plain_object_is_not_transport(self):
-        assert not isinstance(object(), Transport)
+        assert not isinstance(object(), NetTransport)
 
 
 class TestOnIoThread:
