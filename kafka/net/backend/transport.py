@@ -344,12 +344,16 @@ class KafkaSSLTransport:
         if self._state == ConnectionState.HANDSHAKE:
             self._do_handshake()
             return
+        self._do_recv()
+
+    def _do_recv(self):
         data, err = self._ssl_recv()
         if err:
             self.close(err)
         else:
             self._process_outgoing()
             self._protocol.data_received(data)
+            self._do_send()
 
     def write(self, data):
         # from outer protocol (connection)
@@ -361,6 +365,9 @@ class KafkaSSLTransport:
         if self._state == ConnectionState.HANDSHAKE:
             self._do_handshake()
             return
+        self._do_send()
+
+    def _do_send(self):
         nbytes, err = self._ssl_send()
         if err:
             self.close(err)
@@ -446,6 +453,7 @@ class KafkaSSLTransport:
             log.info('%s: connected', self)
             self._state = ConnectionState.CONNECTED
             self._connect_future.success(True)
+            self._do_send()
             return
 
     async def handshake(self):
