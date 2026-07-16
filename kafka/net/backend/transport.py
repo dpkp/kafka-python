@@ -276,6 +276,7 @@ class KafkaSSLTransport:
         self._state = None
         self._connect_future = self._net.create_future()
         self._ssl_context = ssl_context
+        self.host = host
         server_hostname = host.rstrip('.') if host is not None else None
         self._incoming = ssl.MemoryBIO()
         self._outgoing = ssl.MemoryBIO()

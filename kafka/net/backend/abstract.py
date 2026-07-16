@@ -115,6 +115,9 @@ class NetTransport(Protocol):
     """
     # Monotonic timestamp of the last read/write; used for idle-sweeping
     last_activity: float
+    # User-supplied hostname (before DNS resolution); read by _sasl_authenticate
+    # so mechanisms like GSSAPI build principals against the configured name.
+    host: Optional[str]
 
     def write(self, data: bytes) -> None: ...
     def close(self) -> None: ...
