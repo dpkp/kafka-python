@@ -61,6 +61,17 @@ class KafkaAdminClient(
             rate. To avoid connection storms, a randomization factor of 0.2
             will be applied to the backoff resulting in a random range between
             20% below and 20% above the computed value. Default: 30000.
+        socket_connection_setup_timeout_ms (int): The maximum amount of time
+            the client will wait for the socket connection to be established.
+            If the connection is not established before the timeout elapses,
+            the client will close the socket and retry. Default: 10000.
+        socket_connection_setup_timeout_max_ms (int): The maximum amount of
+            time the client will wait for the socket connection to be
+            established. The connection setup timeout will increase
+            exponentially for each consecutive connection failure, up to this
+            maximum. To avoid connection storms, a randomization factor of 0.2
+            will be applied to the timeout, resulting in a random range between
+            20% below and 20% above the computed value. Default: 30000.
         request_timeout_ms (int): Client request timeout in milliseconds.
             Default: 30000.
         default_api_timeout_ms (int): Default timeout in milliseconds for
@@ -218,6 +229,8 @@ class KafkaAdminClient(
         'sasl_kerberos_service_name': 'kafka',
         'sasl_kerberos_domain_name': None,
         'sasl_oauth_token_provider': None,
+        'socket_connection_setup_timeout_ms': 10000,
+        'socket_connection_setup_timeout_max_ms': 30000,
         'proxy_url': None,
         'socks5_proxy': None,  # deprecated
 
