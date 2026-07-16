@@ -584,7 +584,7 @@ class NetworkSelector:
         try:
             protocol.connection_made(transport)
         except Exception as e:
-            transport.close(e)
+            transport.abort(e)
             raise
 
     def sleep(self, delay):
