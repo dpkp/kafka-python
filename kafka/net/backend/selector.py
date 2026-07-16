@@ -575,19 +575,16 @@ class NetworkSelector:
         """
         sock = await _inet_create_connection(self, host, port, socket_options,
                                              proxy_url=proxy_url, timeout_at=timeout_at)
+        transport = KafkaTCPTransport(self, sock, host=host)
         if ssl is not None:
-            transport = KafkaSSLTransport(self, sock, ssl, host=host)
-        else:
-            transport = KafkaTCPTransport(self, sock, host=host)
-        try:
-            await transport.handshake()
-        except Exception as e:
-            transport.close()
-            raise Errors.KafkaConnectionError('Handshake failed: %s' % e)
+            ssl_wrapper = KafkaSSLTransport(self, ssl, host=host)
+            ssl_wrapper.connection_made(transport)
+            await ssl_wrapper.handshake()
+            transport = ssl_wrapper
         try:
             protocol.connection_made(transport)
-        except Exception:
-            transport.close()
+        except Exception as e:
+            transport.abort(e)
             raise
 
     def sleep(self, delay):
