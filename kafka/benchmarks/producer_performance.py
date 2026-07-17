@@ -74,7 +74,7 @@ class ProducerPerformance:
                         count_failure += 1
                     else:
                         raise ValueError(r)
-                print("%d suceeded, %d failed" % (count_success, count_failure))
+                print("%d succeeded, %d failed" % (count_success, count_failure))
 
             start_time = time.monotonic()
             _benchmark()
