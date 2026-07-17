@@ -141,6 +141,49 @@ class TestAssignFromSubscribed:
         # Still gates the assigned one.
         assert s.assignment[TopicPartition('foo', 0)]._pending_revocation is True
 
+    def test_pending_revocation_cleared_for_partition_retained_across_rebalance(self):
+        """Regression test for #3131.
+
+        Under the EAGER rebalance protocol the coordinator marks *every*
+        currently-owned partition pending-revocation before JoinGroup (see
+        ConsumerCoordinator._on_join_prepare_async). When the rebalance
+        completes, ``assign_from_subscribed`` preserves the
+        ``TopicPartitionState`` for any partition the member is given back,
+        so a *retained* partition carries a stale ``_pending_revocation``
+        flag. Because the flag is only ever cleared in
+        ``TopicPartitionState.__init__``, such a partition reports
+        not-fetchable forever - the fetcher positions it (ListOffsets) but
+        never issues a FetchRequest - until a later rebalance drops it and
+        creates fresh state.
+
+        A partition retained across a rebalance must be fetchable again.
+        """
+        s = self._subscribed()
+        foo0 = TopicPartition('foo', 0)
+        foo1 = TopicPartition('foo', 1)
+        s.assign_from_subscribed([foo0, foo1])
+        for tp in (foo0, foo1):
+            s.assignment[tp].seek(
+                OffsetAndMetadata(offset=0, metadata='', leader_epoch=-1))
+        assert s.is_fetchable(foo0)
+        assert s.is_fetchable(foo1)
+
+        # EAGER pre-rebalance: mark the full current assignment for revocation
+        # (mirrors mark_pending_revocation(assigned_partitions())).
+        s.mark_pending_revocation({foo0, foo1})
+        assert not s.is_fetchable(foo0)
+        assert not s.is_fetchable(foo1)
+
+        # Rebalance completes and the member is assigned the same partitions
+        # back. Their state (and valid position) is preserved.
+        s.assign_from_subscribed([foo0, foo1])
+        assert s.assignment[foo0].has_valid_position
+        assert s.assignment[foo1].has_valid_position
+
+        # They must be fetchable again - the revocation window is over.
+        assert s.is_fetchable(foo0)
+        assert s.is_fetchable(foo1)
+
     def test_preserves_preferred_read_replica_on_kept_partition(self):
         s = self._subscribed()
         s.assign_from_subscribed([TopicPartition('foo', 0)])
