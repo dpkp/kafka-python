@@ -624,8 +624,7 @@ class NetworkSelector:
             raise Errors.KafkaTimeoutError('Connection timed out')
 
     async def create_connection(self, protocol, host, port, *, ssl=None,
-                                proxy_url=None, socket_options=(),
-                                timeout_at=None):
+                                socket_options=(), timeout_at=None):
         """Establish a connected transport to host:port and wire ``protocol``.
 
         The selector owns the raw socket: DNS + non-blocking connect, then

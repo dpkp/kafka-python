@@ -319,13 +319,6 @@ class TestCreateConnection:
         finally:
             srv.close()
 
-    def test_proxy_url_raises(self, started_backend):
-        async def do():
-            await started_backend.create_connection(
-                _StubProtocol(), 'h', 1, proxy_url='socks5://proxy:1080')
-        with pytest.raises(NotImplementedError, match='proxy'):
-            started_backend.run(do)
-
 
 class TestLoopConfig:
     def test_loop_factory_used_and_owned(self):
