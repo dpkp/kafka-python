@@ -12,7 +12,6 @@ import time
 
 import kafka.errors as Errors
 from kafka.future import Future
-from kafka.net.backend.inet import create_connection as _inet_create_connection
 from kafka.net.backend.transport import KafkaTCPTransport
 from kafka.net.ssl import KafkaSSLTransport
 from kafka.version import __version__
@@ -638,8 +637,9 @@ class NetworkSelector:
         because it closed mid-connect) the transport is closed before raising,
         so the caller never handles a transport instance directly.
         """
-        sock = await _inet_create_connection(self, host, port, socket_options,
-                                             proxy_url=proxy_url, timeout_at=timeout_at)
+        sock = await self.connect_host(host, port,
+                                       socket_options=socket_options,
+                                       timeout_at=timeout_at)
         transport = KafkaTCPTransport(self, sock, host=host)
         if ssl is not None:
             ssl_wrapper = KafkaSSLTransport(self, ssl, host=host)
