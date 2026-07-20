@@ -142,6 +142,21 @@ class NetProtocol(Protocol):
     def resume_writing(self) -> None: ...
 
 
+import socket
+from typing import List, Tuple, Union, Any
+
+# Complete signature representation
+AddrInfoResult = List[
+    Tuple[
+        socket.AddressFamily,  # 0. family (e.g., AF_INET, AF_INET6)
+        socket.SocketKind,     # 1. type (e.g., SOCK_STREAM, SOCK_DGRAM)
+        int,                   # 2. proto (protocol number)
+        str,                   # 3. canonname (canonical name string)
+        Union[Tuple[str, int], Tuple[str, int, int, int]]  # 4. sockaddr
+    ]
+]
+
+
 @runtime_checkable
 class NetBackend(Protocol):
     """Structural contract for a pluggable async event-loop backend.
@@ -188,6 +203,9 @@ class NetBackend(Protocol):
         """Awaitable that resolves after ``delay`` seconds."""
 
     # --- connection seam --------------------------------------------------
+    async def getaddrinfo(self, host: str, port: int) -> AddrInfoResult:
+        """Resolve host/port via DNS"""
+
     async def create_connection(
         self,
         protocol: NetProtocol,
