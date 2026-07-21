@@ -148,8 +148,8 @@ from typing import List, Tuple, Union, Any
 # Complete signature representation
 AddrInfoResult = List[
     Tuple[
-        socket.AddressFamily,  # 0. family (e.g., AF_INET, AF_INET6)
-        socket.SocketKind,     # 1. type (e.g., SOCK_STREAM, SOCK_DGRAM)
+        socket.AddressFamily,  # 0. family (e.g., AF_INET, AF_INET6)       pylint: disable=no-member
+        socket.SocketKind,     # 1. type (e.g., SOCK_STREAM, SOCK_DGRAM)   pylint: disable=no-member
         int,                   # 2. proto (protocol number)
         str,                   # 3. canonname (canonical name string)
         Union[Tuple[str, int], Tuple[str, int, int, int]]  # 4. sockaddr
