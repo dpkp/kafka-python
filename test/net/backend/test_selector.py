@@ -1,11 +1,13 @@
+import errno
 import socket
 import selectors
 import threading
 import time
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from kafka.errors import KafkaTimeoutError
+import kafka.errors as Errors
 from kafka.future import Future
 from kafka.net.backend.selector import (
     KernelEvent,
@@ -331,7 +333,7 @@ class TestNetworkSelector:
             try:
                 await net.wait_read(rsock, timeout_at=time.monotonic() + 0.02)
                 outcome.append(('resumed', rsock.recv(1024)))
-            except KafkaTimeoutError:
+            except Errors.KafkaTimeoutError:
                 outcome.append(('timeout',))
 
         net.call_soon(reader)
@@ -988,7 +990,7 @@ class TestRunBridgeBackstop:
             self._wedge(net, release)
             th, outcome = self._run_in_thread(net, work)  # no timeout_ms
             assert not th.is_alive(), 'run() hung past the default deadline (#3121)'
-            assert isinstance(outcome.get('exc'), KafkaTimeoutError), (
+            assert isinstance(outcome.get('exc'), Errors.KafkaTimeoutError), (
                 'expected KafkaTimeoutError, got: %r' % outcome)
             assert 0.15 <= outcome['elapsed'] < 2.0
             assert 'may be stalled' in str(outcome['exc'])
@@ -1009,7 +1011,7 @@ class TestRunBridgeBackstop:
             self._wedge(net, release)
             th, outcome = self._run_in_thread(net, work, timeout_ms=100)
             assert not th.is_alive()
-            assert isinstance(outcome.get('exc'), KafkaTimeoutError)
+            assert isinstance(outcome.get('exc'), Errors.KafkaTimeoutError)
             assert 0.15 <= outcome['elapsed'] < 2.0
         finally:
             release.set()
@@ -1054,7 +1056,7 @@ class TestRunBridgeBackstop:
 
         try:
             start = time.monotonic()
-            with pytest.raises(KafkaTimeoutError):
+            with pytest.raises(Errors.KafkaTimeoutError):
                 net.run(waits_forever)  # no start() -> fallback path
             elapsed = time.monotonic() - start
             assert 0.1 <= elapsed < 2.0
@@ -1075,7 +1077,7 @@ class TestRunBridgeBackstop:
             self._wedge(net, release)
             with caplog.at_level('WARNING', logger='kafka.net.backend.selector'):
                 th, outcome = self._run_in_thread(net, work)
-            assert isinstance(outcome.get('exc'), KafkaTimeoutError)
+            assert isinstance(outcome.get('exc'), Errors.KafkaTimeoutError)
             assert any('did not complete within' in r.message and 'work' in r.message
                        for r in caplog.records), (
                 'expected a backstop WARNING, got: %r'
@@ -1099,7 +1101,7 @@ class TestRunBridgeBackstop:
             self._wedge(net, release)
             with caplog.at_level('WARNING', logger='kafka.net.backend.selector'):
                 th, outcome = self._run_in_thread(net, work)  # caller times out
-                assert isinstance(outcome.get('exc'), KafkaTimeoutError)
+                assert isinstance(outcome.get('exc'), Errors.KafkaTimeoutError)
                 # Release the wedge so the abandoned coroutine now completes.
                 release.set()
                 deadline = time.monotonic() + 2.0
@@ -1115,3 +1117,145 @@ class TestRunBridgeBackstop:
         finally:
             release.set()
             net.close()
+
+
+class TestGetaddrinfo:
+    def test_valid_host(self, net):
+        results = net.run(net.getaddrinfo('localhost', 9092))
+        assert len(results) > 0
+        for res in results:
+            assert len(res) == 5
+
+    def test_invalid_host(self, net):
+        # getaddrinfo now raises (rather than returning []) so connect_host
+        # surfaces DNS failures directly.
+        with patch('kafka.net.backend.selector.socket.getaddrinfo', side_effect=socket.gaierror):
+            with pytest.raises(Errors.KafkaConnectionError, match='DNS'):
+                net.run(net.getaddrinfo('invalid.host', 9092))
+
+    def test_numeric_host(self, net):
+        results = net.run(net.getaddrinfo('127.0.0.1', 9092))
+        assert len(results) > 0
+        assert results[0][4][0] == '127.0.0.1'
+
+
+class TestConnectAddrinfo:
+    ADDRINFO = (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, '', ('127.0.0.1', 9092))
+
+    def test_immediate_connect(self, net):
+        sock = MagicMock()
+        sock.connect_ex.return_value = 0
+        with patch('kafka.net.backend.selector.socket.socket', return_value=sock):
+            result = net.run(net.connect_addrinfo(self.ADDRINFO))
+        assert result is sock
+        sock.connect_ex.assert_called_once_with(('127.0.0.1', 9092))
+        sock.setblocking.assert_called_with(False)
+
+    def test_eisconn(self, net):
+        sock = MagicMock()
+        sock.connect_ex.return_value = errno.EISCONN
+        with patch('kafka.net.backend.selector.socket.socket', return_value=sock):
+            result = net.run(net.connect_addrinfo(self.ADDRINFO))
+        assert result is sock
+
+    def test_connection_refused(self, net):
+        sock = MagicMock()
+        sock.connect_ex.return_value = errno.ECONNREFUSED
+        with patch('kafka.net.backend.selector.socket.socket', return_value=sock):
+            with pytest.raises(Errors.KafkaConnectionError):
+                net.run(net.connect_addrinfo(self.ADDRINFO))
+
+    def test_socket_error_uses_errno(self, net):
+        sock = MagicMock()
+        sock.connect_ex.side_effect = socket.error(errno.ECONNREFUSED, 'refused')
+        with patch('kafka.net.backend.selector.socket.socket', return_value=sock):
+            with pytest.raises(Errors.KafkaConnectionError):
+                net.run(net.connect_addrinfo(self.ADDRINFO))
+
+    def test_error_after_wait_write(self, net):
+        """connect_ex returns EINPROGRESS, then after wait_write fires the
+        second connect_ex returns the real error."""
+        # socketpair endpoints are always immediately writable, so wait_write
+        # fires on the first poll and we re-enter the loop.
+        rsock, wsock = socket.socketpair()
+        rsock.setblocking(False)
+        wsock.setblocking(False)
+        try:
+            sock = MagicMock()
+            sock.connect_ex.side_effect = [errno.EINPROGRESS, errno.ECONNREFUSED]
+            sock.fileno.return_value = wsock.fileno()
+            with patch('kafka.net.backend.selector.socket.socket', return_value=sock):
+                with pytest.raises(Errors.KafkaConnectionError):
+                    net.run(net.connect_addrinfo(self.ADDRINFO))
+            assert sock.connect_ex.call_count == 2
+        finally:
+            rsock.close()
+            wsock.close()
+
+    def test_socket_options_applied(self, net):
+        sock = MagicMock()
+        sock.connect_ex.return_value = 0
+        opts = [
+            (socket.IPPROTO_TCP, socket.TCP_NODELAY, 1),
+            (socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1),
+        ]
+        with patch('kafka.net.backend.selector.socket.socket', return_value=sock):
+            net.run(net.connect_addrinfo(self.ADDRINFO, socket_options=opts))
+        sock.setsockopt.assert_has_calls([
+            call(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1),
+            call(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1),
+        ])
+        assert sock.setsockopt.call_count == 2
+
+
+class TestConnectHost:
+    FAKE_ADDR = [(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, '', ('127.0.0.1', 9092))]
+
+    def test_dns_failure(self, net):
+        with patch('kafka.net.backend.selector.socket.getaddrinfo', side_effect=socket.gaierror):
+            with pytest.raises(Errors.KafkaConnectionError, match='DNS'):
+                net.run(net.connect_host('badhost', 9092))
+
+    def test_socket_init_failure(self, net):
+        with patch('kafka.net.backend.selector.socket.getaddrinfo', return_value=self.FAKE_ADDR), \
+             patch('kafka.net.backend.selector.socket.socket', side_effect=OSError('no socket')):
+            with pytest.raises(Errors.KafkaConnectionError):
+                net.run(net.connect_host('host', 9092))
+
+    def test_successful_connection(self, net):
+        sock = MagicMock()
+        sock.connect_ex.return_value = 0
+        with patch('kafka.net.backend.selector.socket.getaddrinfo', return_value=self.FAKE_ADDR), \
+             patch('kafka.net.backend.selector.socket.socket', return_value=sock):
+            result = net.run(net.connect_host('host', 9092))
+        assert result is sock
+        sock.setblocking.assert_called_with(False)
+
+    def test_tries_multiple_addresses(self, net):
+        addr1 = (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, '', ('10.0.0.1', 9092))
+        addr2 = (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, '', ('10.0.0.2', 9092))
+        sock1 = MagicMock()
+        sock1.connect_ex.return_value = errno.ECONNREFUSED
+        sock2 = MagicMock()
+        sock2.connect_ex.return_value = 0
+        sockets = iter([sock1, sock2])
+        with patch('kafka.net.backend.selector.socket.getaddrinfo', return_value=[addr1, addr2]), \
+             patch('kafka.net.backend.selector.socket.socket', side_effect=lambda *a: next(sockets)):
+            result = net.run(net.connect_host('host', 9092))
+        assert result is sock2
+
+    def test_socket_options_applied(self, net):
+        sock = MagicMock()
+        sock.connect_ex.return_value = 0
+        opts = [
+            (socket.IPPROTO_TCP, socket.TCP_NODELAY, 1),
+            (socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1),
+        ]
+        with patch('kafka.net.backend.selector.socket.getaddrinfo', return_value=self.FAKE_ADDR), \
+             patch('kafka.net.backend.selector.socket.socket', return_value=sock):
+            net.run(net.connect_host('host', 9092, socket_options=opts))
+        sock.setsockopt.assert_has_calls([
+            call(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1),
+            call(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1),
+        ])
+        assert sock.setsockopt.call_count == 2

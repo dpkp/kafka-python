@@ -1,6 +1,7 @@
 import collections
 import copy
 import enum
+import errno
 import inspect
 import logging
 import heapq
@@ -11,7 +12,6 @@ import time
 
 import kafka.errors as Errors
 from kafka.future import Future
-from kafka.net.backend.inet import create_connection as _inet_create_connection
 from kafka.net.backend.transport import KafkaTCPTransport
 from kafka.net.ssl import KafkaSSLTransport
 from kafka.version import __version__
@@ -560,22 +560,85 @@ class NetworkSelector:
         """
         return SelectorFuture()
 
+    async def getaddrinfo(self, host, port):
+        # XXX: all DNS functions in Python are blocking. If we really
+        # want to be non-blocking here, we need to use a 3rd-party
+        # library like python-adns, or move resolution onto its
+        # own thread. This will be subject to the default libc
+        # name resolution timeout (5s on most Linux boxes)
+        try:
+            return socket.getaddrinfo(host, port, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        except socket.gaierror as ex:
+            err_str = "DNS lookup failed for %s:%d, %r" % (host, port, ex)
+            raise Errors.KafkaConnectionError(err_str)
+
+    async def connect_host(self, host, port, socket_options=(), timeout_at=None):
+        """Connect to host:port; raises KafkaConnectionError on failure"""
+        addrs = await self.getaddrinfo(host, port)
+        exceptions = [Errors.KafkaConnectionError('DNS Resolution failure')]
+        for addrinfo in addrs:
+            try:
+                return await self.connect_addrinfo(addrinfo, socket_options, timeout_at=timeout_at)
+            except (socket.error, OSError) as e:
+                exceptions.append(Errors.KafkaConnectionError('unable to connect: %s' % (e,)))
+                continue
+            except Errors.KafkaTimeoutError:
+                raise Errors.KafkaConnectionError('Connection timed out')
+            except Errors.KafkaConnectionError as e:
+                exceptions.append(e)
+                continue
+        raise exceptions[-1]
+
+    async def connect_addrinfo(self, addrinfo, socket_options=(), timeout_at=None):
+        """Create non-blocking socket (with options) and connect to addrinfo tuple"""
+        log.debug('%s: Attempting to connect to %s (options: %s)', self, addrinfo, socket_options)
+        family, sock_type, proto, _canonname, sockaddr = addrinfo
+        sock = socket.socket(family, sock_type, proto)
+        sock.setblocking(False)
+        for option in socket_options:
+            sock.setsockopt(*option)
+        while timeout_at is None or time.monotonic() < timeout_at:
+            ret = None
+            try:
+                ret = sock.connect_ex(sockaddr)
+            except BlockingIOError:
+                ret = errno.EWOULDBLOCK
+            except socket.error as err:
+                ret = err.errno
+
+            # Connection succeeded
+            if not ret or ret == errno.EISCONN:
+                log.debug('Connected: %s', sock)
+                return sock
+
+            # Needs retry
+            # WSAEINVAL == 10022, but errno.WSAEINVAL is not available on non-win systems
+            elif ret in (errno.EINPROGRESS, errno.EALREADY, errno.EWOULDBLOCK, 10022):
+                await self.wait_write(sock, timeout_at=timeout_at)
+
+            # Connection failed
+            else:
+                errstr = errno.errorcode.get(ret, 'UNKNOWN')
+                raise Errors.KafkaConnectionError('{} {}'.format(ret, errstr))
+        else:
+            raise Errors.KafkaTimeoutError('Connection timed out')
+
     async def create_connection(self, protocol, host, port, *, ssl=None,
                                 proxy_url=None, socket_options=(),
                                 timeout_at=None):
         """Establish a connected transport to host:port and wire ``protocol``.
 
-        The selector owns the raw socket: DNS + non-blocking connect (with
-        optional SOCKS5/HTTP-CONNECT proxy via KafkaNetSocket), then wraps it
-        in a TCP or SSL transport, runs the TLS handshake, and calls
+        The selector owns the raw socket: DNS + non-blocking connect, then
+        wraps it in a TCP or SSL transport, runs the TLS handshake, and calls
         ``protocol.connection_made(transport)`` -- mirroring asyncio/Twisted,
         which own the socket and wire the protocol at connect time. On any
         failure (handshake error, or a ``protocol`` that refuses the transport
         because it closed mid-connect) the transport is closed before raising,
         so the caller never handles a transport instance directly.
         """
-        sock = await _inet_create_connection(self, host, port, socket_options,
-                                             proxy_url=proxy_url, timeout_at=timeout_at)
+        sock = await self.connect_host(host, port,
+                                       socket_options=socket_options,
+                                       timeout_at=timeout_at)
         transport = KafkaTCPTransport(self, sock, host=host)
         if ssl is not None:
             ssl_wrapper = KafkaSSLTransport(self, ssl, host=host)

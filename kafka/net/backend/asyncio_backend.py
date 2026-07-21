@@ -338,6 +338,9 @@ class AsyncioBackend:
         return state['value']
 
     # --- connection seam --------------------------------------------------
+    async def getaddrinfo(self, host, port):
+        return await self._loop.getaddrinfo(host, port)
+
     async def create_connection(self, protocol, host, port, *, ssl=None,
                                 proxy_url=None, socket_options=(), timeout_at=None):
         if proxy_url is not None:
