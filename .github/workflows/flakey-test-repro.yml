@@ -62,7 +62,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Set up Python ${{ github.event.inputs.python_version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ github.event.inputs.python_version }}
           cache: pip
