@@ -1,3 +1,8 @@
+# 3.0.9 (Jul 21, 2026)
+
+### Fixes
+* Consumer: fix stuck partitions retained after rebalance with listener (#3132)
+
 # 3.0.8 (Jul 9, 2026)
 
 ### Fixes
