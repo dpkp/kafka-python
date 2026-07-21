@@ -628,9 +628,8 @@ class NetworkSelector:
                                 timeout_at=None):
         """Establish a connected transport to host:port and wire ``protocol``.
 
-        The selector owns the raw socket: DNS + non-blocking connect (with
-        optional SOCKS5/HTTP-CONNECT proxy via KafkaNetSocket), then wraps it
-        in a TCP or SSL transport, runs the TLS handshake, and calls
+        The selector owns the raw socket: DNS + non-blocking connect, then
+        wraps it in a TCP or SSL transport, runs the TLS handshake, and calls
         ``protocol.connection_made(transport)`` -- mirroring asyncio/Twisted,
         which own the socket and wire the protocol at connect time. On any
         failure (handshake error, or a ``protocol`` that refuses the transport
