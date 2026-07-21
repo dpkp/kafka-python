@@ -290,6 +290,9 @@ class SubscriptionState:
         for tp in list(self.assignment.keys()):
             if tp not in new_set:
                 del self.assignment[tp]
+            else:
+                # Retained partitions are no longer pending_revocation
+                self.assignment[tp].mark_pending_revocation(False)
         # Add new partitions; kept partitions retain their existing
         # TopicPartitionState (positions, paused flag, KIP-392 cache,
         # etc.).
@@ -651,12 +654,12 @@ class TopicPartitionState:
     def resume(self):
         self.paused = False
 
-    def mark_pending_revocation(self):
+    def mark_pending_revocation(self, val=True):
         """KIP-429: gate fetches while an on_partitions_revoked /
         on_partitions_lost listener is in progress for this partition.
         Single-shot: the surrounding ``assign_from_subscribed`` drops
         the state object once the listener returns."""
-        self._pending_revocation = True
+        self._pending_revocation = val
 
     def is_fetchable(self):
         return (not self.paused
