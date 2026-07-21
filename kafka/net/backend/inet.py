@@ -10,28 +10,6 @@ import kafka.errors as Errors
 log = logging.getLogger(__name__)
 
 
-async def create_connection(net, host, port, socket_options=(), proxy_url=None, timeout_at=None):
-    """Connect to host:port; raises KafkaConnectionError on failure"""
-    socket_factory = KafkaNetSocket(proxy_url)
-    addrs = socket_factory.dns_lookup(host, port)
-    exceptions = [Errors.KafkaConnectionError('DNS Resolution failure')]
-    for res in addrs:
-        try:
-            log.debug('%s: Attempting to connect to %s (options: %s)', socket_factory, res, socket_options)
-            sock = await socket_factory.connect(net, res, socket_options, timeout_at=timeout_at)
-        except (socket.error, OSError) as e:
-            exceptions.append(Errors.KafkaConnectionError('unable to connect: %s' % (e,)))
-            continue
-        except Errors.KafkaTimeoutError:
-            raise Errors.KafkaConnectionError('Connection timed out')
-        except Errors.KafkaConnectionError as e:
-            exceptions.append(e)
-            continue
-        else:
-            return sock
-    raise exceptions[-1]
-
-
 class KafkaNetSocket:
     # scheme => handling class
     _registry = {}
