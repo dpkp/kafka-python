@@ -114,25 +114,6 @@ class TestKafkaConnectionManagerProxyConfig:
         )
         assert m.config['proxy_url'] == 'socks5://new:1080'
 
-    def test_connect_passes_proxy_url(self, net):
-        """_connect must forward the configured proxy_url to
-        net.create_connection. Regression guard against the kwarg name
-        drifting from the create_connection signature."""
-        m = KafkaConnectionManager(net, proxy_url='socks5://proxy:1080')
-        node = MagicMock(host='broker', port=9092, node_id='bootstrap-0')
-        conn = KafkaConnection(net, node_id='bootstrap-0', **m.config)
-
-        async def fake_create_connection(protocol, host, port, **kwargs):
-            # Close mid-connect so _connect short-circuits before
-            # connection_made()/initialize() -- we only assert the forwarded kwarg.
-            conn.close()
-            return MagicMock()
-
-        with patch.object(net, 'create_connection',
-                          side_effect=fake_create_connection) as mc:
-            net.run(m._connect(node, conn))
-        assert mc.call_args.kwargs.get('proxy_url') == 'socks5://proxy:1080'
-
 
 class TestKafkaConnectionManagerBackoff:
     def test_connection_delay_no_backoff(self, manager):

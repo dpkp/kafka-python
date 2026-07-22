@@ -10,6 +10,7 @@ from .metrics import KafkaManagerMetrics
 from kafka.net.backend import resolve_backend
 from kafka.cluster import ClusterMetadata
 import kafka.errors as Errors
+from kafka.net.proxy import KafkaTCPProxy
 from kafka.net.ssl import KafkaSSLTransport
 from kafka.net.wakeup_notifier import WakeupNotifier
 from kafka.protocol.broker_version_data import BrokerVersionData
@@ -243,12 +244,19 @@ class KafkaConnectionManager:
 
     async def _connect(self, node, conn, reset_backoff_on_connect=True, timeout_at=None):
         try:
-            await self._net.create_connection(
-                conn, node.host, node.port,
-                ssl=self.ssl_context,
-                proxy_url=self.config['proxy_url'],
-                socket_options=self.config['socket_options'],
-                timeout_at=timeout_at)
+            if self.config['proxy_url']:
+                proxy = KafkaTCPProxy(self._net, self.config['proxy_url'])
+                await proxy.create_connection(
+                    conn, node.host, node.port,
+                    ssl=self.ssl_context,
+                    socket_options=self.config['socket_options'],
+                    timeout_at=timeout_at)
+            else:
+                await self._net.create_connection(
+                    conn, node.host, node.port,
+                    ssl=self.ssl_context,
+                    socket_options=self.config['socket_options'],
+                    timeout_at=timeout_at)
             # Note: conn.initialize does not currently raise on error;
             # errors are pushed to conn.init_future and raised on await conn
             await conn.initialize(timeout_at=timeout_at)

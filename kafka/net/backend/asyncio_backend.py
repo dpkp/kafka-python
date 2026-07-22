@@ -342,11 +342,7 @@ class AsyncioBackend:
         return await self._loop.getaddrinfo(host, port)
 
     async def create_connection(self, protocol, host, port, *, ssl=None,
-                                proxy_url=None, socket_options=(), timeout_at=None):
-        if proxy_url is not None:
-            raise NotImplementedError(
-                'The asyncio backend does not support proxy_url yet; use the '
-                'default selector backend for SOCKS5/HTTP-CONNECT proxying.')
+                                socket_options=(), timeout_at=None):
         server_hostname = host.rstrip('.') if ssl is not None else None
         adapter = _AsyncioProtocolAdapter(protocol, host, port, socket_options)
         connect = self._loop.create_connection(

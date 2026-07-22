@@ -4,113 +4,110 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from kafka.net.http_connect import HttpConnectProxy
-from kafka.net.backend.inet import KafkaNetSocket
+from kafka.net.http_connect import HttpConnectProxyProtocol
+from kafka.net.proxy import KafkaTCPProxy, KafkaTCPProxyStates
 
 
 _FAKE_PROXY_ADDR = (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, '', ('1.2.3.4', 8080))
 
 
-def _make_proxy(url='http://proxy:8080'):
-    with patch.object(HttpConnectProxy, 'dns_lookup', return_value=[_FAKE_PROXY_ADDR]):
-        proxy = HttpConnectProxy(url)
-    proxy._sock = MagicMock()
-    return proxy
-
-
 class TestHttpConnectProxyRegistry:
-    def test_registered_for_http_scheme(self):
-        with patch.object(HttpConnectProxy, 'dns_lookup', return_value=[_FAKE_PROXY_ADDR]):
-            obj = KafkaNetSocket('http://proxy:8080')
-        assert isinstance(obj, HttpConnectProxy)
+    def test_registered_for_http_scheme(self, net):
+        obj = KafkaTCPProxy(net, 'http://proxy:8080')
+        assert isinstance(obj, HttpConnectProxyProtocol)
 
-    def test_unregistered_scheme_raises(self):
+    def test_unregistered_scheme_raises(self, net):
         with pytest.raises(ValueError, match='Unsupported proxy url scheme'):
-            KafkaNetSocket('socks4://proxy:8080')
+            KafkaTCPProxy(net, 'socks4://proxy:8080')
 
 
-class TestHttpConnectProxyDnsLookup:
-    def test_broker_lookup_returns_unresolved(self):
-        proxy = _make_proxy()
-        result = proxy.dns_lookup('broker.kafka.internal', 9092)
-        assert result == [(socket.AF_UNSPEC, socket.SOCK_STREAM, socket.IPPROTO_TCP, '', ('broker.kafka.internal', 9092))]
+class TestHttpConnectProxyStateMachine:
+    def test_success(self, net):
+        proxy = KafkaTCPProxy(net, 'http://proxy:8080')
+        proxy.connection_made(MagicMock())
+        proxy.data_received(b'HTTP/1.1 200 Connection Established\r\n\r\n')
+        assert proxy._connect_future.is_done
+        assert proxy._connect_future.succeeded()
+        assert proxy._state == KafkaTCPProxyStates.COMPLETE
 
-    def test_proxy_lookup_delegates_to_super(self):
-        with patch('socket.getaddrinfo', return_value=[_FAKE_PROXY_ADDR]) as mock_gai:
-            proxy = _make_proxy()
-            proxy.dns_lookup('proxy', 8080, proxy=True)
-        mock_gai.assert_called()
+    def test_success_no_reason_phrase(self, net):
+        proxy = KafkaTCPProxy(net, 'http://proxy:8080')
+        proxy.connection_made(MagicMock())
+        proxy.data_received(b'HTTP/1.1 200\r\n\r\n')
+        assert proxy._connect_future.is_done
+        assert proxy._connect_future.succeeded()
+        assert proxy._state == KafkaTCPProxyStates.COMPLETE
 
-
-class TestHttpConnectProxySocket:
-    def test_uses_proxy_family_not_broker_family(self):
-        proxy = _make_proxy()
-        with patch('socket.socket') as mock_ctor:
-            proxy.socket(socket.AF_INET6, socket.SOCK_STREAM, socket.IPPROTO_TCP)
-        mock_ctor.assert_called_once_with(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
-
-
-class TestHttpConnectProxyConnectEx:
-    def test_success(self):
-        proxy = _make_proxy()
-        proxy._sock.connect_ex.return_value = 0
-        proxy._sock.send.side_effect = lambda b: len(b)
-        proxy._sock.recv.return_value = b'HTTP/1.1 200 Connection Established\r\n\r\n'
-        assert proxy.connect_ex(proxy._sock, ('broker', 9092)) == 0
-
-    def test_success_no_reason_phrase(self):
-        proxy = _make_proxy()
-        proxy._sock.connect_ex.return_value = 0
-        proxy._sock.send.side_effect = lambda b: len(b)
-        proxy._sock.recv.return_value = b'HTTP/1.1 200\r\n\r\n'
-        assert proxy.connect_ex(proxy._sock, ('broker', 9092)) == 0
-
-    def test_basic_auth_header_sent_when_credentials_in_url(self):
+    def test_basic_auth_header_sent_when_credentials_in_url(self, net):
         import base64
-        proxy = _make_proxy('http://user:pass@proxy:8080')
-        proxy._sock.connect_ex.return_value = 0
+        proxy = KafkaTCPProxy(net, 'http://user:pass@proxy:8080')
+        transport = MagicMock()
         sent = []
-        proxy._sock.send.side_effect = lambda b: sent.append(b) or len(b)
-        proxy._sock.recv.return_value = b'HTTP/1.1 200 Connection Established\r\n\r\n'
-        proxy.connect_ex(proxy._sock, ('broker', 9092))
+        transport.write.side_effect = lambda b: sent.append(b) or len(b)
+        proxy.connection_made(transport)
         request = b''.join(sent).decode()
         expected = base64.b64encode(b'user:pass').decode()
         assert 'Proxy-Authorization: Basic {}'.format(expected) in request
+        assert not proxy._connect_future.is_done
+        proxy.data_received(b'HTTP/1.1 200 Connection Established\r\n\r\n')
+        assert proxy._connect_future.is_done
+        assert proxy._connect_future.succeeded()
+        assert proxy._state == KafkaTCPProxyStates.COMPLETE
 
-    def test_non_200_response_returns_econnrefused(self):
-        proxy = _make_proxy()
-        proxy._sock.connect_ex.return_value = 0
-        proxy._sock.send.side_effect = lambda b: len(b)
-        proxy._sock.recv.return_value = b'HTTP/1.1 407 Proxy Authentication Required\r\n\r\n'
-        assert proxy.connect_ex(proxy._sock, ('broker', 9092)) == errno.ECONNREFUSED
+    def test_non_200_response_disconnects(self, net):
+        proxy = KafkaTCPProxy(net, 'http://proxy:8080')
+        proxy.connection_made(MagicMock())
+        proxy.data_received(b'HTTP/1.1 407 Proxy Authentication Required\r\n\r\n')
+        assert proxy._connect_future.is_done
+        assert proxy._connect_future.failed()
+        assert proxy._state == KafkaTCPProxyStates.DISCONNECTED
 
-    def test_ewouldblock_while_sending(self):
-        proxy = _make_proxy()
-        proxy._sock.connect_ex.return_value = 0
-        proxy._sock.send.side_effect = OSError(errno.EWOULDBLOCK, 'would block')
-        assert proxy.connect_ex(proxy._sock, ('broker', 9092)) == errno.EWOULDBLOCK
 
-    def test_ewouldblock_while_reading(self):
-        proxy = _make_proxy()
-        proxy._sock.connect_ex.return_value = 0
-        proxy._sock.send.side_effect = lambda b: len(b)
-        proxy._sock.recv.side_effect = OSError(errno.EWOULDBLOCK, 'would block')
-        assert proxy.connect_ex(proxy._sock, ('broker', 9092)) == errno.EWOULDBLOCK
+class TestHttpConnectProxyFraming:
+    TARGET = (socket.AF_UNSPEC, socket.SOCK_STREAM, socket.IPPROTO_TCP, '', ('broker.example.com', 9092))
 
-    def test_resumes_after_ewouldblock(self):
-        proxy = _make_proxy()
-        proxy._sock.connect_ex.return_value = 0
-        proxy._sock.send.side_effect = lambda b: len(b)
-        proxy._sock.recv.side_effect = [
-            OSError(errno.EWOULDBLOCK, 'would block'),
-            b'HTTP/1.1 200 Connection Established\r\n\r\n',
-        ]
-        assert proxy.connect_ex(proxy._sock, ('broker', 9092)) == errno.EWOULDBLOCK
-        assert proxy.connect_ex(proxy._sock, ('broker', 9092)) == 0
+    def _proxy(self, net, url='http://proxy:8080'):
+        proxy = KafkaTCPProxy(net, url)
+        proxy.set_addrinfo(self.TARGET)
+        sent = []
+        transport = MagicMock()
+        transport.write.side_effect = lambda b: sent.append(bytes(b)) or len(b)
+        proxy.connection_made(transport)
+        return proxy, sent
 
-    def test_eof_during_handshake_returns_econnrefused(self):
-        proxy = _make_proxy()
-        proxy._sock.connect_ex.return_value = 0
-        proxy._sock.send.side_effect = lambda b: len(b)
-        proxy._sock.recv.return_value = b''
-        assert proxy.connect_ex(proxy._sock, ('broker', 9092)) == errno.ECONNREFUSED
+    def test_connect_line_uses_target_host_port(self, net):
+        # Regression: the target host/port must be set before the state machine
+        # sends CONNECT (an earlier ordering bug emitted "CONNECT None:None").
+        _, sent = self._proxy(net)
+        request = b''.join(sent).decode()
+        assert request.startswith('CONNECT broker.example.com:9092 HTTP/1.1\r\n')
+        assert 'Host: broker.example.com:9092\r\n' in request
+
+    def test_incomplete_response_waits(self, net):
+        proxy, _ = self._proxy(net)
+        # No blank line yet -> keep buffering, stay in REQUESTING.
+        proxy.data_received(b'HTTP/1.1 200 Connection Established\r\n')
+        assert not proxy._connect_future.is_done
+        assert proxy._state == KafkaTCPProxyStates.REQUESTING
+
+    def test_fragmented_response_completes(self, net):
+        proxy, _ = self._proxy(net)
+        proxy.data_received(b'HTTP/1.1 200 Connection Established\r\n')
+        assert not proxy._connect_future.is_done
+        proxy.data_received(b'\r\n')
+        assert proxy._connect_future.succeeded()
+        assert proxy._state == KafkaTCPProxyStates.COMPLETE
+
+    def test_byte_by_byte_delivery(self, net):
+        proxy, _ = self._proxy(net)
+        for byte in b'HTTP/1.1 200 OK\r\n\r\n':
+            assert not proxy._connect_future.is_done
+            proxy.data_received(bytes([byte]))
+        assert proxy._connect_future.succeeded()
+        assert proxy._state == KafkaTCPProxyStates.COMPLETE
+
+    def test_trailing_bytes_after_headers(self, net):
+        proxy, _ = self._proxy(net)
+        proxy.data_received(b'HTTP/1.1 200 OK\r\n\r\nleftover')
+        assert proxy._connect_future.succeeded()
+        assert proxy._state == KafkaTCPProxyStates.COMPLETE

@@ -213,7 +213,6 @@ class NetBackend(Protocol):
         port: int,
         *,
         ssl: Any = None,
-        proxy_url: Optional[str] = None,
         socket_options: Sequence[Any] = (),
         timeout_at: Optional[float] = None,
     ) -> None:
@@ -228,8 +227,7 @@ class NetBackend(Protocol):
         transport handle. ``protocol`` (a ``KafkaConnection``) may *refuse* the
         transport by raising from ``connection_made`` if it closed mid-connect;
         on that (or any) failure the backend closes the orphaned transport
-        before propagating. Backends without native proxy support raise when
-        ``proxy_url`` is set.
+        before propagating.
         """
 
     # --- cross-thread bridge ---------------------------------------------
