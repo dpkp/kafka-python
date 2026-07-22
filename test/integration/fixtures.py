@@ -1,10 +1,13 @@
 import atexit
 import base64
+import hashlib
 import logging
+import random
 import os
 import os.path
 import socket
 import subprocess
+import sys
 import time
 from urllib.parse import urlparse
 import uuid
@@ -13,10 +16,75 @@ import py
 
 from kafka import errors, KafkaAdminClient
 from kafka.errors import InvalidReplicationFactorError
+from kafka.net.backend import list_backends
 from test.testutil import env_kafka_version, random_string
 from test.service import ExternalService, SpawnedService
 
 log = logging.getLogger(__name__)
+
+
+_UNRESOLVED = object()
+_selected_net_cache = _UNRESOLVED
+
+
+def _git_revision():
+    """Commit SHA for deterministic backend selection: ``GITHUB_SHA`` in CI,
+    else ``git rev-parse HEAD``, else None (e.g. a source tarball with no git)."""
+    sha = os.environ.get('GITHUB_SHA')
+    if sha:
+        return sha
+    try:
+        return subprocess.check_output(
+            ['git', 'rev-parse', 'HEAD'],
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+            stderr=subprocess.DEVNULL).decode().strip()
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def _spread_net(sha=None, python=None, kafka=None):
+    """Deterministically pick a backend, spread across the CI matrix.
+
+    Seeds the choice with the commit SHA *and* the per-job matrix variables
+    (Python major.minor + KAFKA_VERSION). Every job in one CI run shares the
+    same ``GITHUB_SHA``, so the matrix vars are what fan the ~17 jobs out across
+    backends within that run; the SHA reshuffles the assignment on later commits,
+    so each (python, kafka) cell covers every backend over time. A given
+    (commit, python, kafka) always picks the same backend -- reproducible on
+    re-run. ``hashlib`` (not the salted builtin ``hash()``) keeps it stable
+    across processes.
+    """
+    backends = sorted(list_backends())
+    sha = (_git_revision() or 'no-sha') if sha is None else sha
+    python = ('%d.%d' % sys.version_info[:2]) if python is None else python
+    kafka = os.environ.get('KAFKA_VERSION', '') if kafka is None else kafka
+    seed = '%s:%s:%s' % (sha, python, kafka)
+    idx = int(hashlib.sha256(seed.encode()).hexdigest(), 16) % len(backends)
+    net = backends[idx]
+    log.warning('KAFKA_PYTHON_NET=random -> net=%r (seed: sha=%s python=%s '
+                'kafka=%s; re-run with KAFKA_PYTHON_NET=%s to reproduce)',
+                net, sha[:12], python, kafka or '-', net)
+    return net
+
+
+def _selected_net():
+    """Resolve the KAFKA_PYTHON_NET override once per run, and log the choice.
+
+    ``KAFKA_PYTHON_NET=random`` picks a backend *once* (not per client) so the
+    whole run uses one backend, spread across the matrix (see ``_spread_net``).
+    Any other value pins that backend. Returns the backend name, or '' when
+    unset (default selector).
+    """
+    global _selected_net_cache
+    if _selected_net_cache is _UNRESOLVED:
+        net = os.environ.get('KAFKA_PYTHON_NET') or ''
+        if net == 'random':
+            net = _spread_net()
+        elif net:
+            log.info('KAFKA_PYTHON_NET=%r: running against the %r net backend',
+                     net, net)
+        _selected_net_cache = net
+    return _selected_net_cache
 
 
 def create_topics(broker, topic_names, num_partitions=None, replication_factor=None):
@@ -729,11 +797,10 @@ class KafkaFixture(Fixture):
         # Run the whole integration suite against a chosen net backend, e.g.
         # KAFKA_PYTHON_NET=asyncio make test. Unset -> default (selector).
         # setdefault so a test that pins net= still wins.
-        net = os.environ.get('KAFKA_PYTHON_NET')
+        net = _selected_net()
         if net:
             params.setdefault('net', net)
         return params
-
 
 
 def get_api_versions():

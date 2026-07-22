@@ -1,6 +1,6 @@
 from .abstract import (
     NetBackend, NetTransport, NetProtocol, NetBackendFuture,
-    resolve_backend, register_backend_lazy,
+    list_backends, resolve_backend, register_backend_lazy,
 )
 
 register_backend_lazy('selector', 'kafka.net.backend.selector', 'NetworkSelector')

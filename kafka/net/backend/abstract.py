@@ -258,6 +258,11 @@ class NetBackend(Protocol):
 _BACKENDS = {}
 
 
+def list_backends():
+    """List all registered backends."""
+    return list(_BACKENDS.keys())
+
+
 def register_backend(name, factory):
     """Register a named backend factory for ``net='<name>'`` selection."""
     _BACKENDS[name] = factory
