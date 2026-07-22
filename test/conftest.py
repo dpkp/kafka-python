@@ -66,7 +66,7 @@ def net():
 
 
 @pytest.fixture(params=['selector', 'asyncio'])
-def both_net(request):
+def all_net(request):
     """A *started* backend, parametrized over selector + asyncio, for curated
     both-backends end-to-end tests.
 

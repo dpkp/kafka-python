@@ -2,7 +2,7 @@
 
 A small, high-signal set of full-stack round-trips (bootstrap, send, metadata
 refresh, consumer-group join) run against BOTH the selector and asyncio backends
-via the parametrized ``both_net`` fixture. This is the cross-backend counterpart
+via the parametrized ``all_net`` fixture. This is the cross-backend counterpart
 to the per-backend suites in this package: those exercise each backend in
 isolation; these prove the manager / coordinator async bridge (run / wait_for /
 send / bootstrap) behaves identically on both.
@@ -33,19 +33,19 @@ def _metadata_topic(name, num_partitions, node_id=0):
                      for p in range(num_partitions)])
 
 
-def _manager(both_net, mock_cluster):
+def _manager(all_net, mock_cluster):
     manager = KafkaConnectionManager(
-        both_net, bootstrap_servers=mock_cluster.bootstrap_servers(),
+        all_net, bootstrap_servers=mock_cluster.bootstrap_servers(),
         api_version=mock_cluster.broker_version, request_timeout_ms=5000)
     mock_cluster.attach(manager)
     return manager
 
 
-def test_bootstrap_and_metadata_send(both_net):
+def test_bootstrap_and_metadata_send(all_net):
     """Bootstrap + a MetadataRequest round-trip through the manager."""
     cluster = MockCluster(num_brokers=1)
     cluster.set_metadata(topics=[_metadata_topic('t', num_partitions=2)])
-    manager = _manager(both_net, cluster)
+    manager = _manager(all_net, cluster)
     try:
         manager.bootstrap(timeout_ms=5000)
         assert manager.bootstrapped
@@ -53,35 +53,35 @@ def test_bootstrap_and_metadata_send(both_net):
 
         async def do_send():
             return await manager.send(MetadataRequest[0]([]))
-        resp = both_net.run(do_send)
+        resp = all_net.run(do_send)
         assert resp is not None
     finally:
         manager.close()
 
 
-def test_metadata_refresh(both_net):
+def test_metadata_refresh(all_net):
     """cluster.refresh_metadata() drives a real MetadataRequest and applies it."""
     cluster = MockCluster(num_brokers=1)
     cluster.set_metadata(topics=[_metadata_topic('t', num_partitions=3)])
-    manager = _manager(both_net, cluster)
+    manager = _manager(all_net, cluster)
     try:
         manager.bootstrap(timeout_ms=5000)
-        both_net.run(manager.cluster.refresh_metadata)
+        all_net.run(manager.cluster.refresh_metadata)
         assert 't' in manager.cluster.topics()
         assert manager.cluster.partitions_for_topic('t') == {0, 1, 2}
     finally:
         manager.close()
 
 
-def test_consumer_group_join_assigns_partitions(both_net, metrics):
+def test_consumer_group_join_assigns_partitions(all_net, metrics):
     """A consumer joins a MockCluster group, is elected leader, runs the
     assignor, and is assigned every partition -- exercising find-coordinator +
     join + sync + heartbeat on both backends."""
     cluster = MockCluster(num_brokers=1)
     cluster.set_metadata(topics=[_metadata_topic('t', num_partitions=3)])
     group = cluster.add_group('grp', coordinator=0)
-    manager = _manager(both_net, cluster)
-    client = KafkaNetClient(net=both_net, manager=manager)
+    manager = _manager(all_net, cluster)
+    client = KafkaNetClient(net=all_net, manager=manager)
     coordinator = ConsumerCoordinator(
         client, SubscriptionState(), metrics=metrics,
         api_version=cluster.broker_version,
