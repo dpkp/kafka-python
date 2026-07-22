@@ -10,12 +10,17 @@ Phase 1 preserves the synchronous public API: ``run()`` blocks the calling
 thread on the loop thread; it does not run on the caller's own loop.
 """
 import asyncio
+import copy
 import inspect
+import logging
 import threading
 import time
 
 import kafka.errors as Errors
 from kafka.future import Future
+from kafka.version import __version__
+
+log = logging.getLogger(__name__)
 
 
 class AsyncioFuture(Future):
@@ -78,7 +83,28 @@ class _DeferredHandle:
 
 
 class AsyncioBackend:
+    DEFAULT_CONFIG = {
+        'client_id': 'kafka-python-' + __version__,
+        # Default operation deadline for a cross-thread run() call that does not
+        # pass its own timeout_ms. Bounds the caller's blocking wait so a stalled
+        # IO loop (e.g. a synchronous rebalance listener/assignor or a blocking
+        # DNS lookup on the IO thread) cannot hang the caller indefinitely.
+        # Mirrors the Java client's default.api.timeout.ms.
+        'default_api_timeout_ms': 60000,
+        # Extra slack added on top of the operation deadline before run()'s
+        # cross-thread wait gives up. The coroutine enforces the operation
+        # deadline itself on a healthy loop; this margin ensures that self-timeout
+        # (and its unwind/retry-backoff) resolves and wins the race, so the
+        # backstop only trips when the loop genuinely isn't running the coroutine.
+        'bridge_grace_ms': 5000,
+    }
+
     def __init__(self, *, loop=None, loop_factory=None, **configs):
+        self.config = copy.copy(self.DEFAULT_CONFIG)
+        for key in self.config:
+            if key in configs:
+                self.config[key] = configs[key]
+
         # Loop acquisition is a strategy, not a hardcode (forward seam for a
         # native/Phase-2 mode). Default: own a fresh loop on our daemon thread.
         # loop_factory lets callers pick the loop implementation (e.g. uvloop)
@@ -93,13 +119,6 @@ class AsyncioBackend:
             self._owns_loop = True
         self._io_thread = None
         self._closed = False
-        self._client_id = configs.get('client_id') or 'kafka-python'
-        # See NetworkSelector: default operation deadline + grace margin for the
-        # cross-thread run() liveness backstop (#3121).
-        self._default_api_timeout_ms = configs.get('default_api_timeout_ms') or 60000
-        self._bridge_grace_ms = configs.get('bridge_grace_ms')
-        if self._bridge_grace_ms is None:
-            self._bridge_grace_ms = 5000
         # Strong refs to live tasks (asyncio only holds weak refs, so bare
         # tasks can be GC'd mid-flight); mirrors NetworkSelector._pending_tasks.
         self._pending = set()
@@ -112,7 +131,7 @@ class AsyncioBackend:
         if self._io_thread is not None:
             return
         t = threading.Thread(target=self._run_forever,
-                             name='kafka-io-%s' % self._client_id, daemon=True)
+                             name='kafka-io-%s' % self.config['client_id'], daemon=True)
         self._io_thread = t
         t.start()
 
@@ -158,6 +177,33 @@ class AsyncioBackend:
             if state['exception'] is None:
                 state['exception'] = exc
             event.set()
+
+    def _bridge_deadline_secs(self, timeout_ms):
+        """Wall-clock ceiling for a cross-thread run() wait, in seconds.
+
+        The operation deadline defaults to ``default_api_timeout_ms`` when the
+        caller passes ``timeout_ms=None``; ``bridge_grace_ms`` is added so the
+        coroutine's own (equal) deadline wins the race on a healthy loop.
+        """
+        op_ms = timeout_ms if timeout_ms is not None else self.config['default_api_timeout_ms']
+        if op_ms >= threading.TIMEOUT_MAX:
+            return None
+        return (op_ms + self.config['bridge_grace_ms']) / 1000
+
+    def _bridge_timeout(self, coro, timeout_ms):
+        op_ms = timeout_ms if timeout_ms is not None else self.config['default_api_timeout_ms']
+        name = getattr(coro, '__name__', None) or repr(coro)
+        exc = Errors.KafkaTimeoutError(
+            'net.run(%s) did not complete within %d ms (+%d ms grace). The IO '
+            'event loop may be stalled by blocking work on the IO thread '
+            '(e.g. a synchronous rebalance listener/assignor).'
+            % (name, op_ms, self.config['bridge_grace_ms']))
+        # A caught KafkaTimeoutError is otherwise invisible; surface the stall so
+        # operators can see it. The coroutine keeps running until it completes or
+        # hits its own deadline, so any side effects (e.g. an offset commit) may
+        # still take effect (see the late-completion warning in run()).
+        log.warning('%s', exc)
+        return exc
 
     # --- scheduling -------------------------------------------------------
     def _spawn(self, coro):
@@ -305,8 +351,7 @@ class AsyncioBackend:
                 "(or another IO-thread callback) calls a blocking consumer/admin API. "
                 "Use AsyncConsumerRebalanceListener and await the async variant, "
                 "or move the blocking work to a worker thread.")
-        op_ms = timeout_ms if timeout_ms is not None else self._default_api_timeout_ms
-        deadline_secs = (op_ms + self._bridge_grace_ms) / 1000
+        deadline_secs = self._bridge_deadline_secs(timeout_ms)
         event = threading.Event()
         state = {'value': None, 'exception': None}
 
@@ -325,14 +370,7 @@ class AsyncioBackend:
             self._pending_waiters[event] = state
         self.call_soon(waiter)
         if not event.wait(timeout=deadline_secs):
-            # Loop never ran the coroutine to completion; leave the waiter
-            # registered (its finally pops it) and surface a liveness timeout.
-            name = getattr(coro, '__name__', None) or repr(coro)
-            raise Errors.KafkaTimeoutError(
-                'net.run(%s) did not complete within %d ms (+%d ms grace). The '
-                'IO event loop may be stalled by blocking work on the IO thread '
-                '(e.g. a synchronous rebalance listener/assignor).'
-                % (name, op_ms, self._bridge_grace_ms))
+            raise self._bridge_timeout(coro, timeout_ms)
         if state['exception'] is not None:
             raise state['exception']  # pylint: disable=raising-bad-type
         return state['value']
