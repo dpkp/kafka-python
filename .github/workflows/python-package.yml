@@ -34,30 +34,36 @@ jobs:
           - "3.0.2"
           - "3.5.2"
           - "3.9.0"
-          - "4.3.0"
         python:
           - "3.14"
         net:
-          - "selector"
+          - "random"
         include:
-          #- python: "pypy3.9"
-          #  kafka: "2.6.0"
-          #  experimental: true
           - python: "3.8"
             kafka: "4.3.0"
+            net: "random"
           - python: "3.9"
             kafka: "4.3.0"
+            net: "random"
           - python: "3.10"
             kafka: "4.3.0"
+            net: "random"
           - python: "3.11"
             kafka: "4.3.0"
+            net: "random"
           - python: "3.12"
             kafka: "4.3.0"
+            net: "random"
           - python: "3.13"
             kafka: "4.3.0"
+            net: "random"
           - python: "3.14"
             kafka: "4.3.0"
             net: "asyncio"
+          - python: "3.14"
+            kafka: "4.3.0"
+            net: "selector"
+
 
     steps:
       - uses: actions/checkout@v7
@@ -103,12 +109,13 @@ jobs:
           KAFKA_VERSION: ${{ matrix.kafka }}
           KAFKA_PYTHON_NET: ${{ matrix.net || '' }}
       - name: Pytest (with coverage)
-        if: matrix.python == '3.14' && matrix.kafka == '4.0.0'
+        if: matrix.python == '3.14' && matrix.kafka == '4.0.0' && matrix.net == 'selector'
         run: make test-coverage
         env:
           KAFKA_VERSION: ${{ matrix.kafka }}
+          KAFKA_PYTHON_NET: ${{ matrix.net || '' }}
       - name: Upload coverage report
-        if: matrix.python == '3.14' && matrix.kafka == '4.0.0'
+        if: matrix.python == '3.14' && matrix.kafka == '4.0.0' && matrix.net == 'selector'
         uses: actions/upload-artifact@v7
         with:
           name: coverage-report
