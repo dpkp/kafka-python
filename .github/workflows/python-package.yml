@@ -18,7 +18,7 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
-    name: "Test: python ${{ matrix.python }} / kafka ${{ matrix.kafka }}"
+    name: "py ${{ matrix.python }} / kafka ${{ matrix.kafka }} / net ${{ matrix.net }}"
     continue-on-error: ${{ matrix.experimental || false }}
     strategy:
       fail-fast: false
@@ -37,6 +37,8 @@ jobs:
           - "4.3.0"
         python:
           - "3.14"
+        net:
+          - "selector"
         include:
           #- python: "pypy3.9"
           #  kafka: "2.6.0"
@@ -53,6 +55,9 @@ jobs:
             kafka: "4.3.0"
           - python: "3.13"
             kafka: "4.3.0"
+          - python: "3.14"
+            kafka: "4.3.0"
+            net: "asyncio"
 
     steps:
       - uses: actions/checkout@v7
@@ -96,6 +101,7 @@ jobs:
         run: make test
         env:
           KAFKA_VERSION: ${{ matrix.kafka }}
+          KAFKA_PYTHON_NET: ${{ matrix.net || '' }}
       - name: Pytest (with coverage)
         if: matrix.python == '3.14' && matrix.kafka == '4.0.0'
         run: make test-coverage
