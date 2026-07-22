@@ -61,8 +61,8 @@ class _DeferredHandle:
     """Cancelable handle for a timer/callback armed cross-thread.
 
     ``call_later``/``call_soon`` invoked off the loop thread schedule the real
-    handle via ``call_soon_threadsafe``; this box lets the caller ``cancel()``
-    synchronously whether or not the real handle has been armed yet.
+    handle via the loop's own ``call_soon_threadsafe``; this box lets the caller
+    ``cancel()`` synchronously whether or not the real handle has been armed yet.
     """
     __slots__ = ('_handle', '_cancelled')
 
@@ -232,19 +232,17 @@ class AsyncioBackend:
 
     def call_soon(self, task):
         # On the loop thread: schedule directly. Off it (or before start()):
-        # route through call_soon_threadsafe so create_task/call_soon run on
-        # the loop thread as asyncio requires.
+        # route through the loop's own call_soon_threadsafe so create_task/
+        # call_soon run on the loop thread as asyncio requires. That threadsafe
+        # hop inherently wakes the loop -- asyncio has no separate wakeup, and
+        # no way to enqueue cross-thread *without* waking, so the selector's
+        # call_soon/call_soon_threadsafe split has nothing to mirror here.
         if self.on_io_thread():
             return self._schedule(task)
-        box = _DeferredHandle()
-        self._loop.call_soon_threadsafe(lambda: box._arm(self._schedule(task)))
-        return box
-
-    def call_soon_threadsafe(self, callback):
         if self._closed:
             raise RuntimeError('AsyncioBackend closed!')
         box = _DeferredHandle()
-        self._loop.call_soon_threadsafe(lambda: box._arm(self._schedule(callback)))
+        self._loop.call_soon_threadsafe(lambda: box._arm(self._schedule(task)))
         return box
 
     def _as_callback(self, task):

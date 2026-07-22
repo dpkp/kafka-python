@@ -747,8 +747,8 @@ class Sender:
     def wakeup(self):
         """Wake the sender loop early (e.g. when a sendable batch is appended).
 
-        Thread-safe: ``WakeupNotifier.notify`` routes through
-        ``call_soon_threadsafe``, so user threads may call this directly.
+        Thread-safe: ``WakeupNotifier.notify`` routes through the thread-safe
+        ``call_soon``, so user threads may call this directly.
         """
         self._wakeup.notify()
 

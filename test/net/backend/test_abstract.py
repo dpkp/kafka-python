@@ -20,7 +20,7 @@ from kafka.net.backend.transport import KafkaTCPTransport
 # The full contract surface, kept here so a missing/renamed method fails loudly.
 CONTRACT_METHODS = (
     'start', 'stop', 'close', 'on_io_thread',
-    'call_soon', 'call_soon_threadsafe', 'call_soon_with_future',
+    'call_soon', 'call_soon_with_future',
     'call_at', 'call_later', 'cancel',
     'sleep', 'create_connection',
     'run', 'create_future', 'wakeup',
@@ -57,6 +57,13 @@ class TestNetBackendContract:
         for name in NON_CONTRACT_METHODS:
             assert name not in CONTRACT_METHODS
             assert hasattr(net, name), name  # still present on the selector impl
+
+    def test_call_soon_threadsafe_folded_into_call_soon(self):
+        # call_soon_threadsafe was merged into the thread-safe call_soon, which
+        # wakes the loop only on a genuine cross-thread schedule.
+        assert 'call_soon_threadsafe' not in CONTRACT_METHODS
+        net = NetworkSelector()
+        assert not hasattr(net, 'call_soon_threadsafe')
 
 
 class TestNetTransportContract:

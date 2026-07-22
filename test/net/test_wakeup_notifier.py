@@ -223,7 +223,7 @@ class TestWakeupNotifier:
 
     def test_notify_from_other_thread(self, net, notifier):
         """notify() is safe to call from another thread; the wakeup
-        routes through call_soon_threadsafe to the IO thread."""
+        routes through the thread-safe call_soon to the IO thread."""
         async def task():
             def background():
                 # Slight delay so the notifier is definitely awaiting.

@@ -38,8 +38,9 @@ Three things are intentionally **not** part of the contract:
 Method families:
 
 * **Lifecycle** -- ``start`` / ``stop`` / ``close`` / ``on_io_thread``.
-* **Scheduling** -- ``call_soon`` / ``call_soon_threadsafe`` /
-  ``call_soon_with_future`` / ``call_at`` / ``call_later`` / ``cancel``.
+* **Scheduling** -- ``call_soon`` (thread-safe; wakes the loop only on a
+  cross-thread schedule) / ``call_soon_with_future`` / ``call_at`` /
+  ``call_later`` / ``cancel``.
 * **Timing** -- ``sleep`` (backend-specific awaitable; core coroutines await it).
 * **Connection** -- ``create_connection`` (returns a :class:`Transport`).
 * **Cross-thread bridge** -- ``run`` (schedule on the loop, block the caller).
@@ -181,10 +182,13 @@ class NetBackend(Protocol):
 
     # --- scheduling -------------------------------------------------------
     def call_soon(self, task: Any) -> Any:
-        """Enqueue a coroutine/callable to run on the next loop iteration."""
+        """Enqueue a coroutine/callable to run on the next loop iteration.
 
-    def call_soon_threadsafe(self, callback: Any) -> Any:
-        """``call_soon`` from another thread; wakes the loop."""
+        Thread-safe: a cross-thread schedule (a running IO thread that is not
+        the caller) wakes the loop; an on-thread schedule skips the pointless
+        wakeup. Returns a cancelable handle (the selector's ``Task``, asyncio's
+        deferred-handle box).
+        """
 
     def call_soon_with_future(self, coro: Any, *args: Any) -> NetBackendFuture:
         """Schedule ``coro`` and return a future that resolves with its result."""
