@@ -65,6 +65,30 @@ def net():
         backend.close()
 
 
+@pytest.fixture(params=['selector', 'asyncio'])
+def both_net(request):
+    """A *started* backend, parametrized over selector + asyncio, for curated
+    both-backends end-to-end tests.
+
+    Unlike the default ``net`` fixture (an unstarted NetworkSelector that tests
+    drive inline), this runs the loop on its own IO thread -- required for the
+    asyncio backend, whose ``run()`` has no inline no-IO-thread fallback. Pair
+    it with a MockCluster (stateful): a started loop runs background heartbeat /
+    metadata-refresh coroutines that fire unscripted requests, which MockCluster
+    answers and a scripted MockBroker would not.
+
+    The manager does not own a passed-in instance, so it neither starts nor
+    closes it -- this fixture owns the lifecycle and closes it on teardown.
+    """
+    from kafka.net.backend import resolve_backend
+    backend = resolve_backend(request.param, {})
+    backend.start()
+    try:
+        yield backend
+    finally:
+        backend.close()
+
+
 @pytest.fixture
 def manager(net, broker):
     broker.attach(net)
