@@ -607,7 +607,7 @@ class TestNetworkSelector:
             time.sleep(0.05)
             net.wakeup()
             # Schedule a task that resolves the future
-            net.call_soon_threadsafe(lambda: f.success(True))
+            net.call_soon(lambda: f.success(True))
 
         t = threading.Thread(target=wake_after_delay)
         t.start()
@@ -618,15 +618,15 @@ class TestNetworkSelector:
         assert f.succeeded()
         assert elapsed < 1.0
 
-    def test_call_soon_threadsafe(self):
+    def test_call_soon_cross_thread(self):
         net = NetworkSelector()
         results = []
         f = Future()
 
         def background():
             time.sleep(0.02)
-            net.call_soon_threadsafe(lambda: results.append('from_thread'))
-            net.call_soon_threadsafe(lambda: f.success(True))
+            net.call_soon(lambda: results.append('from_thread'))
+            net.call_soon(lambda: f.success(True))
 
         t = threading.Thread(target=background)
         t.start()
@@ -957,7 +957,7 @@ class TestRunBridgeBackstop:
             wedged.set()
             release.wait(timeout=5.0)  # safety cap so the suite can't hang
 
-        net.call_soon_threadsafe(wedge)
+        net.call_soon(wedge)
         assert wedged.wait(timeout=1.0), 'IO thread never entered the wedge'
 
     def _run_in_thread(self, net, coro, **kw):

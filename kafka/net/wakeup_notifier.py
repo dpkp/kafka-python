@@ -4,7 +4,7 @@ import weakref
 class WakeupNotifier:
     """await wakeup(timeout_secs) when either ``timeout_secs`` elapses or
     notify() is called -- whichever first. The notifier is safe to call
-    from any thread (it routes through call_soon_threadsafe).
+    from any thread (it routes through the thread-safe call_soon).
 
     Level-triggered: notify() arriving while no one is awaiting is latched
     and consumed by the next ``__call__``. This closes a lost-wakeup race
@@ -24,12 +24,12 @@ class WakeupNotifier:
         self._fut = None
         # Set by ``_wakeup`` when no awaiter is registered; consumed by the
         # next ``__call__``. All accesses run on the IO thread (notify
-        # routes through call_soon_threadsafe), so no lock is needed.
+        # routes through the thread-safe call_soon), so no lock is needed.
         self._pending = False
         # Coalescing guard: True once a ``_wakeup`` has been scheduled via
         # ``notify()`` but has not yet run on the IO thread. Lets ``notify()``
-        # skip the redundant ``call_soon_threadsafe`` (Task alloc + socketpair
-        # write + selector wakeup) when a wake is already in flight. Set on
+        # skip the redundant ``call_soon`` (Task alloc + socketpair write +
+        # selector wakeup) when a wake is already in flight. Set on
         # user threads, cleared by ``_wakeup`` on the IO thread; cross-thread
         # access is GIL-atomic and the check-then-set in ``notify()`` can at
         # worst schedule one redundant wake, never drop one (see ``notify``).
@@ -78,6 +78,6 @@ class WakeupNotifier:
             return
         self._scheduled = True
         try:
-            self._net.call_soon_threadsafe(self._wakeup)
+            self._net.call_soon(self._wakeup)
         except ReferenceError:
             self._scheduled = False

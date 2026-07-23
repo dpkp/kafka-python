@@ -265,8 +265,8 @@ class NetworkSelector:
 
     def run_forever(self):
         """Run the event loop until stop() is called. Intended to be driven by
-        a dedicated IO thread. Wake-ups from other threads must go through
-        call_soon_threadsafe() so the select() loop returns promptly."""
+        a dedicated IO thread. Cross-thread schedules go through call_soon(),
+        which wakes the select() loop so it returns promptly."""
         self._stop = False
         log.info('IO loop starting (client_id=%s)', self.config['client_id'])
         try:
@@ -424,7 +424,7 @@ class NetworkSelector:
                 event.set()
         with self._pending_waiters_lock:
             self._pending_waiters[event] = state
-        self.call_soon_threadsafe(waiter)
+        self.call_soon(waiter)
         if not event.wait(timeout=deadline_secs):
             # Loop never ran the coroutine to completion within the deadline.
             # Leave the waiter registered: if the coroutine later finishes, its
@@ -469,19 +469,35 @@ class NetworkSelector:
         task.state = TaskState.DONE
 
     def call_soon(self, task):
+        """Schedule a coroutine/callable on the loop; return its Task handle.
+
+        Thread-safe. Unless the caller can be proven to be running *on* the IO
+        thread, the closed/errored guards are enforced and the loop is woken so
+        a blocked select() returns promptly. On the IO thread that wakeup is
+        pointless -- we're already inside the loop, nothing is blocked in
+        select() -- so it's skipped, and the hot path (transport read/write
+        re-scheduling) pays nothing extra.
+
+        The gate is ``on_io_thread()``, not "is there an IO thread": a test may
+        drive ``poll()`` cross-thread on an unstarted selector, and that blocked
+        poll still needs waking. Skipping the wakeup only when we're certainly
+        on the loop keeps that case correct; the cost off the loop is one
+        socketpair byte (harmless, and only the started IO-thread hot path is
+        performance-sensitive).
+        """
+        # Wake/guard unless we're certainly on the loop thread.
+        threadsafe = not self.on_io_thread()
+        if threadsafe:
+            if self._exception:
+                raise self._exception from None
+            elif self._closed:
+                raise RuntimeError('NetworkSelector closed!')
         if not isinstance(task, Task):
             task = Task(task)
         self._add_ready_task(task)
         self._pending_tasks.add(task)
-        return task
-
-    def call_soon_threadsafe(self, callback):
-        if self._exception:
-            raise self._exception from None
-        elif self._closed:
-            raise RuntimeError('NetworkSelector closed!')
-        task = self.call_soon(callback)
-        self.wakeup()
+        if threadsafe:
+            self.wakeup()
         return task
 
     def call_soon_with_future(self, coro, *args):
@@ -494,7 +510,7 @@ class NetworkSelector:
                 future.success(await self._invoke(coro, *args))
             except BaseException as exc:
                 future.failure(exc)
-        self.call_soon_threadsafe(wrapper)
+        self.call_soon(wrapper)
         return future
 
     async def _invoke(self, coro, *args):

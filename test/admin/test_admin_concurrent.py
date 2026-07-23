@@ -3,7 +3,7 @@
 Verifies that multiple caller threads can safely invoke admin methods
 concurrently while a dedicated IO thread owns the event loop. Exercises
 the thread-safety foundation in KafkaConnectionManager (start/stop,
-cross-thread run via Event, call_soon_threadsafe).
+cross-thread run via Event, the thread-safe call_soon).
 """
 import threading
 

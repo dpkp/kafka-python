@@ -353,10 +353,10 @@ class MockBroker:
             if transport.is_closing():
                 continue
             # abort() must run on the event loop: connection_lost mutates
-            # state the loop owns. call_soon_threadsafe works both when the
+            # state the loop owns. The thread-safe call_soon works both when the
             # loop runs on an IO thread and when a test drives poll() inline.
             try:
-                transport._net.call_soon_threadsafe(lambda t=transport: t.abort(error))
+                transport._net.call_soon(lambda t=transport: t.abort(error))
             except RuntimeError:
                 pass  # selector already closed; nothing left to abort
 
