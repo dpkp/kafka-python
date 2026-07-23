@@ -51,6 +51,8 @@ import abc
 import importlib
 from typing import Any, Callable, Optional, Protocol, Sequence, Tuple, runtime_checkable
 
+import kafka.errors as Errors
+
 
 @runtime_checkable
 class NetBackendFuture(Protocol):
@@ -278,6 +280,45 @@ class NetBackend(abc.ABC):
     @abc.abstractmethod
     def wakeup(self) -> None:
         """Interrupt the loop's select() from another thread."""
+
+    # --- shared helpers (composed from the primitives above) --------------
+    async def wait_for(self, future: NetBackendFuture, timeout_ms: Optional[float]) -> Any:
+        """Await ``future`` with a timeout in ms. Raises KafkaTimeoutError on timeout.
+
+        Composed entirely from ``create_future`` / ``call_later`` / ``cancel``,
+        so the implementation is identical across backends; it lives here rather
+        than in each backend (or on the manager, which merely delegates). A
+        backend with a native bounded-await may override.
+
+        Must be awaited from a coroutine running on this loop. The underlying
+        future is not cancelled on timeout -- it continues to run; the timeout
+        only unblocks the awaiter.
+        """
+        # Always await a backend-native wrapper, never ``future`` directly:
+        # ``future`` may be a plain thread-safe Future which isn't awaitable on
+        # every backend (e.g. asyncio rejects a bare ``yield self``). We touch it
+        # only via callbacks. (create_future() gives the backend's awaitable.)
+        wrapper = self.create_future()
+        def _on_success(value):
+            if not wrapper.is_done:
+                wrapper.success(value)
+        def _on_failure(exc):
+            if not wrapper.is_done:
+                wrapper.failure(exc)
+        future.add_callback(_on_success)
+        future.add_errback(_on_failure)
+        timer = None
+        if timeout_ms is not None:
+            def _on_timeout():
+                if not wrapper.is_done:
+                    wrapper.failure(Errors.KafkaTimeoutError(
+                        'Timed out after %s ms' % timeout_ms))
+            timer = self.call_later(timeout_ms / 1000, _on_timeout)
+        try:
+            return await wrapper
+        finally:
+            if timer is not None:
+                self.cancel(timer)
 
 
 # --- backend selection ----------------------------------------------------

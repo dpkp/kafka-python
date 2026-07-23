@@ -11,6 +11,9 @@ Driven through MockCluster (stateful), not a scripted MockBroker: a started loop
 runs background heartbeat / metadata-refresh coroutines that fire unscripted
 requests, which MockCluster answers and a scripted MockBroker would not.
 """
+import pytest
+
+import kafka.errors as Errors
 from kafka.consumer.subscription_state import SubscriptionState
 from kafka.coordinator.consumer import ConsumerCoordinator
 from kafka.net.compat import KafkaNetClient
@@ -71,6 +74,23 @@ def test_metadata_refresh(all_net):
         assert manager.cluster.partitions_for_topic('t') == {0, 1, 2}
     finally:
         manager.close()
+
+
+def test_wait_for_success_and_timeout(all_net):
+    """The shared ``NetBackend.wait_for`` helper behaves identically on both
+    backends: a resolved future passes its value through, and a future that
+    never resolves raises KafkaTimeoutError once the bound elapses."""
+    async def resolves():
+        fut = all_net.create_future()
+        all_net.call_soon(lambda: fut.success('value'))
+        return await all_net.wait_for(fut, timeout_ms=5000)
+    assert all_net.run(resolves) == 'value'
+
+    async def never_resolves():
+        fut = all_net.create_future()
+        return await all_net.wait_for(fut, timeout_ms=20)
+    with pytest.raises(Errors.KafkaTimeoutError):
+        all_net.run(never_resolves)
 
 
 def test_consumer_group_join_assigns_partitions(all_net, metrics):
