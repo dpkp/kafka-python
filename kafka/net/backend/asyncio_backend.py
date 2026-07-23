@@ -18,6 +18,7 @@ import time
 
 import kafka.errors as Errors
 from kafka.future import Future
+from kafka.net.backend.abstract import NetBackend
 from kafka.version import __version__
 
 log = logging.getLogger(__name__)
@@ -82,7 +83,7 @@ class _DeferredHandle:
             self._handle.cancel()
 
 
-class AsyncioBackend:
+class AsyncioBackend(NetBackend):
     DEFAULT_CONFIG = {
         'client_id': 'kafka-python-' + __version__,
         # Default operation deadline for a cross-thread run() call that does not

@@ -1,9 +1,10 @@
 """Conformance tests for the NetBackend contract (kafka/net/backend/abstract.py).
 
-NetworkSelector is the reference implementation; these pin that it satisfies
-the NetBackend Protocol structurally and that the shared lifecycle helper
-``on_io_thread()`` behaves correctly. Step 4's AsyncioBackend will be held to
-the same isinstance/method-presence checks.
+NetworkSelector is the reference implementation; these pin that it inherits the
+NetBackend ABC, that the ABC enforces the contract at instantiation (an
+incomplete subclass raises TypeError), and that the shared lifecycle helper
+``on_io_thread()`` behaves correctly. AsyncioBackend is held to the same
+subclass/method-presence checks.
 """
 import asyncio
 import threading
@@ -31,18 +32,29 @@ NON_CONTRACT_METHODS = ('wait_read', 'wait_write', 'unregister_event', 'poll')
 
 
 class TestNetBackendContract:
-    def test_networkselector_satisfies_protocol(self):
+    def test_networkselector_is_netbackend_subclass(self):
+        assert issubclass(NetworkSelector, NetBackend)
         assert isinstance(NetworkSelector(), NetBackend)
+
+    def test_netbackend_is_an_abc(self):
+        import abc
+        assert isinstance(NetBackend, abc.ABCMeta)
+        # Every contract method is abstract, so the base itself can't instantiate.
+        with pytest.raises(TypeError):
+            NetBackend()
 
     def test_plain_object_is_not_netbackend(self):
         assert not isinstance(object(), NetBackend)
 
-    def test_partial_impl_is_not_netbackend(self):
-        class Partial:
+    def test_incomplete_subclass_cannot_instantiate(self):
+        # ABC enforcement at instantiation -- no type checker required: a
+        # subclass missing any abstract method raises TypeError when built.
+        class Partial(NetBackend):
             def start(self):
                 pass
             # missing everything else
-        assert not isinstance(Partial(), NetBackend)
+        with pytest.raises(TypeError):
+            Partial()
 
     def test_all_contract_methods_present_and_callable(self):
         net = NetworkSelector()

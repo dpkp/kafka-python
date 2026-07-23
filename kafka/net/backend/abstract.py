@@ -47,6 +47,7 @@ Method families:
 * **Future factory** -- ``create_future`` (see ``NetBackendFuture``).
 * **Cross-thread wake** -- ``wakeup``.
 """
+import abc
 import importlib
 from typing import Any, Callable, Optional, Protocol, Sequence, Tuple, runtime_checkable
 
@@ -158,29 +159,43 @@ AddrInfoResult = List[
 ]
 
 
-@runtime_checkable
-class NetBackend(Protocol):
-    """Structural contract for a pluggable async event-loop backend.
+class NetBackend(abc.ABC):
+    """Contract for a pluggable async event-loop backend.
 
-    ``runtime_checkable`` so conformance can be asserted with ``isinstance``;
-    note that only checks member *presence*, not signatures. ``NetworkSelector``
-    satisfies this structurally (no explicit inheritance needed).
+    An ``abc.ABC`` (not a ``Protocol``): backends inherit it and are checked at
+    instantiation -- a missing method raises ``TypeError`` immediately, with no
+    type checker in the loop. ``NetworkSelector`` / ``AsyncioBackend`` subclass
+    it directly. The satellite surfaces this backend *produces* --
+    :class:`NetBackendFuture`, :class:`NetTransport`, :class:`NetProtocol` --
+    stay structural ``Protocol``\\ s, since the concrete objects that satisfy
+    them (``SelectorFuture``, ``KafkaTCPTransport``, ``KafkaConnection``) do so
+    by shape and shouldn't be forced to inherit.
+
+    Every method below is abstract; the docstrings pin the cross-backend
+    semantics (which thread resolves futures, fan-out, callback timing). Derived
+    helpers that compose these primitives (e.g. :meth:`wait_for`) live here as
+    concrete methods, shared by every backend.
     """
 
     # --- lifecycle --------------------------------------------------------
+    @abc.abstractmethod
     def start(self) -> None:
         """Spawn/attach the IO thread that runs the loop. Idempotent."""
 
+    @abc.abstractmethod
     def stop(self, timeout_ms: Optional[float] = None) -> None:
         """Stop the loop and join the IO thread. Idempotent."""
 
+    @abc.abstractmethod
     def close(self) -> None:
         """Stop (if running) and release loop resources. Idempotent."""
 
+    @abc.abstractmethod
     def on_io_thread(self) -> bool:
         """True if the caller is running on this backend's IO thread."""
 
     # --- scheduling -------------------------------------------------------
+    @abc.abstractmethod
     def call_soon(self, task: Any) -> Any:
         """Enqueue a coroutine/callable to run on the next loop iteration.
 
@@ -190,26 +205,33 @@ class NetBackend(Protocol):
         deferred-handle box).
         """
 
+    @abc.abstractmethod
     def call_soon_with_future(self, coro: Any, *args: Any) -> NetBackendFuture:
         """Schedule ``coro`` and return a future that resolves with its result."""
 
+    @abc.abstractmethod
     def call_at(self, when: float, task: Any) -> Any:
         """Schedule ``task`` to run at absolute monotonic time ``when``."""
 
+    @abc.abstractmethod
     def call_later(self, delay: float, task: Any) -> Any:
         """Schedule ``task`` to run after ``delay`` seconds."""
 
+    @abc.abstractmethod
     def cancel(self, task: Any) -> None:
         """Cancel a scheduled task/timer previously returned by call_*."""
 
     # --- timing (core coroutines await this) ------------------------------
+    @abc.abstractmethod
     def sleep(self, delay: float) -> Any:
         """Awaitable that resolves after ``delay`` seconds."""
 
     # --- connection seam --------------------------------------------------
+    @abc.abstractmethod
     async def getaddrinfo(self, host: str, port: int) -> AddrInfoResult:
         """Resolve host/port via DNS"""
 
+    @abc.abstractmethod
     async def create_connection(
         self,
         protocol: NetProtocol,
@@ -235,6 +257,7 @@ class NetBackend(Protocol):
         """
 
     # --- cross-thread bridge ---------------------------------------------
+    @abc.abstractmethod
     def run(self, coro: Any, *args: Any, timeout_ms: Optional[float] = None) -> Any:
         """Schedule ``coro`` on the loop, block the calling thread, return/raise.
 
@@ -247,10 +270,12 @@ class NetBackend(Protocol):
         """
 
     # --- future factory ---------------------------------------------------
+    @abc.abstractmethod
     def create_future(self) -> NetBackendFuture:
         """Create a loop-awaitable future (see ``NetBackendFuture``)."""
 
     # --- misc -------------------------------------------------------------
+    @abc.abstractmethod
     def wakeup(self) -> None:
         """Interrupt the loop's select() from another thread."""
 

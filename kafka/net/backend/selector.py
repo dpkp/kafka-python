@@ -12,6 +12,7 @@ import time
 
 import kafka.errors as Errors
 from kafka.future import Future
+from kafka.net.backend.abstract import NetBackend
 from kafka.net.backend.transport import KafkaTCPTransport
 from kafka.net.ssl import KafkaSSLTransport
 from kafka.version import __version__
@@ -194,7 +195,7 @@ class Task:
         return self._exc
 
 
-class NetworkSelector:
+class NetworkSelector(NetBackend):
     DEFAULT_CONFIG = {
         'client_id': 'kafka-python-' + __version__,
         'selector': selectors.DefaultSelector,
