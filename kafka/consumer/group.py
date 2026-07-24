@@ -786,13 +786,11 @@ class KafkaConsumer:
             timeout_ms = self.config['default_api_timeout_ms']
         timer = Timer(timeout_ms)
         if self._cluster.metadata_refresh_in_progress:
-            future = self._cluster.request_update()
-            self._net.run(self._manager.wait_for, future, timer.timeout_ms, timeout_ms=timer.timeout_ms)
+            self._net.wait_for(self._cluster.request_update(), timeout_ms=timer.timeout_ms)
         stash = self._cluster.need_all_topic_metadata
         try:
             self._cluster.need_all_topic_metadata = True
-            future = self._cluster.request_update()
-            self._net.run(self._manager.wait_for, future, timer.timeout_ms, timeout_ms=timer.timeout_ms)
+            self._net.wait_for(self._cluster.request_update(), timeout_ms=timer.timeout_ms)
         finally:
             self._cluster.need_all_topic_metadata = stash
 
@@ -966,10 +964,7 @@ class KafkaConsumer:
         # past the user's deadline.
         reset_task = self._fetcher.reset_offsets_if_needed(timeout_ms=timer.timeout_ms)
         if reset_task is not None and not timer.expired:
-            try:
-                self._net.run(self._manager.wait_for, reset_task, timer.timeout_ms)
-            except Errors.KafkaTimeoutError:
-                pass
+            self._net.wait_for(reset_task, timeout_ms=timer.timeout_ms, raise_error=False)
         # Phase 3 (KIP-320): mark any positions whose cluster leader epoch
         # has advanced beyond the position's epoch and await the validation
         # RPC. Surfaces LogTruncationError to the caller if truncation is
@@ -978,10 +973,7 @@ class KafkaConsumer:
         validation_task = self._fetcher.validate_offsets_if_needed(
             timeout_ms=timer.timeout_ms)
         if validation_task is not None and not timer.expired:
-            try:
-                self._net.run(self._manager.wait_for, validation_task, timer.timeout_ms)
-            except Errors.KafkaTimeoutError:
-                pass
+            self._net.wait_for(validation_task, timeout_ms=timer.timeout_ms, raise_error=False)
         position = self._subscription.assignment[partition].position
         if position is not None:
             return position.offset
@@ -1361,7 +1353,7 @@ class KafkaConsumer:
 
         Callers that also want the reset to complete should follow up with
         ``self._fetcher.reset_offsets_if_needed()`` and either await the
-        returned Task (e.g. via ``manager.wait_for``) or fire-and-forget.
+        returned Task (e.g. via ``net.await_for``) or fire-and-forget.
 
         Arguments:
             timeout_ms (int, optional): Milliseconds to block refreshing

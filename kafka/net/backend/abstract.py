@@ -72,10 +72,10 @@ class NetBackendFuture(Protocol):
     1. **Resolution thread.** A future from ``create_future()`` is created and
        resolved (``success`` / ``failure``) on the loop/IO thread only.
        Cross-thread handoffs (a user thread blocking on a loop result) use a
-       plain thread-safe ``Future`` bridged via ``manager.wait_for`` /
-       ``manager.run`` -- never a backend future awaited directly. Backends
-       whose native awaitable is loop-affine (``asyncio.Future``, Twisted
-       ``Deferred``) depend on this; their ``__await__`` adapter may assert it.
+       plain thread-safe ``Future`` bridged via ``net.wait_for`` -- never a
+       backend future awaited directly. Backends whose native awaitable is
+       loop-affine (``asyncio.Future``, Twisted ``Deferred``) depend on this;
+       their ``__await__`` adapter may assert it.
 
     2. **Fan-out.** Multiple coroutines may ``await`` the same future and
        multiple callbacks may be registered; all are resumed / invoked. (A bare
@@ -282,13 +282,8 @@ class NetBackend(abc.ABC):
         """Interrupt the loop's select() from another thread."""
 
     # --- shared helpers (composed from the primitives above) --------------
-    async def wait_for(self, future: NetBackendFuture, timeout_ms: Optional[float]) -> Any:
-        """Await ``future`` with a timeout in ms. Raises KafkaTimeoutError on timeout.
-
-        Composed entirely from ``create_future`` / ``call_later`` / ``cancel``,
-        so the implementation is identical across backends; it lives here rather
-        than in each backend (or on the manager, which merely delegates). A
-        backend with a native bounded-await may override.
+    async def await_for(self, future: Any, timeout_ms: Optional[float], raise_error: bool = True) -> Any:
+        """Await ``future`` with a timeout in ms.
 
         Must be awaited from a coroutine running on this loop. The underlying
         future is not cancelled on timeout -- it continues to run; the timeout
@@ -316,9 +311,21 @@ class NetBackend(abc.ABC):
             timer = self.call_later(timeout_ms / 1000, _on_timeout)
         try:
             return await wrapper
+        except Exception:
+            if raise_error:
+                raise
         finally:
             if timer is not None:
                 self.cancel(timer)
+
+    def wait_for(self, future: Any, timeout_ms: float, raise_error: bool=True) -> NetBackendFuture:
+        """Block until ``future`` resolves with a timeout in ms.
+
+        Must be awaited from a coroutine running on this loop. The underlying
+        future is not cancelled on timeout -- it continues to run; the timeout
+        only unblocks the awaiter.
+        """
+        return self.run(self.await_for, future, timeout_ms, raise_error, timeout_ms=timeout_ms)
 
 
 # --- backend selection ----------------------------------------------------

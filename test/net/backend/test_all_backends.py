@@ -83,12 +83,12 @@ def test_wait_for_success_and_timeout(all_net):
     async def resolves():
         fut = all_net.create_future()
         all_net.call_soon(lambda: fut.success('value'))
-        return await all_net.wait_for(fut, timeout_ms=5000)
+        return await all_net.await_for(fut, timeout_ms=5000)
     assert all_net.run(resolves) == 'value'
 
     async def never_resolves():
         fut = all_net.create_future()
-        return await all_net.wait_for(fut, timeout_ms=20)
+        return await all_net.await_for(fut, timeout_ms=20)
     with pytest.raises(Errors.KafkaTimeoutError):
         all_net.run(never_resolves)
 

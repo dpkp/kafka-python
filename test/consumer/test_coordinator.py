@@ -502,7 +502,7 @@ def offsets():
     }
 
 
-def test_commit_offsets_async(mocker, manager, coordinator, offsets):
+def test_commit_offsets_async(mocker, net, manager, coordinator, offsets):
     mocker.patch.object(coordinator, 'coordinator_unknown', return_value=False)
     mocker.patch.object(coordinator, 'ensure_coordinator_ready')
     # _send_offset_commit_request is an async coroutine; scheduled via
@@ -512,7 +512,7 @@ def test_commit_offsets_async(mocker, manager, coordinator, offsets):
     mocker.patch.object(coordinator, '_send_offset_commit_request',
                         side_effect=fake_send)
     future = coordinator.commit_offsets_async(offsets)
-    manager.wait_for_blocking(future, 1000)
+    net.wait_for(future, 1000)
     assert coordinator._send_offset_commit_request.call_count == 1
 
 
@@ -649,7 +649,7 @@ def test_send_offset_commit_request_fail(coordinator, offsets):
     ((2, 0), 4),
     ((2, 1), 6),
 ], indirect=['broker'])
-def test_send_offset_commit_request_versions(broker, manager, seeded_coord, offsets, version):
+def test_send_offset_commit_request_versions(broker, net, manager, seeded_coord, offsets, version):
     captured = {}
     _Topic = OffsetCommitResponse.OffsetCommitResponseTopic
     _Partition = _Topic.OffsetCommitResponsePartition
@@ -666,19 +666,20 @@ def test_send_offset_commit_request_versions(broker, manager, seeded_coord, offs
     broker.respond_fn(OffsetCommitRequest, handler)
     future = manager.call_soon(
         seeded_coord._send_offset_commit_request, offsets)
-    manager.wait_for_blocking(future, 5000)
+    net.wait_for(future, 5000)
     assert future.succeeded()
     assert captured['api_version'] == version
 
 
-def test_send_offset_commit_request_failure(mocker, broker, manager, seeded_coord, offsets):
+def test_send_offset_commit_request_failure(mocker, broker, net, manager, seeded_coord, offsets):
     spy = mocker.spy(seeded_coord, '_failed_request')
     error = Errors.KafkaConnectionError('simulated transport failure')
     broker.fail_next(OffsetCommitRequest, error=error)
 
     future = manager.call_soon(
         seeded_coord._send_offset_commit_request, offsets)
-    manager.wait_for_blocking(future, 5000)
+    with pytest.raises(Errors.KafkaConnectionError):
+        net.wait_for(future, 5000)
 
     assert future.failed()
     assert future.exception is error
@@ -693,7 +694,7 @@ def test_send_offset_commit_request_failure(mocker, broker, manager, seeded_coor
     assert call_error is error
 
 
-def test_send_offset_commit_request_success(mocker, broker, manager, seeded_coord, offsets):
+def test_send_offset_commit_request_success(mocker, broker, net, manager, seeded_coord, offsets):
     _Topic = OffsetCommitResponse.OffsetCommitResponseTopic
     _Partition = _Topic.OffsetCommitResponsePartition
     broker.respond(OffsetCommitRequest, OffsetCommitResponse(
@@ -706,7 +707,7 @@ def test_send_offset_commit_request_success(mocker, broker, manager, seeded_coor
 
     future = manager.call_soon(
         seeded_coord._send_offset_commit_request, offsets)
-    manager.wait_for_blocking(future, 5000)
+    net.wait_for(future, 5000)
 
     assert future.succeeded()
     assert spy.call_count == 1
@@ -794,7 +795,7 @@ def test_send_offset_fetch_request_fail(coordinator, partitions):
     ((2, 5), 7),
     ((3, 0), 8),
 ], indirect=['broker'])
-def test_send_offset_fetch_request_versions(broker, manager, seeded_coord, partitions, version):
+def test_send_offset_fetch_request_versions(broker, net, manager, seeded_coord, partitions, version):
     captured = {}
     _Topic = OffsetFetchResponse.OffsetFetchResponseTopic
     _Partition = _Topic.OffsetFetchResponsePartition
@@ -824,19 +825,20 @@ def test_send_offset_fetch_request_versions(broker, manager, seeded_coord, parti
     broker.respond_fn(OffsetFetchRequest, handler)
     future = manager.call_soon(
         seeded_coord._send_offset_fetch_request, partitions)
-    manager.wait_for_blocking(future, 5000)
+    net.wait_for(future, 5000)
     assert future.succeeded()
     assert captured['api_version'] == version
 
 
-def test_send_offset_fetch_request_failure(mocker, broker, manager, seeded_coord, partitions):
+def test_send_offset_fetch_request_failure(mocker, broker, net, manager, seeded_coord, partitions):
     spy = mocker.spy(seeded_coord, '_failed_request')
     error = Errors.KafkaConnectionError('simulated transport failure')
     broker.fail_next(OffsetFetchRequest, error=error)
 
     future = manager.call_soon(
         seeded_coord._send_offset_fetch_request, partitions)
-    manager.wait_for_blocking(future, 5000)
+    with pytest.raises(Errors.KafkaConnectionError):
+        net.wait_for(future, 5000)
 
     assert future.failed()
     assert future.exception is error
@@ -850,7 +852,7 @@ def test_send_offset_fetch_request_failure(mocker, broker, manager, seeded_coord
     assert call_error is error
 
 
-def test_send_offset_fetch_request_success(mocker, broker, manager, seeded_coord, partitions, offsets):
+def test_send_offset_fetch_request_success(mocker, broker, net, manager, seeded_coord, partitions, offsets):
     _Topic = OffsetFetchResponse.OffsetFetchResponseTopic
     _Partition = _Topic.OffsetFetchResponsePartition
     _Group = OffsetFetchResponse.OffsetFetchResponseGroup
@@ -876,7 +878,7 @@ def test_send_offset_fetch_request_success(mocker, broker, manager, seeded_coord
 
     future = manager.call_soon(
         seeded_coord._send_offset_fetch_request, partitions)
-    manager.wait_for_blocking(future, 5000)
+    net.wait_for(future, 5000)
 
     assert future.succeeded()
     assert future.value == offsets
@@ -890,7 +892,7 @@ def test_send_offset_fetch_request_success(mocker, broker, manager, seeded_coord
     ('read_committed', True),
 ])
 def test_send_offset_fetch_request_sets_require_stable(
-        broker, manager, client, metrics, partitions, isolation_level, expected):
+        broker, net, manager, client, metrics, partitions, isolation_level, expected):
     coord = ConsumerCoordinator(client, SubscriptionState(),
                                 metrics=metrics,
                                 api_version=broker.broker_version,
@@ -927,7 +929,7 @@ def test_send_offset_fetch_request_sets_require_stable(
         broker.respond_fn(OffsetFetchRequest, handler)
         future = manager.call_soon(
             coord._send_offset_fetch_request, partitions)
-        manager.wait_for_blocking(future, 5000)
+        net.wait_for(future, 5000)
         assert future.succeeded()
         assert captured['require_stable'] is expected
     finally:
@@ -1534,7 +1536,7 @@ def test_heartbeat(mocker, net, coordinator):
     net.poll(timeout_ms=50)
 
 
-def test_lookup_coordinator_failure(mocker, manager, coordinator):
+def test_lookup_coordinator_failure(mocker, net, manager, coordinator):
     # _send_group_coordinator_request is now an async coroutine scheduled
     # via manager.call_soon, so we drive the event loop to let the mock
     # fire before asserting on the returned future.
@@ -1543,7 +1545,7 @@ def test_lookup_coordinator_failure(mocker, manager, coordinator):
     mocker.patch.object(coordinator, '_send_group_coordinator_request',
                         side_effect=fake_send)
     future = coordinator.lookup_coordinator()
-    manager.wait_for_blocking(future, 1000)
+    net.wait_for(future, 1000, raise_error=False)
     assert future.failed()
 
 
@@ -2497,7 +2499,8 @@ def _dispatch_heartbeat(coord):
     the resulting future resolves."""
     manager = coord._manager
     future = manager.call_soon(coord._send_heartbeat_request)
-    manager.wait_for_blocking(future, 5000)
+    net = coord._manager._net
+    net.wait_for(future, timeout_ms=5000, raise_error=False)
     return future
 
 
@@ -2865,7 +2868,7 @@ def test_metadata_growth_triggers_rejoin_end_to_end(net, metrics):
         # listener sees the change (the racing metadata update from KAFKA-3949).
         mock_cluster.set_metadata(topics=[_metadata_topic('t', num_partitions=2)])
         future = client.cluster.request_update()
-        manager.wait_for_blocking(future, 5000)
+        net.wait_for(future, 5000)
 
         # The leader's assignment snapshot is now stale -> must rejoin.
         assert coordinator.need_rejoin()

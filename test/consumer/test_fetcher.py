@@ -639,7 +639,7 @@ def test_clean_done_fetch_futures_only_mutates_when_driven_on_loop(fetcher):
 
 def _capture_wakeup(fetcher, mocker):
     """Patch net.run to capture the wakeup Future (arg after wait_for)
-    without blocking, mirroring net.run(manager.wait_for, wakeup, timeout)."""
+    without blocking, mirroring net.wait_for(wakeup, timeout)."""
     captured = {}
 
     def fake_run(coro, *args, timeout_ms=None):
@@ -659,7 +659,7 @@ def test_fetch_records_no_stall_when_response_arrives_before_wait(fetcher, topic
     Still required under the IO thread, where a fetch future can resolve at
     any moment.
 
-    This is faithful to the real wait: ``realistic_run`` returns immediately
+    This is faithful to the real wait: ``realistic_wait_for`` returns immediately
     only if the wakeup was already resolved (the synchronous fire), and
     otherwise behaves like a wait that blocks and times out. Drop the
     synchronous fire (e.g. by filtering already-done futures out of
@@ -674,10 +674,7 @@ def test_fetch_records_no_stall_when_response_arrives_before_wait(fetcher, topic
 
     outcome = {'stalled': None}
 
-    def realistic_run(coro, wakeup, wait_timeout_ms, timeout_ms=None):
-        # Stand-in for net.run(manager.wait_for, wakeup, wait_timeout_ms,
-        # timeout_ms=...). The positional wait_for timeout and the run() backstop
-        # kwarg carry the same value.
+    def realistic_wait_for(wakeup, timeout_ms=None, raise_error=False):
         if wakeup.is_done:
             outcome['stalled'] = False
             # Emulate the IO thread having buffered the response that
@@ -687,9 +684,10 @@ def test_fetch_records_no_stall_when_response_arrives_before_wait(fetcher, topic
             return None
         # Not resolved -> a real wait would block until timeout and raise.
         outcome['stalled'] = True
-        raise Errors.KafkaTimeoutError()
+        if raise_error:
+            raise Errors.KafkaTimeoutError()
 
-    mocker.patch.object(fetcher._net, 'run', side_effect=realistic_run)
+    mocker.patch.object(fetcher._net, 'wait_for', side_effect=realistic_wait_for)
 
     records, idle = fetcher.fetch_records(timeout_ms=10000)
 

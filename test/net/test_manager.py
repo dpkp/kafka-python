@@ -537,7 +537,7 @@ class TestKafkaConnectionManagerRun:
         # wait_for should fail with KafkaTimeoutError, not GeneratorExit.
         async def waiter():
             inner = manager.call_soon(hangs_then_times_out)
-            return await manager.wait_for(inner, timeout_ms=50)
+            return await manager._net.await_for(inner, timeout_ms=50, raise_error=True)
 
         with pytest.raises(Errors.KafkaTimeoutError):
             manager.run(waiter)

@@ -365,14 +365,14 @@ class BaseCoordinator(ABC):
                 future = self.lookup_coordinator()
 
             try:
-                await self._manager.wait_for(future, timer.timeout_ms)
+                await self._net.await_for(future, timeout_ms=timer.timeout_ms)
             except Errors.KafkaTimeoutError:
                 return False
             except Errors.InvalidMetadataError as exc:
                 log.debug('Requesting metadata for group coordinator request: %s', exc)
                 metadata_update = self._cluster.request_update()
                 try:
-                    await self._manager.wait_for(metadata_update, timer.timeout_ms)
+                    await self._net.await_for(metadata_update, timeout_ms=timer.timeout_ms)
                 except Errors.KafkaTimeoutError:
                     return False
             except Errors.RetriableError:
@@ -514,8 +514,7 @@ class BaseCoordinator(ABC):
                 self._join_task = self._manager.call_soon(self._do_join_and_sync_async)
 
             try:
-                assignment_bytes = await self._manager.wait_for(
-                    self._join_task, timer.timeout_ms)
+                assignment_bytes = await self._net.await_for(self._join_task, timeout_ms=timer.timeout_ms)
             except Errors.KafkaTimeoutError:
                 # Timer expired; leave self._join_task in flight so the next
                 # poll re-awaits it instead of sending a duplicate JoinGroup.
@@ -1087,7 +1086,7 @@ class BaseCoordinator(ABC):
             log.debug('Sending LeaveGroupRequest to %s: %s', self.coordinator_id, request)
             future = self._manager.send(request, node_id=self.coordinator_id)
             try:
-                response = await self._manager.wait_for(future, timeout_ms)
+                response = await self._net.await_for(future, timeout_ms=timeout_ms)
                 self._handle_leave_group_response(response)
             except Errors.KafkaError as exc:
                 log.error("LeaveGroup request failed: %s", exc)

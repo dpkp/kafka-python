@@ -111,7 +111,7 @@ class TestKIP320OffsetValidation:
     """End-to-end OffsetsForLeaderEpoch flow through the wire."""
 
     def test_advanced_cluster_epoch_triggers_validation_request(
-            self, broker, manager, fetcher):
+            self, broker, net, manager, fetcher):
         """When the metadata-cached leader_epoch advances past the
         consumer's position epoch, the next ``maybe_validate_positions``
         marks the partition and ``_validate_offsets_async`` issues an
@@ -123,7 +123,7 @@ class TestKIP320OffsetValidation:
         # the consumer's cluster cache sees the new epoch.
         _broker_metadata(broker, leader_epoch=5)
         manager.cluster.request_update()
-        manager.wait_for_blocking(manager.cluster.request_update(), 1000)
+        net.wait_for(manager.cluster.request_update(), 1000)
 
         captured = {}
 
@@ -144,7 +144,7 @@ class TestKIP320OffsetValidation:
         assert fetcher._subscriptions.assignment[tp].position.offset == 50
 
     def test_validated_position_not_revalidated_forever(
-            self, broker, manager, fetcher):
+            self, broker, net, manager, fetcher):
         """Regression for #3106: consumer stalls after one fetched batch.
 
         After a leader election the cluster epoch advances (3 -> 5), but
@@ -162,7 +162,7 @@ class TestKIP320OffsetValidation:
 
         # Cluster leader epoch advances to 5; refresh the consumer's cache.
         _broker_metadata(broker, leader_epoch=5)
-        manager.wait_for_blocking(manager.cluster.request_update(), 1000)
+        net.wait_for(manager.cluster.request_update(), 1000)
 
         # No truncation (end_offset 100 >= position 50), and the broker
         # reports the requested epoch (3), NOT the current cluster epoch (5).
@@ -193,11 +193,11 @@ class TestKIP320OffsetValidation:
         assert state.is_fetchable()
 
         # And no further OffsetForLeaderEpoch request is issued.
-        manager.run(fetcher._validate_offsets_async, 1000)
+        net.run(fetcher._validate_offsets_async, 1000)
         assert ofle_requests[0] == 1
 
     def test_seek_forces_revalidation_of_new_position(
-            self, broker, manager, fetcher):
+            self, broker, net, manager, fetcher):
         """A seek must re-arm validation even after a prior validation.
 
         Companion to #3106: the per-partition reconciled-leader-epoch must be
@@ -211,7 +211,7 @@ class TestKIP320OffsetValidation:
         fetcher._subscriptions.seek(tp, OffsetAndMetadata(50, '', 3))
 
         _broker_metadata(broker, leader_epoch=5)
-        manager.wait_for_blocking(manager.cluster.request_update(), 1000)
+        net.wait_for(manager.cluster.request_update(), 1000)
 
         broker.respond(OffsetForLeaderEpochRequest,
                        _ofle_response(error_code=0, leader_epoch=3, end_offset=100))
@@ -230,7 +230,7 @@ class TestKIP320OffsetValidation:
             'seeked position not re-validated -> could consume past truncation'
 
     def test_diverged_seeks_to_endpoint_with_policy(
-            self, broker, manager, fetcher):
+            self, broker, net, manager, fetcher):
         """end_offset < position.offset (valid epoch) on the wire triggers
         a seek to the broker-reported divergence point - preserves progress
         and tags position with the confirmed epoch. Mirrors Java's
@@ -252,7 +252,7 @@ class TestKIP320OffsetValidation:
         assert pos.leader_epoch == 3
 
     def test_diverged_raises_when_no_reset_policy(
-            self, broker, client, manager, metrics):
+            self, broker, net, client, manager, metrics):
         """With offset_reset_strategy=NONE, the same wire response
         produces LogTruncationError carrying the divergent offset and
         leaves the position untouched."""
@@ -282,7 +282,7 @@ class TestKIP320OffsetValidation:
         assert subs.assignment[tp].position.offset == 100
 
     def test_undefined_response_resets_with_policy(
-            self, broker, manager, fetcher):
+            self, broker, net, fetcher):
         """UNDEFINED end_offset/leader_epoch (broker has no record of our
         epoch) with a reset policy: no known seek point, so fall back to
         auto_offset_reset rather than silently dropping the epoch."""
@@ -293,14 +293,14 @@ class TestKIP320OffsetValidation:
         broker.respond(OffsetForLeaderEpochRequest,
                        _ofle_response(error_code=0, leader_epoch=-1, end_offset=-1))
 
-        manager.run(fetcher._validate_offsets_async, 1000)
+        net.run(fetcher._validate_offsets_async, 1000)
 
         assert fetcher._cached_log_truncation is None
         assert fetcher._subscriptions.assignment[tp].awaiting_reset
         assert not fetcher._subscriptions.assignment[tp].awaiting_validation
 
     def test_undefined_response_raises_when_no_reset_policy(
-            self, broker, client, manager, metrics):
+            self, broker, net, client, manager, metrics):
         """UNDEFINED response with reset policy NONE: LogTruncationError
         with divergent_offsets[tp] == None (no known recovery point)."""
         _broker_metadata(broker, leader_epoch=3)
@@ -326,7 +326,7 @@ class TestKIP320OffsetValidation:
         assert subs.assignment[tp].position.offset == 100
 
     def test_fenced_epoch_on_fetch_marks_validation_then_succeeds(
-            self, broker, manager, fetcher):
+            self, broker, net, fetcher):
         """A FENCED_LEADER_EPOCH on a real Fetch response routes through
         ``request_position_validation``; a subsequent
         ``_validate_offsets_async`` issues the OffsetForLeaderEpochRequest
@@ -350,7 +350,7 @@ class TestKIP320OffsetValidation:
 
         # Now run the validation driver; it should send OffsetForLeaderEpoch
         # and clear the flag.
-        manager.run(fetcher._validate_offsets_async, 1000)
+        net.run(fetcher._validate_offsets_async, 1000)
         assert not fetcher._subscriptions.assignment[tp].awaiting_validation
 
     def test_validation_retries_on_fenced_epoch_response(
@@ -401,7 +401,7 @@ class TestKIP392RackAwareFetching:
     """End-to-end: client_rack arrives on the wire and the broker's
     preferred_read_replica is honored on the next fetch."""
 
-    def test_rack_id_sent_on_fetch_request(self, broker, manager, fetcher):
+    def test_rack_id_sent_on_fetch_request(self, broker, net, manager, fetcher):
         """FetchRequest carries ``rack_id`` when client_rack is configured,
         and negotiates to v11+ against a modern broker."""
         fetcher.config['client_rack'] = 'us-east-1a'
@@ -425,14 +425,14 @@ class TestKIP392RackAwareFetching:
         assert 0 in requests, 'expected one fetch routed to the leader (node 0)'
         request, _ = requests[0]
         future = manager.send(request, node_id=0)
-        manager.wait_for_blocking(future, 2000)
+        net.wait_for(future, 2000)
 
         assert captured['api_version'] >= 11, (
             'KIP-392 requires FetchRequest v11+; got v%s' % captured.get('api_version'))
         assert captured['rack_id'] == 'us-east-1a'
 
     def test_preferred_replica_cached_and_used_on_next_fetch(
-            self, broker, manager, fetcher):
+            self, broker, net, manager, fetcher):
         """First fetch goes to the leader; broker returns
         ``preferred_read_replica=N``; second fetch routes to node N."""
         tp = TopicPartition(TOPIC, PARTITION)
@@ -452,7 +452,7 @@ class TestKIP392RackAwareFetching:
                     offline_replicas=[])],
             )])
         # Re-pull metadata so the cluster cache knows about node 5.
-        manager.wait_for_blocking(manager.cluster.request_update(), 2000)
+        net.wait_for(manager.cluster.request_update(), 2000)
 
         fetcher._subscriptions.seek(tp, OffsetAndMetadata(0, '', 3))
 
@@ -473,7 +473,7 @@ class TestKIP392RackAwareFetching:
         assert fetcher._select_read_replica(tp) == 5
 
     def test_preferred_replica_negative_one_means_leader(
-            self, broker, manager, fetcher):
+            self, broker, fetcher):
         """``preferred_read_replica == -1`` is the broker explicitly telling
         the client to stop using a cached follower."""
         tp = TopicPartition(TOPIC, PARTITION)
@@ -518,7 +518,7 @@ class TestFetchV12Epoch:
     """FetchRequest v12 split-epoch request encoding and tagged response handling."""
 
     def test_negotiates_v12_and_sends_split_epoch_fields(
-            self, broker, manager, fetcher):
+            self, broker, net, manager, fetcher):
         """current_leader_epoch comes from cluster metadata, last_fetched_epoch
         from the position - and they are sent distinctly on the wire."""
         tp = TopicPartition(TOPIC, PARTITION)
@@ -543,7 +543,7 @@ class TestFetchV12Epoch:
         assert broker.node_id in requests
         request, _ = requests[broker.node_id]
         future = manager.send(request, node_id=broker.node_id)
-        manager.wait_for_blocking(future, 2000)
+        net.wait_for(future, 2000)
 
         assert captured['api_version'] >= 12, (
             'expected Fetch v12+ negotiation; got v%s' % captured.get('api_version'))
@@ -551,7 +551,7 @@ class TestFetchV12Epoch:
         assert captured['last_fetched_epoch'] == 3
 
     def test_last_fetched_epoch_is_minus_one_when_position_has_no_epoch(
-            self, broker, manager, fetcher):
+            self, broker, net, manager, fetcher):
         """A position without a known epoch (e.g. bare seek) sends -1."""
         tp = TopicPartition(TOPIC, PARTITION)
         fetcher._subscriptions.seek(tp, OffsetAndMetadata(0, '', -1))
@@ -569,12 +569,12 @@ class TestFetchV12Epoch:
         requests = fetcher._create_fetch_requests()
         request, _ = requests[broker.node_id]
         future = manager.send(request, node_id=broker.node_id)
-        manager.wait_for_blocking(future, 2000)
+        net.wait_for(future, 2000)
 
         assert captured['last_fetched_epoch'] == -1
 
     def test_current_leader_epoch_minus_one_when_metadata_has_no_epoch(
-            self, broker, manager, fetcher):
+            self, broker, net, manager, fetcher):
         """If the cluster cache has no epoch for the partition, send -1
         (not the position epoch) - we honestly don't know the current leader."""
         tp = TopicPartition(TOPIC, PARTITION)
@@ -596,7 +596,7 @@ class TestFetchV12Epoch:
         requests = fetcher._create_fetch_requests()
         request, _ = requests[broker.node_id]
         future = manager.send(request, node_id=broker.node_id)
-        manager.wait_for_blocking(future, 2000)
+        net.wait_for(future, 2000)
 
         assert captured['current_leader_epoch'] == -1
         assert captured['last_fetched_epoch'] == 7
@@ -624,7 +624,7 @@ class TestFetchV12Epoch:
         assert spy.call_count >= 1
 
     def test_diverging_epoch_with_unset_end_offset_is_ignored(
-            self, broker, manager, fetcher):
+            self, broker, fetcher):
         """A divergence struct with end_offset = -1 is treated as 'no
         divergence reported' and records are parsed normally."""
         from unittest.mock import MagicMock
@@ -642,7 +642,7 @@ class TestFetchV12Epoch:
         assert not fetcher._subscriptions.assignment[tp].awaiting_validation
 
     def test_current_leader_hint_updates_cluster_cache_on_known_broker(
-            self, broker, manager, fetcher, mocker):
+            self, broker, net, manager, fetcher, mocker):
         """A leader-change error response carrying current_leader with a
         newer epoch updates the cached leader id+epoch. If the new leader id
         is a broker we already know, no metadata refresh is needed."""
@@ -667,7 +667,7 @@ class TestFetchV12Epoch:
                     isr_nodes=[broker.node_id, 7],
                     offline_replicas=[])],
             )])
-        manager.wait_for_blocking(manager.cluster.request_update(), 2000)
+        net.wait_for(manager.cluster.request_update(), 2000)
 
         tp = TopicPartition(TOPIC, PARTITION)
         fetcher._subscriptions.seek(tp, OffsetAndMetadata(50, '', 3))

@@ -431,22 +431,6 @@ class KafkaConnectionManager:
             if self._owns_net and not self._net.on_io_thread():
                 self._net.close()
 
-    async def wait_for(self, future, timeout_ms):
-        """Await ``future`` with a timeout in ms; raises KafkaTimeoutError on timeout.
-
-        Thin delegate to the backend's shared ``wait_for`` (see
-        ``NetBackend.wait_for``), mirroring the ``call_soon`` / ``create_future``
-        shims. Must be awaited from a coroutine running on this loop.
-        """
-        return await self._net.wait_for(future, timeout_ms)
-
-    def wait_for_blocking(self, future, timeout_ms):
-        try:
-            self.run(self.wait_for, future, timeout_ms, timeout_ms=timeout_ms)
-        except Exception:
-            pass
-        return future
-
     def create_future(self):
         """Create a Future suitable for awaiting on the underlying loop.
 
