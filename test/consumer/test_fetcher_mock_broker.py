@@ -354,7 +354,7 @@ class TestKIP320OffsetValidation:
         assert not fetcher._subscriptions.assignment[tp].awaiting_validation
 
     def test_validation_retries_on_fenced_epoch_response(
-            self, broker, manager, fetcher):
+            self, broker, net, fetcher):
         """FENCED_LEADER_EPOCH in the OffsetForLeaderEpoch response itself
         is retried after ``retry_backoff_ms`` within a single
         ``_validate_offsets_async`` invocation."""
