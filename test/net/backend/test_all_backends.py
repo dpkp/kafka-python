@@ -76,8 +76,8 @@ def test_metadata_refresh(all_net):
         manager.close()
 
 
-def test_wait_for_success_and_timeout(all_net):
-    """The shared ``NetBackend.wait_for`` helper behaves identically on both
+def test_await_for_success_and_timeout(all_net):
+    """The shared ``NetBackend.await_for`` helper behaves identically on both
     backends: a resolved future passes its value through, and a future that
     never resolves raises KafkaTimeoutError once the bound elapses."""
     async def resolves():
