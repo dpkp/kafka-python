@@ -418,10 +418,8 @@ class ConsumerCoordinator(BaseCoordinator):
                     # essentially be ignored. See KAFKA-3949 for the complete
                     # description of the problem.
                     if self._subscription.subscribed_pattern:
-                        metadata_update = self._cluster.request_update()
                         try:
-                            self._net.run(
-                                self._manager.wait_for, metadata_update, timer.timeout_ms)
+                            self._net.wait_for(self._cluster.request_update(), timeout_ms=timer.timeout_ms)
                         except Errors.KafkaTimeoutError:
                             log.debug('coordinator.poll: timeout updating metadata; returning early')
                             return False
@@ -675,14 +673,7 @@ class ConsumerCoordinator(BaseCoordinator):
             else:
                 future = self._manager.call_soon(self._send_offset_fetch_request, partitions)
                 self._offset_fetch_futures[future_key] = future
-
-            try:
-                await self._manager.wait_for(future, timer.timeout_ms)
-            except Errors.KafkaTimeoutError:
-                pass
-            except BaseException:
-                # handled below via future.is_done / retriable; cleanup happens too
-                pass
+            await self._net.await_for(future, timeout_ms=timer.timeout_ms, raise_error=False)
 
             if future.is_done:
                 if future_key in self._offset_fetch_futures:
@@ -860,13 +851,7 @@ class ConsumerCoordinator(BaseCoordinator):
             await self.ensure_coordinator_ready_async(timeout_ms=timer.timeout_ms)
 
             future = self._manager.call_soon(self._send_offset_commit_request, offsets)
-            try:
-                await self._manager.wait_for(future, timer.timeout_ms)
-            except Errors.KafkaTimeoutError:
-                pass
-            except BaseException:
-                # handled below via future.is_done / retriable
-                pass
+            await self._net.await_for(future, timeout_ms=timer.timeout_ms, raise_error=False)
 
             if future.is_done:
                 if future.succeeded():

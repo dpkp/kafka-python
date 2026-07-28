@@ -51,6 +51,8 @@ import abc
 import importlib
 from typing import Any, Callable, Optional, Protocol, Sequence, Tuple, runtime_checkable
 
+import kafka.errors as Errors
+
 
 @runtime_checkable
 class NetBackendFuture(Protocol):
@@ -70,10 +72,10 @@ class NetBackendFuture(Protocol):
     1. **Resolution thread.** A future from ``create_future()`` is created and
        resolved (``success`` / ``failure``) on the loop/IO thread only.
        Cross-thread handoffs (a user thread blocking on a loop result) use a
-       plain thread-safe ``Future`` bridged via ``manager.wait_for`` /
-       ``manager.run`` -- never a backend future awaited directly. Backends
-       whose native awaitable is loop-affine (``asyncio.Future``, Twisted
-       ``Deferred``) depend on this; their ``__await__`` adapter may assert it.
+       plain thread-safe ``Future`` bridged via ``net.wait_for`` -- never a
+       backend future awaited directly. Backends whose native awaitable is
+       loop-affine (``asyncio.Future``, Twisted ``Deferred``) depend on this;
+       their ``__await__`` adapter may assert it.
 
     2. **Fan-out.** Multiple coroutines may ``await`` the same future and
        multiple callbacks may be registered; all are resumed / invoked. (A bare
@@ -278,6 +280,59 @@ class NetBackend(abc.ABC):
     @abc.abstractmethod
     def wakeup(self) -> None:
         """Interrupt the loop's select() from another thread."""
+
+    # --- shared helpers (composed from the primitives above) --------------
+    async def await_for(self, future: Any, timeout_ms: Optional[float], raise_error: bool = True) -> Any:
+        """Await ``future`` with a timeout in ms.
+
+        Must be awaited from a coroutine running on this loop. The underlying
+        future is not cancelled on timeout -- it continues to run; the timeout
+        only unblocks the awaiter.
+        """
+        # Always await a backend-native wrapper, never ``future`` directly:
+        # ``future`` may be a plain thread-safe Future which isn't awaitable on
+        # every backend (e.g. asyncio rejects a bare ``yield self``). We touch it
+        # only via callbacks. (create_future() gives the backend's awaitable.)
+        wrapper = self.create_future()
+        def _on_success(value):
+            if not wrapper.is_done:
+                wrapper.success(value)
+        def _on_failure(exc):
+            if not wrapper.is_done:
+                wrapper.failure(exc)
+        future.add_callback(_on_success)
+        future.add_errback(_on_failure)
+        timer = None
+        if timeout_ms is not None:
+            def _on_timeout():
+                if not wrapper.is_done:
+                    wrapper.failure(Errors.KafkaTimeoutError(
+                        'Timed out after %s ms' % timeout_ms))
+            timer = self.call_later(timeout_ms / 1000, _on_timeout)
+        try:
+            return await wrapper
+        except Exception:
+            if raise_error:
+                raise
+        finally:
+            if timer is not None:
+                self.cancel(timer)
+
+    def wait_for(self, future: Any, timeout_ms: Optional[float], raise_error: bool=True) -> Any:
+        """Block the calling thread until ``future`` resolves, with a timeout in ms.
+
+        The cross-thread blocking bridge for ``await_for``: schedules the await on
+        the loop and blocks the caller until it resolves, then returns its value
+        (or raises). Must be called from a user thread, never the IO thread
+        (``run`` raises ``RuntimeError`` there). The underlying future is not
+        cancelled on timeout -- it continues to run; the timeout only unblocks
+        the awaiter.
+        """
+        try:
+            return self.run(self.await_for, future, timeout_ms, raise_error, timeout_ms=timeout_ms)
+        except Exception:
+            if raise_error:
+                raise
 
 
 # --- backend selection ----------------------------------------------------

@@ -502,7 +502,7 @@ def offsets():
     }
 
 
-def test_commit_offsets_async(mocker, coordinator, offsets):
+def test_commit_offsets_async(mocker, net, manager, coordinator, offsets):
     mocker.patch.object(coordinator, 'coordinator_unknown', return_value=False)
     mocker.patch.object(coordinator, 'ensure_coordinator_ready')
     # _send_offset_commit_request is an async coroutine; scheduled via
@@ -512,7 +512,7 @@ def test_commit_offsets_async(mocker, coordinator, offsets):
     mocker.patch.object(coordinator, '_send_offset_commit_request',
                         side_effect=fake_send)
     future = coordinator.commit_offsets_async(offsets)
-    coordinator._client.poll(future=future, timeout_ms=1000)
+    net.wait_for(future, 1000)
     assert coordinator._send_offset_commit_request.call_count == 1
 
 
@@ -649,7 +649,7 @@ def test_send_offset_commit_request_fail(coordinator, offsets):
     ((2, 0), 4),
     ((2, 1), 6),
 ], indirect=['broker'])
-def test_send_offset_commit_request_versions(broker, seeded_coord, offsets, version):
+def test_send_offset_commit_request_versions(broker, net, manager, seeded_coord, offsets, version):
     captured = {}
     _Topic = OffsetCommitResponse.OffsetCommitResponseTopic
     _Partition = _Topic.OffsetCommitResponsePartition
@@ -664,21 +664,22 @@ def test_send_offset_commit_request_versions(broker, seeded_coord, offsets, vers
             ])])
 
     broker.respond_fn(OffsetCommitRequest, handler)
-    future = seeded_coord._manager.call_soon(
+    future = manager.call_soon(
         seeded_coord._send_offset_commit_request, offsets)
-    seeded_coord._client.poll(future=future, timeout_ms=5000)
+    net.wait_for(future, 5000)
     assert future.succeeded()
     assert captured['api_version'] == version
 
 
-def test_send_offset_commit_request_failure(mocker, broker, seeded_coord, offsets):
+def test_send_offset_commit_request_failure(mocker, broker, net, manager, seeded_coord, offsets):
     spy = mocker.spy(seeded_coord, '_failed_request')
     error = Errors.KafkaConnectionError('simulated transport failure')
     broker.fail_next(OffsetCommitRequest, error=error)
 
-    future = seeded_coord._manager.call_soon(
+    future = manager.call_soon(
         seeded_coord._send_offset_commit_request, offsets)
-    seeded_coord._client.poll(future=future, timeout_ms=5000)
+    with pytest.raises(Errors.KafkaConnectionError):
+        net.wait_for(future, 5000)
 
     assert future.failed()
     assert future.exception is error
@@ -693,7 +694,7 @@ def test_send_offset_commit_request_failure(mocker, broker, seeded_coord, offset
     assert call_error is error
 
 
-def test_send_offset_commit_request_success(mocker, broker, seeded_coord, offsets):
+def test_send_offset_commit_request_success(mocker, broker, net, manager, seeded_coord, offsets):
     _Topic = OffsetCommitResponse.OffsetCommitResponseTopic
     _Partition = _Topic.OffsetCommitResponsePartition
     broker.respond(OffsetCommitRequest, OffsetCommitResponse(
@@ -704,9 +705,9 @@ def test_send_offset_commit_request_success(mocker, broker, seeded_coord, offset
         ])]))
     spy = mocker.spy(seeded_coord, '_handle_offset_commit_response')
 
-    future = seeded_coord._manager.call_soon(
+    future = manager.call_soon(
         seeded_coord._send_offset_commit_request, offsets)
-    seeded_coord._client.poll(future=future, timeout_ms=5000)
+    net.wait_for(future, 5000)
 
     assert future.succeeded()
     assert spy.call_count == 1
@@ -794,7 +795,7 @@ def test_send_offset_fetch_request_fail(coordinator, partitions):
     ((2, 5), 7),
     ((3, 0), 8),
 ], indirect=['broker'])
-def test_send_offset_fetch_request_versions(broker, seeded_coord, partitions, version):
+def test_send_offset_fetch_request_versions(broker, net, manager, seeded_coord, partitions, version):
     captured = {}
     _Topic = OffsetFetchResponse.OffsetFetchResponseTopic
     _Partition = _Topic.OffsetFetchResponsePartition
@@ -822,21 +823,22 @@ def test_send_offset_fetch_request_versions(broker, seeded_coord, partitions, ve
                 ])])])
 
     broker.respond_fn(OffsetFetchRequest, handler)
-    future = seeded_coord._manager.call_soon(
+    future = manager.call_soon(
         seeded_coord._send_offset_fetch_request, partitions)
-    seeded_coord._client.poll(future=future, timeout_ms=5000)
+    net.wait_for(future, 5000)
     assert future.succeeded()
     assert captured['api_version'] == version
 
 
-def test_send_offset_fetch_request_failure(mocker, broker, seeded_coord, partitions):
+def test_send_offset_fetch_request_failure(mocker, broker, net, manager, seeded_coord, partitions):
     spy = mocker.spy(seeded_coord, '_failed_request')
     error = Errors.KafkaConnectionError('simulated transport failure')
     broker.fail_next(OffsetFetchRequest, error=error)
 
-    future = seeded_coord._manager.call_soon(
+    future = manager.call_soon(
         seeded_coord._send_offset_fetch_request, partitions)
-    seeded_coord._client.poll(future=future, timeout_ms=5000)
+    with pytest.raises(Errors.KafkaConnectionError):
+        net.wait_for(future, 5000)
 
     assert future.failed()
     assert future.exception is error
@@ -850,7 +852,7 @@ def test_send_offset_fetch_request_failure(mocker, broker, seeded_coord, partiti
     assert call_error is error
 
 
-def test_send_offset_fetch_request_success(mocker, broker, seeded_coord, partitions, offsets):
+def test_send_offset_fetch_request_success(mocker, broker, net, manager, seeded_coord, partitions, offsets):
     _Topic = OffsetFetchResponse.OffsetFetchResponseTopic
     _Partition = _Topic.OffsetFetchResponsePartition
     _Group = OffsetFetchResponse.OffsetFetchResponseGroup
@@ -874,9 +876,9 @@ def test_send_offset_fetch_request_success(mocker, broker, seeded_coord, partiti
             ])])]))
     spy = mocker.spy(seeded_coord, '_handle_offset_fetch_response')
 
-    future = seeded_coord._manager.call_soon(
+    future = manager.call_soon(
         seeded_coord._send_offset_fetch_request, partitions)
-    seeded_coord._client.poll(future=future, timeout_ms=5000)
+    net.wait_for(future, 5000)
 
     assert future.succeeded()
     assert future.value == offsets
@@ -890,13 +892,13 @@ def test_send_offset_fetch_request_success(mocker, broker, seeded_coord, partiti
     ('read_committed', True),
 ])
 def test_send_offset_fetch_request_sets_require_stable(
-        broker, client, metrics, partitions, isolation_level, expected):
+        broker, net, manager, client, metrics, partitions, isolation_level, expected):
     coord = ConsumerCoordinator(client, SubscriptionState(),
                                 metrics=metrics,
                                 api_version=broker.broker_version,
                                 isolation_level=isolation_level)
     try:
-        client._manager.bootstrap(timeout_ms=5000)
+        manager.bootstrap(timeout_ms=5000)
         coord._subscription.subscribe(topics=['foobar'])
         coord.coordinator_id = 0
         coord._generation = Generation(0, 'foobar', b'')
@@ -925,9 +927,9 @@ def test_send_offset_fetch_request_sets_require_stable(
                     ])])])
 
         broker.respond_fn(OffsetFetchRequest, handler)
-        future = coord._manager.call_soon(
+        future = manager.call_soon(
             coord._send_offset_fetch_request, partitions)
-        coord._client.poll(future=future, timeout_ms=5000)
+        net.wait_for(future, 5000)
         assert future.succeeded()
         assert captured['require_stable'] is expected
     finally:
@@ -1534,7 +1536,7 @@ def test_heartbeat(mocker, net, coordinator):
     net.poll(timeout_ms=50)
 
 
-def test_lookup_coordinator_failure(mocker, coordinator):
+def test_lookup_coordinator_failure(mocker, net, manager, coordinator):
     # _send_group_coordinator_request is now an async coroutine scheduled
     # via manager.call_soon, so we drive the event loop to let the mock
     # fire before asserting on the returned future.
@@ -1543,11 +1545,11 @@ def test_lookup_coordinator_failure(mocker, coordinator):
     mocker.patch.object(coordinator, '_send_group_coordinator_request',
                         side_effect=fake_send)
     future = coordinator.lookup_coordinator()
-    coordinator._client.poll(future=future, timeout_ms=1000)
+    net.wait_for(future, 1000, raise_error=False)
     assert future.failed()
 
 
-def test_do_join_and_sync_async_join_protocol_type_mismatch(request, broker, seeded_coord):
+def test_do_join_and_sync_async_join_protocol_type_mismatch(request, broker, manager, seeded_coord):
     """KIP-559: JoinGroupResponse with mismatched protocol_type must raise
     InconsistentGroupProtocolError."""
     request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
@@ -1556,10 +1558,10 @@ def test_do_join_and_sync_async_join_protocol_type_mismatch(request, broker, see
         protocol_type='not-consumer'))
 
     with pytest.raises(Errors.InconsistentGroupProtocolError):
-        seeded_coord._manager.run(seeded_coord._do_join_and_sync_async)
+        manager.run(seeded_coord._do_join_and_sync_async)
 
 
-def test_do_join_and_sync_async_sync_protocol_type_mismatch(request, broker, seeded_coord):
+def test_do_join_and_sync_async_sync_protocol_type_mismatch(request, broker, manager, seeded_coord):
     """KIP-559: SyncGroupResponse with mismatched protocol_type must raise."""
     request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
     broker.respond(JoinGroupRequest, _join_response_object(
@@ -1568,10 +1570,10 @@ def test_do_join_and_sync_async_sync_protocol_type_mismatch(request, broker, see
         protocol_type='not-consumer'))
 
     with pytest.raises(Errors.InconsistentGroupProtocolError):
-        seeded_coord._manager.run(seeded_coord._do_join_and_sync_async)
+        manager.run(seeded_coord._do_join_and_sync_async)
 
 
-def test_do_join_and_sync_async_sync_protocol_name_mismatch(request, broker, seeded_coord):
+def test_do_join_and_sync_async_sync_protocol_name_mismatch(request, broker, manager, seeded_coord):
     """KIP-559: SyncGroupResponse with mismatched protocol_name must raise."""
     request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
     broker.respond(JoinGroupRequest, _join_response_object(
@@ -1581,7 +1583,7 @@ def test_do_join_and_sync_async_sync_protocol_name_mismatch(request, broker, see
         protocol_name='roundrobin'))
 
     with pytest.raises(Errors.InconsistentGroupProtocolError):
-        seeded_coord._manager.run(seeded_coord._do_join_and_sync_async)
+        manager.run(seeded_coord._do_join_and_sync_async)
 
 
 # ---------------------------------------------------------------------------
@@ -2495,8 +2497,10 @@ class TestOnCloseRevokesPartitions:
 def _dispatch_heartbeat(coord):
     """Dispatch a single _send_heartbeat_request and pump the network until
     the resulting future resolves."""
-    future = coord._manager.call_soon(coord._send_heartbeat_request)
-    coord._client.poll(future=future, timeout_ms=5000)
+    manager = coord._manager
+    future = manager.call_soon(coord._send_heartbeat_request)
+    net = coord._manager._net
+    net.wait_for(future, timeout_ms=5000, raise_error=False)
     return future
 
 
@@ -2864,7 +2868,7 @@ def test_metadata_growth_triggers_rejoin_end_to_end(net, metrics):
         # listener sees the change (the racing metadata update from KAFKA-3949).
         mock_cluster.set_metadata(topics=[_metadata_topic('t', num_partitions=2)])
         future = client.cluster.request_update()
-        client.poll(future=future, timeout_ms=5000)
+        net.wait_for(future, 5000)
 
         # The leader's assignment snapshot is now stale -> must rejoin.
         assert coordinator.need_rejoin()

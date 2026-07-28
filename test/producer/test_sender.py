@@ -145,7 +145,7 @@ def _capture(captured):
     ((0, 9), 1),
     ((0, 8, 0), 0),
 ], indirect=['broker'])
-def test_produce_request_negotiates_wire_version(sender, broker, manager, produce_version):
+def test_produce_request_negotiates_wire_version(sender, broker, net, manager, produce_version):
     """``Sender._produce_request`` returns a ProduceRequest with no fixed
     version; the connection negotiates the wire version against the broker's
     api_versions table at send time. We verify by capturing the api_version
@@ -164,7 +164,7 @@ def test_produce_request_negotiates_wire_version(sender, broker, manager, produc
     broker.respond_fn(ProduceResponse, _capture(captured))
 
     future = manager.send(produce_request, node_id=0)
-    manager.run(manager.wait_for, future, 5000)
+    net.wait_for(future, 5000)
 
     assert captured['api_version'] == produce_version
 
@@ -176,7 +176,7 @@ def test_produce_request_negotiates_wire_version(sender, broker, manager, produc
     ((0, 8, 0), 0),
 ], indirect=['broker'])
 def test_create_produce_requests_negotiates_wire_version(
-        sender, broker, manager, produce_version):
+        sender, broker, net, manager, produce_version):
     """``_create_produce_requests`` builds one ProduceRequest per node;
     each one negotiates independently against its broker's api_versions
     table. We send each through the MockBroker (all routed to the single
@@ -208,7 +208,7 @@ def test_create_produce_requests_negotiates_wire_version(
         captured = {}
         broker.respond_fn(ProduceResponse, _capture(captured))
         future = manager.send(request, node_id=node)
-        manager.run(manager.wait_for, future, 5000)
+        net.wait_for(future, 5000)
         assert captured['api_version'] == produce_version, (
             'node %d: expected v%d got v%s'
             % (node, produce_version, captured.get('api_version')))

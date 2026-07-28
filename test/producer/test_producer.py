@@ -108,7 +108,7 @@ def _producer_for_send_test(partitioner):
     the real network."""
     producer = _mock_producer(partitioner=partitioner)
     producer._sender.initiate_close()
-    producer._manager.run(producer._manager.wait_for, producer._sender._loop_future, 2000)
+    producer._net.wait_for(producer._sender._loop_future, 2000)
     producer._accumulator = MagicMock()
     producer._sender = MagicMock()
     # close() now blocks on the sender's loop Future; give the mock an

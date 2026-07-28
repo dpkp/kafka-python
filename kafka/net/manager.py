@@ -431,39 +431,6 @@ class KafkaConnectionManager:
             if self._owns_net and not self._net.on_io_thread():
                 self._net.close()
 
-    async def wait_for(self, future, timeout_ms):
-        """Await `future` with a timeout in ms. Raises KafkaTimeoutError on timeout.
-
-        Must be awaited from a coroutine running on this loop. The underlying
-        future is not cancelled on timeout - it continues to run; the timeout
-        only unblocks the awaiter.
-        """
-        # Always await a backend-native wrapper, never `future` directly:
-        # `future` may be a plain thread-safe Future which isn't awaitable on
-        # every backend (e.g. asyncio rejects a bare `yield self`). We touch it
-        # only via callbacks. (create_future() gives the backend's awaitable.)
-        wrapper = self._net.create_future()
-        def _on_success(value):
-            if not wrapper.is_done:
-                wrapper.success(value)
-        def _on_failure(exc):
-            if not wrapper.is_done:
-                wrapper.failure(exc)
-        future.add_callback(_on_success)
-        future.add_errback(_on_failure)
-        timer = None
-        if timeout_ms is not None:
-            def _on_timeout():
-                if not wrapper.is_done:
-                    wrapper.failure(Errors.KafkaTimeoutError(
-                        'Timed out after %s ms' % timeout_ms))
-            timer = self._net.call_later(timeout_ms / 1000, _on_timeout)
-        try:
-            return await wrapper
-        finally:
-            if timer is not None:
-                self._net.cancel(timer)
-
     def create_future(self):
         """Create a Future suitable for awaiting on the underlying loop.
 

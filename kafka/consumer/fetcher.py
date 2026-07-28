@@ -257,11 +257,7 @@ class Fetcher:
                 wakeup.success(None)
         for fut in waited_on:
             fut.add_both(_wake)
-
-        try:
-            self._net.run(self._manager.wait_for, wakeup, timeout_ms, timeout_ms=timeout_ms)
-        except Errors.KafkaTimeoutError:
-            pass
+        self._net.wait_for(wakeup, timeout_ms=timeout_ms, raise_error=False)
 
         records, _ = self.fetched_records(
             max_records, update_offsets=update_offsets)
@@ -354,7 +350,7 @@ class Fetcher:
         Returns the cached Future for the in-flight reset task (shared
         across concurrent callers) or None if no reset is needed. Callers
         may discard the Future (fire-and-forget, e.g. consumer.poll) or
-        await it via ``manager.wait_for(future, timeout_ms)`` to block
+        await it via ``net.await_for(future, timeout_ms)`` to block
         until resets complete (e.g. consumer.position).
 
         Arguments:
@@ -450,7 +446,7 @@ class Fetcher:
             try:
                 refresh_future = None
                 backoff = False
-                offsets, retry = await self._manager.wait_for(future, timer.timeout_ms)
+                offsets, retry = await self._net.await_for(future, timeout_ms=timer.timeout_ms)
             except Errors.InvalidMetadataError:
                 refresh_future = self._manager.cluster.request_update()
             except Errors.RetriableError:
@@ -466,7 +462,7 @@ class Fetcher:
 
             if refresh_future:
                 try:
-                    await self._manager.wait_for(refresh_future, timer.timeout_ms)
+                    await self._net.await_for(refresh_future, timeout_ms=timer.timeout_ms)
                 except Errors.RetriableError:
                     backoff = True
 
@@ -759,10 +755,7 @@ class Fetcher:
                 wait_ms = self.config['request_timeout_ms']
                 if timer.timeout_ms is not None:
                     wait_ms = min(wait_ms, timer.timeout_ms)
-                try:
-                    await self._manager.wait_for(metadata_update, wait_ms)
-                except Errors.KafkaTimeoutError:
-                    pass
+                await self._net.await_for(metadata_update, timeout_ms=wait_ms, raise_error=False)
                 continue
 
             log.debug('Resetting offsets for %s', set(offset_resets.keys()))
@@ -1039,10 +1032,7 @@ class Fetcher:
                 wait_ms = self.config['request_timeout_ms']
                 if timer.timeout_ms is not None:
                     wait_ms = min(wait_ms, timer.timeout_ms)
-                try:
-                    await self._manager.wait_for(metadata_update, wait_ms)
-                except Errors.KafkaTimeoutError:
-                    pass
+                await self._net.await_for(metadata_update, timeout_ms=wait_ms, raise_error=False)
                 continue
 
             log.debug('Validating offsets for %s', set(positions.keys()))

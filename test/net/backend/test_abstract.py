@@ -77,6 +77,12 @@ class TestNetBackendContract:
         net = NetworkSelector()
         assert not hasattr(net, 'call_soon_threadsafe')
 
+    def test_wait_for_is_shared_concrete_helper(self):
+        # wait_for composes create_future/call_later/cancel, so it's a concrete
+        # method on the ABC (NOT abstract) that every backend inherits unchanged.
+        assert 'wait_for' not in NetBackend.__abstractmethods__
+        assert NetworkSelector.wait_for is NetBackend.wait_for
+
 
 class TestNetTransportContract:
     def test_kafkatcptransport_satisfies_transport(self):

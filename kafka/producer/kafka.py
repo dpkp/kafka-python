@@ -732,11 +732,7 @@ class KafkaProducer:
                             str(self), timeout)
             elif self._sender is not None:
                 self._sender.initiate_close()
-                try:
-                    self._manager.run(self._manager.wait_for,
-                                      self._sender._loop_future, timeout * 1000)
-                except Errors.KafkaTimeoutError:
-                    pass
+                self._net.wait_for(self._sender._loop_future, timeout_ms=timeout * 1000, raise_error=False)
 
         if self._sender is not None and self._sender.is_running():
             log.info("%s: Proceeding to force close the producer since pending"
@@ -744,11 +740,7 @@ class KafkaProducer:
                      str(self), timeout)
             self._sender.force_close()
             if not on_io_thread:
-                try:
-                    self._manager.run(self._manager.wait_for,
-                                      self._sender._loop_future, self.config['retry_backoff_ms'])
-                except Errors.KafkaTimeoutError:
-                    pass
+                self._net.wait_for(self._sender._loop_future, timeout_ms=self.config['retry_backoff_ms'], raise_error=False)
 
         if not on_io_thread:
             try:

@@ -82,11 +82,8 @@ def test_client(request, sasl_kafka):
     try:
         manager.bootstrap(timeout_ms=5000)  # auto-starts the owned net
 
-        async def fetch_metadata():
-            future = manager.send(MetadataRequest(topics=None, version=1), node_id=None)
-            return await manager.wait_for(future, 10000)
-
-        result = manager.run(fetch_metadata)
+        future = manager.send(MetadataRequest(topics=None, version=1), node_id=None)
+        result = manager._net.wait_for(future, timeout_ms=10000, raise_error=True)
         assert topic_name in [t[1] for t in result.topics]
     finally:
         manager.close()  # auto-closes the owned net
