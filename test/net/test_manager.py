@@ -1,11 +1,9 @@
 import socket
 import threading
-import time
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from kafka.cluster import ClusterMetadata
 from kafka.future import Future
 from kafka.net.backend.selector import NetworkSelector
 from kafka.net.connection import KafkaConnection
@@ -460,84 +458,3 @@ class TestKafkaConnectionManagerConnectRace:
         assert conn.closed
         with pytest.raises(Errors.KafkaConnectionError):
             conn.connection_made(MagicMock())
-
-
-class TestKafkaConnectionManagerRun:
-    def test_run_function(self, manager):
-        def test_coro():
-            return 42
-        assert manager.run(test_coro) == 42
-
-    def test_run_async_coro_function(self, manager):
-        async def test_coro():
-            return 100
-        assert manager.run(test_coro) == 100
-
-    def test_run_async_coro_with_args(self, manager):
-        async def test_coro(foo):
-            return foo
-        assert manager.run(test_coro, 123) == 123
-
-    def test_run_async_coro(self, manager):
-        async def test_coro():
-            return 49
-        assert manager.run(test_coro()) == 49
-
-    def test_run_async_chain(self, manager):
-        async def test_coro_foo():
-            return 'foo!'
-        async def test_coro_bar():
-            return await test_coro_foo()
-        assert manager.run(test_coro_bar()) == 'foo!'
-
-    def test_run_raises(self, manager):
-        async def bad_coro():
-            raise ValueError('bad_coro')
-        with pytest.raises(ValueError, match='bad_coro'):
-            manager.run(bad_coro)
-
-    def test_call_soon_does_not_raise(self, manager, net):
-        async def bad_coro():
-            raise ValueError('bad_coro')
-        future = manager.call_soon(bad_coro)
-        assert not future.is_done
-        net.poll(future=future)
-        assert future.failed()
-        assert isinstance(future.exception, ValueError)
-        assert future.exception.args[0] == 'bad_coro'
-
-    def test_run_survives_gc_during_poll(self, manager, monkeypatch):
-        """Regression: an aggressive gc.collect() between _poll_once
-        iterations must not close orphan-cycle suspended coroutines and mask
-        the real result with GeneratorExit.
-
-        The wrapper Future returned by manager.call_soon pins its Task via
-        a no-op callback so the cycle (Future_yielded <-> _poll_once cb <->
-        Task <-> coroutine <-> Future_yielded) has an external reference
-        for as long as the wrapper Future is pending.
-        """
-        import gc
-        from kafka.net.backend.selector import NetworkSelector
-
-        # Force a GC cycle on every _poll_once entry to deterministically
-        # trigger the orphan-collection race that was masking timeouts in CI.
-        orig_poll_once = NetworkSelector._poll_once
-
-        def aggressive_poll_once(self, timeout=None):
-            gc.collect()
-            return orig_poll_once(self, timeout)
-        monkeypatch.setattr(NetworkSelector, '_poll_once', aggressive_poll_once)
-
-        async def hangs_then_times_out():
-            # Awaits a bare (loop-awaitable) future that nothing references
-            # externally -- exactly the orphan-cycle shape that CPython's gc
-            # collects.
-            await manager.create_future()
-
-        # wait_for should fail with KafkaTimeoutError, not GeneratorExit.
-        async def waiter():
-            inner = manager.call_soon(hangs_then_times_out)
-            return await manager._net.await_for(inner, timeout_ms=50, raise_error=True)
-
-        with pytest.raises(Errors.KafkaTimeoutError):
-            manager.run(waiter)
