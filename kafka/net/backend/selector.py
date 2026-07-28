@@ -501,37 +501,6 @@ class NetworkSelector(NetBackend):
             self.wakeup()
         return task
 
-    def call_soon_with_future(self, coro, *args):
-        if hasattr(coro, '__await__'):
-            if args:
-                raise ValueError('initiated coroutine does not accept args')
-        future = SelectorFuture()  # returned to callers who await it
-        async def wrapper():
-            try:
-                future.success(await self._invoke(coro, *args))
-            except BaseException as exc:
-                future.failure(exc)
-        self.call_soon(wrapper)
-        return future
-
-    async def _invoke(self, coro, *args):
-        """Invoke coro/awaitable/function and fully resolve the result.
-
-        If the result is itself a Future (e.g. send() returning an unresolved
-        Future), it is awaited so callers receive the resolved value.
-        """
-        if inspect.iscoroutinefunction(coro):
-            result = await coro(*args)
-        elif hasattr(coro, '__await__'):
-            result = await coro
-        else:
-            result = coro(*args)
-        if inspect.iscoroutine(result) or hasattr(result, '__await__'):
-            result = await result
-        while isinstance(result, Future):
-            result = await result
-        return result
-
     def _unschedule(self, task):
         assert task.state is TaskState.SCHEDULED
         assert task.scheduled_at is not None

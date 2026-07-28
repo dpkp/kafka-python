@@ -49,6 +49,7 @@ Method families:
 """
 import abc
 import importlib
+import inspect
 from typing import Any, Callable, Optional, Protocol, Sequence, Tuple, runtime_checkable
 
 import kafka.errors as Errors
@@ -208,10 +209,6 @@ class NetBackend(abc.ABC):
         """
 
     @abc.abstractmethod
-    def call_soon_with_future(self, coro: Any, *args: Any) -> NetBackendFuture:
-        """Schedule ``coro`` and return a future that resolves with its result."""
-
-    @abc.abstractmethod
     def call_at(self, when: float, task: Any) -> Any:
         """Schedule ``task`` to run at absolute monotonic time ``when``."""
 
@@ -333,6 +330,33 @@ class NetBackend(abc.ABC):
         except Exception:
             if raise_error:
                 raise
+
+    async def _invoke(self, coro, *args):
+        """Invoke coro/awaitable/function and fully resolve the result."""
+        if inspect.iscoroutinefunction(coro):
+            result = await coro(*args)
+        elif hasattr(coro, '__await__'):
+            result = await coro
+        else:
+            result = coro(*args)
+        if inspect.iscoroutine(result) or hasattr(result, '__await__'):
+            result = await result
+        while isinstance(result, NetBackendFuture):
+            result = await result
+        return result
+
+    def call_soon_with_future(self, coro: Any, *args: Any) -> NetBackendFuture:
+        """Schedule ``coro`` and return a future that resolves with its result."""
+        if hasattr(coro, '__await__') and args:
+            raise ValueError('initiated coroutine does not accept args')
+        future = self.create_future()
+        async def wrapper():
+            try:
+                future.success(await self._invoke(coro, *args))
+            except BaseException as exc:
+                future.failure(exc)
+        self.call_soon(wrapper)
+        return future
 
 
 # --- backend selection ----------------------------------------------------

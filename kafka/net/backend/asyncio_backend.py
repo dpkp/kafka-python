@@ -286,57 +286,6 @@ class AsyncioBackend(NetBackend):
     def create_future(self):
         return AsyncioFuture(self._loop)
 
-    async def _resolve_future(self, fut):
-        """Await any kafka.future.Future (plain or AsyncioFuture) to its value."""
-        if fut.is_done:
-            if fut.exception is not None:
-                raise fut.exception
-            return fut.value
-        aio = self._loop.create_future()
-
-        def _cb(_=None):
-            if aio.done():
-                return
-            if fut.exception is not None:
-                aio.set_exception(fut.exception)
-            else:
-                aio.set_result(fut.value)
-
-        fut.add_both(_cb)
-        return await aio
-
-    async def _invoke(self, coro, *args):
-        """Invoke coro/awaitable/function and fully resolve the result.
-
-        Mirrors NetworkSelector._invoke, but bridges any trailing kafka Future
-        through _resolve_future (a plain Future isn't awaitable under asyncio).
-        """
-        if inspect.iscoroutinefunction(coro):
-            result = await coro(*args)
-        elif hasattr(coro, '__await__'):
-            result = await coro
-        else:
-            result = coro(*args)
-        if inspect.iscoroutine(result) or hasattr(result, '__await__'):
-            result = await result
-        while isinstance(result, Future):
-            result = await self._resolve_future(result)
-        return result
-
-    def call_soon_with_future(self, coro, *args):
-        if hasattr(coro, '__await__') and args:
-            raise ValueError('initiated coroutine does not accept args')
-        future = AsyncioFuture(self._loop)
-
-        async def wrapper():
-            try:
-                future.success(await self._invoke(coro, *args))
-            except BaseException as exc:
-                future.failure(exc)
-
-        self.call_soon(wrapper)
-        return future
-
     # --- cross-thread bridge ---------------------------------------------
     def run(self, coro, *args, timeout_ms=None):
         if self._closed:
