@@ -67,21 +67,21 @@ def test_close_unblocks_pending_callers(broker):
         bootstrap_servers='%s:%d' % (broker.host, broker.port),
         request_timeout_ms=5000,
     )
-    manager = admin._manager
+    net = admin._net
 
     blocked = threading.Event()
     released = threading.Event()
 
     async def blocker():
         blocked.set()
-        # Wait forever - only unblocks via manager.stop()
-        await manager._net.sleep(3600)
+        # Wait forever - only unblocks via net.stop()
+        await net.sleep(3600)
 
     result = {}
 
     def caller():
         try:
-            manager.run(blocker)
+            net.run(blocker)
         except BaseException as exc:
             result['exception'] = exc
         finally:

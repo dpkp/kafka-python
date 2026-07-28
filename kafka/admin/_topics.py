@@ -32,7 +32,7 @@ class TopicAdminMixin:
         Returns:
             A list of topic name strings.
         """
-        metadata = self._manager.run(self._get_cluster_metadata, None)
+        metadata = self._net.run(self._get_cluster_metadata, None)
         return [t['name'] for t in metadata['topics']]
 
     def describe_topics(self, topics=None):
@@ -48,7 +48,7 @@ class TopicAdminMixin:
         Returns:
             A list of dicts describing each topic (including partition info).
         """
-        metadata = self._manager.run(self._get_cluster_metadata, topics)
+        metadata = self._net.run(self._get_cluster_metadata, topics)
         return metadata['topics']
 
     @staticmethod
@@ -141,7 +141,7 @@ class TopicAdminMixin:
         def response_errors(r):
             for topic in r.topics:
                 yield Errors.for_code(topic.error_code)
-        response = self._manager.run(self._send_request_to_controller, request, response_errors, raise_errors)
+        response = self._net.run(self._send_request_to_controller, request, response_errors, raise_errors)
         if wait_for_metadata:
             self.wait_for_topics([new_topic.name for new_topic in request.topics])
         result = response.to_dict()
@@ -251,7 +251,7 @@ class TopicAdminMixin:
         def response_errors(r):
             for response in r.responses:
                 yield Errors.for_code(response.error_code)
-        response = self._manager.run(self._send_request_to_controller, request, response_errors, raise_errors)
+        response = self._net.run(self._send_request_to_controller, request, response_errors, raise_errors)
         result = response.to_dict()
         result.pop('throttle_time_ms', None)
         result['topics'] = result.pop('responses')

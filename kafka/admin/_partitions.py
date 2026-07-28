@@ -90,7 +90,7 @@ class PartitionAdminMixin:
         def response_errors(r):
             for result in r.results:
                 yield Errors.for_code(result.error_code)
-        return self._manager.run(self._send_request_to_controller, request, response_errors, raise_errors)
+        return self._net.run(self._send_request_to_controller, request, response_errors, raise_errors)
 
     async def _async_get_leader_for_partitions(self, partitions):
         """Finds ID of the leader node for every given topic partition."""
@@ -212,9 +212,9 @@ class PartitionAdminMixin:
         Returns:
             dict {topicPartition -> metadata}
         """
-        return self._manager.run(self._async_delete_records, records_to_delete,
-                                 timeout_ms, partition_leader_id,
-                                 timeout_ms=timeout_ms)
+        return self._net.run(
+            self._async_delete_records, records_to_delete, timeout_ms, partition_leader_id,
+            timeout_ms=timeout_ms)
 
     def _get_all_topic_partitions(self, topics=None):
         return [
@@ -262,7 +262,8 @@ class PartitionAdminMixin:
                 for partition in result.partition_result:
                     yield Errors.for_code(partition.error_code)
         ignore_errors = (Errors.ElectionNotNeededError,)
-        return self._manager.run(self._send_request_to_controller, request, response_errors, raise_errors, ignore_errors)
+        return self._net.run(
+            self._send_request_to_controller, request, response_errors, raise_errors, ignore_errors)
 
     @staticmethod
     def _process_alter_partition_reassignments_input(reassignments):
@@ -317,7 +318,7 @@ class PartitionAdminMixin:
 
         def top_level_error(r):
             yield Errors.for_code(r.error_code)
-        response = self._manager.run(
+        response = self._net.run(
             self._send_request_to_controller, request, top_level_error)
 
         results = {}
@@ -387,7 +388,7 @@ class PartitionAdminMixin:
             with keys ``'replicas'``, ``'adding_replicas'``, and
             ``'removing_replicas'`` (each a list of broker IDs).
         """
-        return self._manager.run(
+        return self._net.run(
             self._async_list_partition_reassignments, topic_partitions, timeout_ms,
             timeout_ms=timeout_ms)
 
@@ -469,7 +470,7 @@ class PartitionAdminMixin:
             ``next_cursor`` is None if pagination is complete, otherwise a
             dict with the next page's ``topic_name`` and ``partition_index``.
         """
-        return self._manager.run(
+        return self._net.run(
             self._async_describe_topic_partitions, topics, response_partition_limit, cursor)
 
     # -- List partition offsets --------------------------------------------
@@ -575,7 +576,7 @@ class PartitionAdminMixin:
             UnsupportedVersionError: If the broker does not support a version
                 of ListOffsetsRequest compatible with the requested specs.
         """
-        return self._manager.run(
+        return self._net.run(
             self._async_list_partition_offsets, topic_partition_specs, isolation_level, timeout_ms,
             timeout_ms=timeout_ms)
 

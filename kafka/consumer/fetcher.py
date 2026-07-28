@@ -270,7 +270,7 @@ class Fetcher:
         Returns:
             List of Futures: each future resolves to a FetchResponse
         """
-        return self._manager.run(self._send_fetches_async)
+        return self._net.run(self._send_fetches_async)
 
     async def _send_fetches_async(self):
         futures = []
@@ -298,7 +298,7 @@ class Fetcher:
         # IO thread so it never races the foreground's list(self._fetch_futures)
         # read in fetch_records(). Defined async to enforce that -- the body
         # can only run by being driven on the IO loop (awaited from another
-        # coroutine, or scheduled via manager.run/call_soon), so the rebind
+        # coroutine, or scheduled via net.run/call_soon), so the rebind
         # always executes on the IO thread regardless of who initiates it.
         # The rebind is a single atomic attribute store, so a foreground reader
         # always sees either the old or the new deque, never a half-cleaned one.
@@ -470,7 +470,7 @@ class Fetcher:
                 delay = self.config['retry_backoff_ms'] / 1000
                 if timer.timeout_ms is not None:
                     delay = min(delay, timer.timeout_ms / 1000)
-                await self._manager._net.sleep(delay)
+                await self._net.sleep(delay)
 
             timer.maybe_raise()
 
@@ -734,7 +734,7 @@ class Fetcher:
                 if timer.timeout_ms is not None:
                     delay = min(delay, timer.timeout_ms / 1000)
                 if delay > 0:
-                    await self._manager._net.sleep(delay)
+                    await self._net.sleep(delay)
                 continue
 
             offset_resets = {}
@@ -1015,7 +1015,7 @@ class Fetcher:
                 if timer.timeout_ms is not None:
                     delay = min(delay, timer.timeout_ms / 1000)
                 if delay > 0:
-                    await self._manager._net.sleep(delay)
+                    await self._net.sleep(delay)
                 continue
 
             positions = {}

@@ -177,7 +177,7 @@ def test_join_complete(mocker, coordinator):
     assert assignor.on_assignment.call_count == 0
     assignment = ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'')
     generation = 12
-    coordinator._manager.run(
+    coordinator._net.run(
         coordinator._on_join_complete_async,
         generation, 'member-foo', 'roundrobin', assignment.encode())
     assert assignor.on_assignment.call_count == 1
@@ -192,7 +192,7 @@ def test_join_complete_with_sticky_assignor(mocker, coordinator):
     assert assignor.on_assignment.call_count == 0
     generation = 3
     assignment = ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'')
-    coordinator._manager.run(
+    coordinator._net.run(
         coordinator._on_join_complete_async,
         generation, 'member-foo', 'sticky', assignment.encode())
     assert assignor.on_assignment.call_count == 1
@@ -236,7 +236,7 @@ def test_on_join_prepare_async_invokes_sync_listener(mocker, coordinator):
     listener = mocker.MagicMock(spec=ConsumerRebalanceListener)
     coordinator._subscription.subscribe(topics=['foobar'], listener=listener)
 
-    coordinator._manager.run(coordinator._on_join_prepare_async, 0, 'member-foo')
+    coordinator._net.run(coordinator._on_join_prepare_async, 0, 'member-foo')
 
     assert listener.on_partitions_revoked.call_count == 1
     listener.on_partitions_revoked.assert_called_with(set())
@@ -254,7 +254,7 @@ def test_on_join_prepare_async_awaits_async_listener(coordinator):
             calls.append(('assigned', assigned))
 
     coordinator._subscription.subscribe(topics=['foobar'], listener=MyListener())
-    coordinator._manager.run(coordinator._on_join_prepare_async, 0, 'member-foo')
+    coordinator._net.run(coordinator._on_join_prepare_async, 0, 'member-foo')
 
     assert calls == [('revoked', set())]
 
@@ -280,7 +280,7 @@ def test_slow_rebalance_listener_logs_warning(mocker, coordinator):
     log_warning = mocker.patch('kafka.coordinator.consumer.log.warning')
 
     # Below threshold: no warning.
-    coordinator._manager.run(coordinator._on_join_prepare_async, 0, 'member-foo')
+    coordinator._net.run(coordinator._on_join_prepare_async, 0, 'member-foo')
     assert not any(
         'Rebalance listener' in str(call.args[0])
         for call in log_warning.call_args_list)
@@ -288,7 +288,7 @@ def test_slow_rebalance_listener_logs_warning(mocker, coordinator):
     # Above threshold: drop the threshold to a tiny value and re-run.
     mocker.patch.object(coordinator, '_REBALANCE_LISTENER_WARN_SECS', 0.001)
     log_warning.reset_mock()
-    coordinator._manager.run(coordinator._on_join_prepare_async, 0, 'member-foo')
+    coordinator._net.run(coordinator._on_join_prepare_async, 0, 'member-foo')
     matching = [c for c in log_warning.call_args_list
                 if 'Rebalance listener' in str(c.args[0])]
     assert len(matching) == 1
@@ -311,7 +311,7 @@ def test_on_join_prepare_async_listener_exception_propagates(mocker, coordinator
     coordinator._subscription.subscribe(topics=['foobar'], listener=listener)
 
     with pytest.raises(Errors.KafkaError) as exc_info:
-        coordinator._manager.run(coordinator._on_join_prepare_async, 42, 'member-foo')
+        coordinator._net.run(coordinator._on_join_prepare_async, 42, 'member-foo')
     assert exc_info.value.__cause__ is crash
     # Cleanup still ran before the exception bubbled out.
     assert coordinator._is_leader is False
@@ -322,7 +322,7 @@ def test_on_join_prepare_async_skips_auto_commit_when_disabled(mocker, coordinat
     spy = mocker.spy(coordinator, '_commit_offsets_sync_async')
     coordinator._subscription.subscribe(topics=['foobar'])
 
-    coordinator._manager.run(coordinator._on_join_prepare_async, 0, 'member-foo')
+    coordinator._net.run(coordinator._on_join_prepare_async, 0, 'member-foo')
 
     assert spy.call_count == 0
 
@@ -335,7 +335,7 @@ def test_on_join_prepare_async_runs_auto_commit_when_enabled(mocker, coordinator
                               side_effect=_noop)
     coordinator._subscription.subscribe(topics=['foobar'])
 
-    coordinator._manager.run(coordinator._on_join_prepare_async, 0, 'member-foo')
+    coordinator._net.run(coordinator._on_join_prepare_async, 0, 'member-foo')
 
     assert spy.call_count == 1
 
@@ -347,7 +347,7 @@ def test_on_join_complete_async_invokes_sync_listener(mocker, coordinator):
     coordinator._assignors = {assignor.name: assignor}
     assignment = ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'')
 
-    coordinator._manager.run(
+    coordinator._net.run(
         coordinator._on_join_complete_async,
         12, 'member-foo', 'roundrobin', assignment.encode())
 
@@ -371,7 +371,7 @@ def test_on_join_complete_async_awaits_async_listener(coordinator):
     coordinator._assignors = {assignor.name: assignor}
     assignment = ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'')
 
-    coordinator._manager.run(
+    coordinator._net.run(
         coordinator._on_join_complete_async,
         12, 'member-foo', 'roundrobin', assignment.encode())
 
@@ -392,7 +392,7 @@ def test_on_join_complete_async_listener_exception_propagates(mocker, coordinato
     assignment = ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'')
 
     with pytest.raises(Errors.KafkaError) as exc_info:
-        coordinator._manager.run(
+        coordinator._net.run(
             coordinator._on_join_complete_async,
             12, 'member-foo', 'roundrobin', assignment.encode())
     assert exc_info.value.__cause__ is crash
@@ -1184,7 +1184,7 @@ def test_do_join_and_sync_async_follower(request, broker, seeded_coord):
     broker.respond(SyncGroupRequest, _sync_response_object(
         assignment=expected_assignment))
 
-    result = seeded_coord._manager.run(seeded_coord._do_join_and_sync_async)
+    result = seeded_coord._net.run(seeded_coord._do_join_and_sync_async)
 
     assert result == expected_assignment
     assert seeded_coord._generation.generation_id == 42
@@ -1219,7 +1219,7 @@ def test_do_join_and_sync_async_leader(request, mocker, broker, seeded_coord):
     # Spy on _perform_assignment to confirm the leader path ran the assignor.
     spy = mocker.spy(seeded_coord, '_perform_assignment')
 
-    result = seeded_coord._manager.run(seeded_coord._do_join_and_sync_async)
+    result = seeded_coord._net.run(seeded_coord._do_join_and_sync_async)
 
     assert spy.call_count == 1
     leader_id, protocol_name, members_arg = spy.call_args[0]
@@ -1237,7 +1237,7 @@ def test_do_join_and_sync_async_coordinator_unknown(request, seeded_coord):
     request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
     seeded_coord.coordinator_id = None  # force coordinator_unknown
     with pytest.raises(Errors.CoordinatorNotAvailableError):
-        seeded_coord._manager.run(seeded_coord._do_join_and_sync_async)
+        seeded_coord._net.run(seeded_coord._do_join_and_sync_async)
 
 
 @pytest.mark.parametrize('error_code,error_type', [
@@ -1253,7 +1253,7 @@ def test_do_join_and_sync_async_join_error(request, broker, seeded_coord,
     request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
     broker.respond(JoinGroupRequest, _join_response_object(error_code=error_code))
     with pytest.raises(error_type):
-        seeded_coord._manager.run(seeded_coord._do_join_and_sync_async)
+        seeded_coord._net.run(seeded_coord._do_join_and_sync_async)
 
 
 @pytest.mark.parametrize('error_code,error_type', [
@@ -1271,7 +1271,7 @@ def test_do_join_and_sync_async_sync_error(request, broker, seeded_coord,
         leader='leader-x', member_id='member-1'))
     broker.respond(SyncGroupRequest, _sync_response_object(error_code=error_code))
     with pytest.raises(error_type):
-        seeded_coord._manager.run(seeded_coord._do_join_and_sync_async)
+        seeded_coord._net.run(seeded_coord._do_join_and_sync_async)
     # All sync errors flip rejoin_needed via request_rejoin().
     assert seeded_coord.rejoin_needed is True
 
@@ -1283,7 +1283,7 @@ def test_join_group_async_no_rejoin_returns_true(request, mocker, broker, seeded
     seeded_coord.state = MemberState.STABLE
 
     before = broker.requests_received
-    result = seeded_coord._manager.run(seeded_coord.join_group_async, 5000)
+    result = seeded_coord._net.run(seeded_coord.join_group_async, 5000)
 
     assert result is True
     assert broker.requests_received == before
@@ -1298,7 +1298,7 @@ def test_join_group_async_happy_path_follower(request, broker, seeded_coord):
     broker.respond(SyncGroupRequest, _sync_response_object(
         assignment=ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'').encode()))
 
-    result = seeded_coord._manager.run(seeded_coord.join_group_async, 5000)
+    result = seeded_coord._net.run(seeded_coord.join_group_async, 5000)
 
     assert result is True
     assert seeded_coord.state == MemberState.STABLE
@@ -1332,7 +1332,7 @@ def test_join_group_uses_extended_per_request_timeout(request, mocker, broker, s
 
     mocker.patch.object(seeded_coord._manager, 'send', side_effect=capturing_send)
 
-    seeded_coord._manager.run(seeded_coord.join_group_async, 5000)
+    seeded_coord._net.run(seeded_coord.join_group_async, 5000)
 
     join_sends = [t for name, t in sends if 'JoinGroup' in name]
     assert join_sends, "expected at least one JoinGroupRequest send"
@@ -1358,7 +1358,7 @@ def test_join_group_async_retries_on_retriable_error(request, broker, seeded_coo
     broker.respond(SyncGroupRequest, _sync_response_object(
         assignment=ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'').encode()))
 
-    result = seeded_coord._manager.run(seeded_coord.join_group_async, 5000)
+    result = seeded_coord._net.run(seeded_coord.join_group_async, 5000)
 
     assert result is True
     assert seeded_coord.state == MemberState.STABLE
@@ -1372,7 +1372,7 @@ def test_join_group_async_raises_non_retriable(request, broker, seeded_coord):
         error_code=Errors.GroupAuthorizationFailedError.errno))
 
     with pytest.raises(Errors.GroupAuthorizationFailedError):
-        seeded_coord._manager.run(seeded_coord.join_group_async, 5000)
+        seeded_coord._net.run(seeded_coord.join_group_async, 5000)
 
 
 def test_join_group_async_returns_false_on_short_timeout_and_caches_task(
@@ -1411,7 +1411,7 @@ def test_join_group_async_returns_false_on_short_timeout_and_caches_task(
     # await on JoinGroup is not timer-aware, this call hangs until the
     # connection's request_timeout_ms fires (~5s in the fixture).
     start = time.monotonic()
-    result = seeded_coord._manager.run(seeded_coord.join_group_async, 50)
+    result = seeded_coord._net.run(seeded_coord.join_group_async, 50)
     elapsed = time.monotonic() - start
     assert result is False
     assert elapsed < 1.0, (
@@ -1422,7 +1422,7 @@ def test_join_group_async_returns_false_on_short_timeout_and_caches_task(
     # Second call: broker is still hanging. Should reuse the cached
     # in-flight task instead of sending a duplicate JoinGroup.
     start = time.monotonic()
-    result = seeded_coord._manager.run(seeded_coord.join_group_async, 50)
+    result = seeded_coord._net.run(seeded_coord.join_group_async, 50)
     elapsed = time.monotonic() - start
     assert result is False
     assert elapsed < 1.0
@@ -1434,7 +1434,7 @@ def test_join_group_async_returns_false_on_short_timeout_and_caches_task(
         assignment=ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'').encode()))
     join_response_pending.success(None)
 
-    result = seeded_coord._manager.run(seeded_coord.join_group_async, 5000)
+    result = seeded_coord._net.run(seeded_coord.join_group_async, 5000)
     assert result is True
     assert join_request_count[0] == 1, (
         'duplicate JoinGroup sent on the success path')
@@ -1444,7 +1444,7 @@ def test_join_group_async_returns_false_on_short_timeout_and_caches_task(
 @pytest.mark.parametrize("broker", [(0, 8, 0)], indirect=True)
 def test_join_group_async_unsupported_version(broker, coordinator):
     with pytest.raises(Errors.UnsupportedVersionError):
-        coordinator._manager.run(coordinator.join_group_async, None)
+        coordinator._net.run(coordinator.join_group_async, None)
 
 
 def test_ensure_active_group_async_happy_path(request, broker, seeded_coord):
@@ -1456,7 +1456,7 @@ def test_ensure_active_group_async_happy_path(request, broker, seeded_coord):
     broker.respond(SyncGroupRequest, _sync_response_object(
         assignment=ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'').encode()))
 
-    result = seeded_coord._manager.run(seeded_coord.ensure_active_group_async, 5000)
+    result = seeded_coord._net.run(seeded_coord.ensure_active_group_async, 5000)
 
     assert result is True
     assert seeded_coord.state == MemberState.STABLE
@@ -1465,7 +1465,7 @@ def test_ensure_active_group_async_happy_path(request, broker, seeded_coord):
 
 
 def test_ensure_active_group_sync_facade(request, broker, seeded_coord):
-    """The sync ensure_active_group facade dispatches via manager.run."""
+    """The sync ensure_active_group facade dispatches via net.run."""
     request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
     seeded_coord.rejoin_needed = True
     seeded_coord.state = MemberState.UNJOINED
@@ -1549,7 +1549,7 @@ def test_lookup_coordinator_failure(mocker, net, manager, coordinator):
     assert future.failed()
 
 
-def test_do_join_and_sync_async_join_protocol_type_mismatch(request, broker, manager, seeded_coord):
+def test_do_join_and_sync_async_join_protocol_type_mismatch(request, broker, net, seeded_coord):
     """KIP-559: JoinGroupResponse with mismatched protocol_type must raise
     InconsistentGroupProtocolError."""
     request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
@@ -1558,10 +1558,10 @@ def test_do_join_and_sync_async_join_protocol_type_mismatch(request, broker, man
         protocol_type='not-consumer'))
 
     with pytest.raises(Errors.InconsistentGroupProtocolError):
-        manager.run(seeded_coord._do_join_and_sync_async)
+        net.run(seeded_coord._do_join_and_sync_async)
 
 
-def test_do_join_and_sync_async_sync_protocol_type_mismatch(request, broker, manager, seeded_coord):
+def test_do_join_and_sync_async_sync_protocol_type_mismatch(request, broker, net, seeded_coord):
     """KIP-559: SyncGroupResponse with mismatched protocol_type must raise."""
     request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
     broker.respond(JoinGroupRequest, _join_response_object(
@@ -1570,10 +1570,10 @@ def test_do_join_and_sync_async_sync_protocol_type_mismatch(request, broker, man
         protocol_type='not-consumer'))
 
     with pytest.raises(Errors.InconsistentGroupProtocolError):
-        manager.run(seeded_coord._do_join_and_sync_async)
+        net.run(seeded_coord._do_join_and_sync_async)
 
 
-def test_do_join_and_sync_async_sync_protocol_name_mismatch(request, broker, manager, seeded_coord):
+def test_do_join_and_sync_async_sync_protocol_name_mismatch(request, broker, net, seeded_coord):
     """KIP-559: SyncGroupResponse with mismatched protocol_name must raise."""
     request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
     broker.respond(JoinGroupRequest, _join_response_object(
@@ -1583,7 +1583,7 @@ def test_do_join_and_sync_async_sync_protocol_name_mismatch(request, broker, man
         protocol_name='roundrobin'))
 
     with pytest.raises(Errors.InconsistentGroupProtocolError):
-        manager.run(seeded_coord._do_join_and_sync_async)
+        net.run(seeded_coord._do_join_and_sync_async)
 
 
 # ---------------------------------------------------------------------------
@@ -1648,7 +1648,7 @@ class TestKip429OnJoinPrepare:
         # Real generation - otherwise is_lost() trips and the lost
         # branch fires on_partitions_lost instead.
         coordinator._generation = Generation(42, 'member-foo', 'range')
-        coordinator._manager.run(coordinator._on_join_prepare_async, 42, 'member-foo')
+        coordinator._net.run(coordinator._on_join_prepare_async, 42, 'member-foo')
         listener.on_partitions_revoked.assert_called_once_with(
             {TopicPartition('foobar', 0), TopicPartition('foobar', 1)})
 
@@ -1663,7 +1663,7 @@ class TestKip429OnJoinPrepare:
             # Real generation - otherwise is_lost() trips and the lost
             # branch fires on_partitions_lost instead.
             coord._generation = Generation(42, 'member-foo', 'cooperative-sticky')
-            coord._manager.run(coord._on_join_prepare_async, 42, 'member-foo')
+            coord._net.run(coord._on_join_prepare_async, 42, 'member-foo')
             # KIP-429: no global on_partitions_revoked in the prepare
             # phase - individual partitions are revoked later in
             # _on_join_complete based on the diff.
@@ -1691,7 +1691,7 @@ class TestKip429OnJoinPrepare:
             coord._subscription.change_subscription(['t'])
             coord._generation = Generation(42, 'mbr-1', 'cooperative-sticky')
 
-            coord._manager.run(coord._on_join_prepare_async, 42, 'mbr-1')
+            coord._net.run(coord._on_join_prepare_async, 42, 'mbr-1')
 
             # Only the unsubscribed-topic partitions should be revoked,
             # and only those should be dropped from the assignment.
@@ -1731,7 +1731,7 @@ class TestKip429OnJoinPrepare:
             coord._subscription.change_subscription(['t'])
             coord._generation = Generation(42, 'mbr-1', 'cooperative-sticky')
 
-            coord._manager.run(coord._on_join_prepare_async, 42, 'mbr-1')
+            coord._net.run(coord._on_join_prepare_async, 42, 'mbr-1')
 
             assert listener.fetchable_at_revoke == {
                 TopicPartition('old', 0): False}
@@ -1752,7 +1752,7 @@ class TestKip429OnJoinPrepare:
                 TopicPartition('t', 0), TopicPartition('t', 1)])
             coord._generation = Generation(42, 'mbr-1', 'cooperative-sticky')
 
-            coord._manager.run(coord._on_join_prepare_async, 42, 'mbr-1')
+            coord._net.run(coord._on_join_prepare_async, 42, 'mbr-1')
 
             listener.on_partitions_revoked.assert_not_called()
             assert coord._subscription.assigned_partitions() == {
@@ -1786,7 +1786,7 @@ class TestKip429OnJoinComplete:
                 TopicPartition('t', 2)])
 
             assignment_bytes = self._make_assignment_bytes('t', [1, 2, 3])
-            coord._manager.run(
+            coord._net.run(
                 coord._on_join_complete_async,
                 42, 'member-1', 'cooperative-sticky', assignment_bytes)
 
@@ -1807,7 +1807,7 @@ class TestKip429OnJoinComplete:
                 TopicPartition('t', 0), TopicPartition('t', 1)])
 
             assignment_bytes = self._make_assignment_bytes('t', [0, 1])
-            coord._manager.run(
+            coord._net.run(
                 coord._on_join_complete_async,
                 42, 'member-1', 'cooperative-sticky', assignment_bytes)
 
@@ -1830,7 +1830,7 @@ class TestKip429OnJoinComplete:
 
             # New assignment drops partition 1.
             assignment_bytes = self._make_assignment_bytes('t', [0])
-            coord._manager.run(
+            coord._net.run(
                 coord._on_join_complete_async,
                 42, 'member-1', 'cooperative-sticky', assignment_bytes)
 
@@ -1850,7 +1850,7 @@ class TestKip429OnJoinComplete:
             spy = mocker.spy(coord, 'request_rejoin')
 
             assignment_bytes = self._make_assignment_bytes('t', [0, 1])
-            coord._manager.run(
+            coord._net.run(
                 coord._on_join_complete_async,
                 42, 'member-1', 'cooperative-sticky', assignment_bytes)
 
@@ -1883,7 +1883,7 @@ class TestKip429OnJoinComplete:
 
             # Rebalance: keep partition 0, drop 1, add 2.
             assignment_bytes = self._make_assignment_bytes('t', [0, 2])
-            coord._manager.run(
+            coord._net.run(
                 coord._on_join_complete_async,
                 42, 'member-1', 'cooperative-sticky', assignment_bytes)
 
@@ -1920,7 +1920,7 @@ class TestKip429OnJoinComplete:
 
             # Assignment names a topic the consumer isn't subscribed to.
             bad_assignment = self._make_assignment_bytes('other-topic', [0])
-            coord._manager.run(
+            coord._net.run(
                 coord._on_join_complete_async,
                 42, 'member-1', 'cooperative-sticky', bad_assignment)
 
@@ -1973,7 +1973,7 @@ class TestKip429OnPartitionsLost:
                 calls.append(('assigned', assigned))
 
         lost = {TopicPartition('t', 0)}
-        coordinator._manager.run(OldAsync().on_partitions_lost, lost)
+        coordinator._net.run(OldAsync().on_partitions_lost, lost)
         assert calls == [('revoked', lost)]
 
     def test_generation_is_lost(self):
@@ -2015,7 +2015,7 @@ class TestKip429OnPartitionsLost:
         coordinator.reset_generation()
         assert coordinator._generation.is_lost() is True
 
-        coordinator._manager.run(
+        coordinator._net.run(
             coordinator._on_join_prepare_async, 0, 'member-foo')
 
         listener.on_partitions_lost.assert_called_once_with(
@@ -2037,7 +2037,7 @@ class TestKip429OnPartitionsLost:
             coordinator, '_commit_offsets_sync_async')
         coordinator.reset_generation()
 
-        coordinator._manager.run(
+        coordinator._net.run(
             coordinator._on_join_prepare_async, 0, 'member-foo')
 
         commit_spy.assert_not_called()
@@ -2055,14 +2055,14 @@ class TestKip429OnPartitionsLost:
         coordinator.reset_generation()
 
         # First call: lost path.
-        coordinator._manager.run(
+        coordinator._net.run(
             coordinator._on_join_prepare_async, 0, 'member-foo')
         # Re-assign and install a real generation; the next prepare
         # should fire revoked, not lost.
         coordinator._generation = Generation(42, 'mbr-1', 'range')
         coordinator._subscription.assign_from_subscribed([TopicPartition('t', 0)])
         listener.reset_mock()
-        coordinator._manager.run(
+        coordinator._net.run(
             coordinator._on_join_prepare_async, 42, 'mbr-1')
         listener.on_partitions_lost.assert_not_called()
         listener.on_partitions_revoked.assert_called_once_with(
@@ -2142,7 +2142,7 @@ class TestKip429OnPartitionsLost:
         coordinator._subscription.subscribe(topics=['t'], listener=AsyncListener())
         coordinator._subscription.assign_from_subscribed([TopicPartition('t', 0)])
         coordinator.reset_generation()
-        coordinator._manager.run(
+        coordinator._net.run(
             coordinator._on_join_prepare_async, 0, 'member-foo')
 
         assert calls == [('lost', {TopicPartition('t', 0)})]
@@ -2160,7 +2160,7 @@ class TestKip429OnPartitionsLost:
         coordinator.reset_generation()
 
         with pytest.raises(Errors.KafkaError) as exc_info:
-            coordinator._manager.run(
+            coordinator._net.run(
                 coordinator._on_join_prepare_async, 0, 'member-foo')
         assert exc_info.value.__cause__ is crash
 
@@ -2267,7 +2267,7 @@ class TestListenerExceptionPropagation:
 
             assignment_bytes = self._make_assignment_bytes('t', [1, 2])
             with pytest.raises(Errors.KafkaError):
-                coord._manager.run(
+                coord._net.run(
                     coord._on_join_complete_async,
                     42, 'member-1', 'cooperative-sticky', assignment_bytes)
 
@@ -2294,7 +2294,7 @@ class TestListenerExceptionPropagation:
 
             assignment_bytes = self._make_assignment_bytes('t', [0, 1])
             with pytest.raises(Errors.KafkaError) as exc_info:
-                coord._manager.run(
+                coord._net.run(
                     coord._on_join_complete_async,
                     42, 'member-1', 'cooperative-sticky', assignment_bytes)
             assert exc_info.value.__cause__ is assigned_crash
@@ -2331,7 +2331,7 @@ class TestOnJoinCompleteBailOnInvalidAssignment:
         old_deadline = coordinator.next_auto_commit_deadline
 
         bad_assignment = self._make_assignment_bytes('other-topic', [0])
-        coordinator._manager.run(
+        coordinator._net.run(
             coordinator._on_join_complete_async,
             42, 'member-1', assignor_name, bad_assignment)
 
@@ -2497,9 +2497,8 @@ class TestOnCloseRevokesPartitions:
 def _dispatch_heartbeat(coord):
     """Dispatch a single _send_heartbeat_request and pump the network until
     the resulting future resolves."""
-    manager = coord._manager
-    future = manager.call_soon(coord._send_heartbeat_request)
     net = coord._manager._net
+    future = net.call_soon_with_future(coord._send_heartbeat_request)
     net.wait_for(future, timeout_ms=5000, raise_error=False)
     return future
 

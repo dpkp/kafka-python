@@ -77,7 +77,7 @@ def test_client(request, sasl_kafka):
 
     # Low-level SASL round-trip via KafkaConnectionManager directly (no compat
     # shim, no poll()): the manager owns + auto-starts/closes its net, so this
-    # is just bootstrap + manager.run(coro) and runs on any backend.
+    # is just bootstrap + net.run(coro) and runs on any backend.
     manager = KafkaConnectionManager(**client_params(sasl_kafka, 'client'))
     try:
         manager.bootstrap(timeout_ms=5000)  # auto-starts the owned net

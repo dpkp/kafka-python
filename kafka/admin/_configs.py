@@ -186,8 +186,8 @@ class ConfigAdminMixin:
         Returns:
             dict of {resource_type (str): {resource_name (str): {config_key: {config data}}}}
         """
-        return self._manager.run(self._async_describe_configs, config_resources,
-                                 include_synonyms, config_filter)
+        return self._net.run(
+            self._async_describe_configs, config_resources, include_synonyms, config_filter)
 
     @staticmethod
     def _list_config_resources_process_response(response):
@@ -226,7 +226,7 @@ class ConfigAdminMixin:
         Returns:
             dict of {resource_type (str): [resource_name (str)]}
         """
-        return self._manager.run(self._async_list_config_resources, resource_types)
+        return self._net.run(self._async_list_config_resources, resource_types)
 
     async def _get_missing_modified_configs(self, config_resources):
         resource_lookups = [ConfigResource(resource.resource_type, resource.name) for resource in config_resources]
@@ -332,7 +332,8 @@ class ConfigAdminMixin:
         Returns:
             dict of {resource_type (str): {resource_name (str): Error/Result}}
         """
-        return self._manager.run(self._async_alter_configs, config_resources, validate_only, raise_on_unknown, incremental)
+        return self._net.run(
+            self._async_alter_configs, config_resources, validate_only, raise_on_unknown, incremental)
 
     async def _async_reset_configs(self, config_resources, validate_only=False, raise_on_unknown=True, incremental=None):
         if raise_on_unknown:
@@ -376,7 +377,8 @@ class ConfigAdminMixin:
         Returns:
             dict of {resource_type (str): {resource_name (str): Error/Result}}
         """
-        return self._manager.run(self._async_reset_configs, config_resources, validate_only, raise_on_unknown, incremental)
+        return self._net.run(
+            self._async_reset_configs, config_resources, validate_only, raise_on_unknown, incremental)
 
 
 class AlterConfigOp(EnumHelper, IntEnum):

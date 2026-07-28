@@ -91,7 +91,7 @@ class ClusterAdminMixin:
         Returns:
             A dict with cluster-wide metadata, excluding topic details.
         """
-        return self._manager.run(self._describe_cluster)
+        return self._net.run(self._describe_cluster)
 
     async def _async_describe_log_dirs(self, topic_partitions=(), brokers=None):
         request = DescribeLogDirsRequest(topics=topic_partitions)
@@ -119,7 +119,7 @@ class ClusterAdminMixin:
             list of dicts, containing per-broker log-dir data
         """
         topic_partitions = self._get_topic_partitions(topic_partitions)
-        return self._manager.run(self._async_describe_log_dirs, topic_partitions, brokers)
+        return self._net.run(self._async_describe_log_dirs, topic_partitions, brokers)
 
     @staticmethod
     def _alter_replica_log_dirs_requests(replica_assignments):
@@ -176,7 +176,7 @@ class ClusterAdminMixin:
             dict mapping :class:`~kafka.TopicPartitionReplica` to the
             corresponding error class (``kafka.errors.NoError`` on success).
         """
-        return self._manager.run(self._async_alter_replica_log_dirs, replica_assignments)
+        return self._net.run(self._async_alter_replica_log_dirs, replica_assignments)
 
     async def _async_describe_quorum(self, topic, partition):
         _Topic = DescribeQuorumRequest.TopicData
@@ -213,7 +213,7 @@ class ClusterAdminMixin:
         Returns:
             dict matching the DescribeQuorumResponse shape.
         """
-        return self._manager.run(self._async_describe_quorum, '__cluster_metadata', 0)
+        return self._net.run(self._async_describe_quorum, '__cluster_metadata', 0)
 
     async def _async_get_broker_version_data(self, broker_id):
         conn = await self._manager.get_connection(broker_id)
@@ -221,7 +221,7 @@ class ClusterAdminMixin:
 
     def get_broker_version_data(self, broker_id):
         """Return BrokerVersionData for a specific broker"""
-        return self._manager.run(self._async_get_broker_version_data, broker_id)
+        return self._net.run(self._async_get_broker_version_data, broker_id)
 
     def api_versions(self):
         api_versions = self._manager.broker_version_data.api_versions
@@ -272,7 +272,7 @@ class ClusterAdminMixin:
                 - ``finalized_features_epoch``: int, or None if unknown
                   (broker did not report an epoch, or reported -1)
         """
-        return self._manager.run(self._async_describe_features, send_request_to_controller)
+        return self._net.run(self._async_describe_features, send_request_to_controller)
 
     @staticmethod
     def _build_feature_updates(feature_updates):
@@ -348,9 +348,9 @@ class ClusterAdminMixin:
         Returns:
             dict of {feature_name: 'OK' | error message}
         """
-        return self._manager.run(self._async_update_features,
-                                 feature_updates, validate_only, timeout_ms,
-                                 timeout_ms=timeout_ms)
+        return self._net.run(
+            self._async_update_features, feature_updates, validate_only, timeout_ms,
+            timeout_ms=timeout_ms)
 
 
 class UpdateFeatureType(EnumHelper, IntEnum):
