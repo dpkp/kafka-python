@@ -447,20 +447,3 @@ class KafkaConnectionManager:
         Returns: Future
         """
         return self._net.call_soon_with_future(coro, *args)
-
-    def run(self, coro, *args, timeout_ms=None):
-        """Schedules coro on the event loop, blocks until complete, returns value or raises.
-
-        If an IO thread is running (via start()), the caller thread blocks on
-        a cross-thread Event while the coroutine runs on the IO thread. Safe
-        to call concurrently from multiple caller threads.
-
-        If no IO thread is running, falls back to driving the loop on the
-        caller thread (legacy behavior).
-
-        The blocking wait is bounded by ``timeout_ms`` (or the backend's
-        ``default_api_timeout_ms`` when None) plus a grace margin; see
-        :meth:`NetworkSelector.run`.
-        """
-        self._maybe_start()
-        return self._net.run(coro, *args, timeout_ms=timeout_ms)
