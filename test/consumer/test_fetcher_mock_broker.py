@@ -135,7 +135,7 @@ class TestKIP320OffsetValidation:
         fetcher.maybe_validate_positions()
         assert fetcher._subscriptions.assignment[tp].awaiting_validation
 
-        manager.run(fetcher._validate_offsets_async, 1000)
+        net.run(fetcher._validate_offsets_async, 1000)
 
         assert 'version' in captured, 'OffsetForLeaderEpochRequest never reached broker'
         assert not fetcher._subscriptions.assignment[tp].awaiting_validation
@@ -177,7 +177,7 @@ class TestKIP320OffsetValidation:
         # Round 1: poll marks + drives validation to completion.
         fetcher.maybe_validate_positions()
         assert fetcher._subscriptions.assignment[tp].awaiting_validation
-        manager.run(fetcher._validate_offsets_async, 1000)
+        net.run(fetcher._validate_offsets_async, 1000)
 
         assert fetcher._cached_log_truncation is None
         assert not fetcher._subscriptions.assignment[tp].awaiting_validation
@@ -218,7 +218,7 @@ class TestKIP320OffsetValidation:
 
         # Validate the first position against the current leader (epoch 5).
         fetcher.maybe_validate_positions()
-        manager.run(fetcher._validate_offsets_async, 1000)
+        net.run(fetcher._validate_offsets_async, 1000)
         assert not fetcher._subscriptions.assignment[tp].awaiting_validation
 
         # User seeks to a different offset whose record epoch (4) is below the
@@ -242,7 +242,7 @@ class TestKIP320OffsetValidation:
         broker.respond(OffsetForLeaderEpochRequest,
                        _ofle_response(error_code=0, leader_epoch=3, end_offset=80))
 
-        manager.run(fetcher._validate_offsets_async, 1000)
+        net.run(fetcher._validate_offsets_async, 1000)
 
         assert fetcher._cached_log_truncation is None
         assert not fetcher._subscriptions.assignment[tp].awaiting_reset
@@ -269,7 +269,7 @@ class TestKIP320OffsetValidation:
         broker.respond(OffsetForLeaderEpochRequest,
                        _ofle_response(error_code=0, leader_epoch=3, end_offset=80))
 
-        manager.run(fetcher._validate_offsets_async, 1000)
+        net.run(fetcher._validate_offsets_async, 1000)
 
         with pytest.raises(Errors.LogTruncationError) as exc_info:
             fetcher.validate_offsets_if_needed()
@@ -316,7 +316,7 @@ class TestKIP320OffsetValidation:
         broker.respond(OffsetForLeaderEpochRequest,
                        _ofle_response(error_code=0, leader_epoch=-1, end_offset=-1))
 
-        manager.run(fetcher._validate_offsets_async, 1000)
+        net.run(fetcher._validate_offsets_async, 1000)
 
         with pytest.raises(Errors.LogTruncationError) as exc_info:
             fetcher.validate_offsets_if_needed()
@@ -354,7 +354,7 @@ class TestKIP320OffsetValidation:
         assert not fetcher._subscriptions.assignment[tp].awaiting_validation
 
     def test_validation_retries_on_fenced_epoch_response(
-            self, broker, manager, fetcher):
+            self, broker, net, fetcher):
         """FENCED_LEADER_EPOCH in the OffsetForLeaderEpoch response itself
         is retried after ``retry_backoff_ms`` within a single
         ``_validate_offsets_async`` invocation."""
@@ -370,7 +370,7 @@ class TestKIP320OffsetValidation:
             error_code=0, leader_epoch=5, end_offset=100))
 
         start = time.monotonic()
-        manager.run(fetcher._validate_offsets_async, 2000)
+        net.run(fetcher._validate_offsets_async, 2000)
         elapsed = time.monotonic() - start
 
         assert not fetcher._subscriptions.assignment[tp].awaiting_validation

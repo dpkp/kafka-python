@@ -70,7 +70,7 @@ class UserAdminMixin:
         Returns:
             A dict mapping user name -> error message (or None on success).
         """
-        return self._manager.run(self._async_alter_user_scram_credentials, alterations)
+        return self._net.run(self._async_alter_user_scram_credentials, alterations)
 
     async def _async_describe_user_scram_credentials(self, users=None):
         if users is None:
@@ -118,7 +118,7 @@ class UserAdminMixin:
             ``'error'`` (None or error message) and ``'credential_infos'``
             (list of {'mechanism': ScramMechanism, 'iterations': int}).
         """
-        return self._manager.run(self._async_describe_user_scram_credentials, users)
+        return self._net.run(self._async_describe_user_scram_credentials, users)
 
 
 class ScramMechanism(IntEnum):

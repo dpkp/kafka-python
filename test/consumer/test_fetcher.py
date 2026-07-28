@@ -173,7 +173,7 @@ def test_reset_offsets_if_needed(fetcher, topic, mocker):
 
 
 def test__reset_offsets_async_waits_for_metadata_when_leader_unknown(
-        fetcher, manager, mocker):
+        fetcher, net, mocker):
     """If the leader is unknown, _reset_offsets_async should wait for a
     metadata refresh and retry within the timer budget. Regression for the
     test_kafka_consumer_position_after_seek_to_end integration test where
@@ -205,7 +205,7 @@ def test__reset_offsets_async_waits_for_metadata_when_leader_unknown(
         return ({tp: OffsetAndTimestamp(42, None, -1)}, set())
     mocker.patch.object(fetcher, '_send_list_offsets_request', side_effect=fake_send)
 
-    manager.run(fetcher._reset_offsets_async, 1000)
+    net.run(fetcher._reset_offsets_async, 1000)
 
     assert not fetcher._subscriptions.assignment[tp].awaiting_reset
     assert fetcher._subscriptions.assignment[tp].position.offset == 42
@@ -214,7 +214,7 @@ def test__reset_offsets_async_waits_for_metadata_when_leader_unknown(
 
 
 def test__reset_offsets_async_bails_when_leader_permanently_unknown(
-        fetcher, manager, mocker):
+        fetcher, net, mocker):
     """If metadata refresh doesn't resolve the leader within the timer
     budget, _reset_offsets_async should bail rather than spin forever.
     """
@@ -231,7 +231,7 @@ def test__reset_offsets_async_bails_when_leader_permanently_unknown(
 
     # 50ms timer caps the spin even though leader stays unknown forever.
     start = time.monotonic()
-    manager.run(fetcher._reset_offsets_async, 50)
+    net.run(fetcher._reset_offsets_async, 50)
     elapsed = time.monotonic() - start
     assert elapsed < 1.0, (
         '_reset_offsets_async did not respect timer budget; took %.2fs' % elapsed)
@@ -240,7 +240,7 @@ def test__reset_offsets_async_bails_when_leader_permanently_unknown(
     assert fetcher._subscriptions.assignment[tp].awaiting_reset
 
 
-def test__reset_offsets_async(fetcher, manager, mocker):
+def test__reset_offsets_async(fetcher, net, mocker):
     tp0 = TopicPartition("topic", 0)
     tp1 = TopicPartition("topic", 1)
     fetcher._subscriptions.subscribe(topics=["topic"])
@@ -260,8 +260,8 @@ def test__reset_offsets_async(fetcher, manager, mocker):
     mocker.patch.object(fetcher, '_send_list_offsets_request', side_effect=fake_send)
 
     # _reset_offsets_async loops until partitions_needing_reset is empty;
-    # manager.run waits for the whole driver to complete.
-    manager.run(fetcher._reset_offsets_async, 1000)
+    # net.run waits for the whole driver to complete.
+    net.run(fetcher._reset_offsets_async, 1000)
 
     assert not fetcher._subscriptions.assignment[tp0].awaiting_reset
     assert not fetcher._subscriptions.assignment[tp1].awaiting_reset
@@ -270,7 +270,7 @@ def test__reset_offsets_async(fetcher, manager, mocker):
 
 
 def test__reset_offsets_async_retries_after_retriable_failure(
-        fetcher, manager, mocker):
+        fetcher, net, mocker):
     """A retriable per-partition error (NotLeader, etc.) sets the partition
     into retry_backoff_ms backoff. _reset_offsets_async must sleep for that
     backoff and retry, rather than exit and rely on an outer caller to
@@ -298,7 +298,7 @@ def test__reset_offsets_async_retries_after_retriable_failure(
                         side_effect=fake_send)
 
     start = time.monotonic()
-    manager.run(fetcher._reset_offsets_async, 1000)
+    net.run(fetcher._reset_offsets_async, 1000)
     elapsed = time.monotonic() - start
 
     assert call_count[0] == 2, (
@@ -316,7 +316,7 @@ def test__send_list_offsets_requests(fetcher, manager, net, mocker):
 
     pending = []
     async def fake_send(node_id, timestamps):
-        f = fetcher._manager.create_future()  # awaited below
+        f = net.create_future()  # awaited below
         pending.append(f)
         return await f
     mocked_send = mocker.patch.object(fetcher, "_send_list_offsets_request", side_effect=fake_send)
@@ -332,12 +332,12 @@ def test__send_list_offsets_requests(fetcher, manager, net, mocker):
 
     # Leader == None
     with pytest.raises(StaleMetadata):
-        manager.run(fetcher._send_list_offsets_requests, {tp: 0})
+        net.run(fetcher._send_list_offsets_requests, {tp: 0})
     assert not mocked_send.called
 
     # Leader == -1
     with pytest.raises(StaleMetadata):
-        manager.run(fetcher._send_list_offsets_requests, {tp: 0})
+        net.run(fetcher._send_list_offsets_requests, {tp: 0})
     assert not mocked_send.called
 
     # Leader == 0, send failed
@@ -370,7 +370,7 @@ def test__send_list_offsets_requests_multiple_nodes(fetcher, manager, net, mocke
 
     send_futures = []
     async def fake_send(node_id, timestamps):
-        f = fetcher._manager.create_future()  # awaited below
+        f = net.create_future()  # awaited below
         send_futures.append((node_id, timestamps, f))
         return await f
     mocked_send = mocker.patch.object(fetcher, "_send_list_offsets_request", side_effect=fake_send)
@@ -574,7 +574,7 @@ def test_fetch_records_not_idle_when_reset_task_pending(fetcher, mocker):
     assert idle is False
 
 
-def test_clean_done_fetch_futures_removes_out_of_order_done(fetcher):
+def test_clean_done_fetch_futures_removes_out_of_order_done(fetcher, net):
     """Completed fetch futures must be dropped regardless of position, not
     just a contiguous run from the head. With multiple brokers, fetches
     complete out of order, so a head-only cleanup would strand an
@@ -588,7 +588,7 @@ def test_clean_done_fetch_futures_removes_out_of_order_done(fetcher):
     fetcher._fetch_futures.extend([done_head, pending, done_tail])
 
     # async def: must be driven on the IO loop (it rebinds _fetch_futures).
-    fetcher._manager.run(fetcher._clean_done_fetch_futures)
+    net.run(fetcher._clean_done_fetch_futures)
 
     # Only the still-in-flight future survives.
     assert list(fetcher._fetch_futures) == [pending]
@@ -616,7 +616,7 @@ def test_in_flight_fetches_is_read_only(fetcher):
     assert list(fetcher._fetch_futures) == [done]
 
 
-def test_clean_done_fetch_futures_only_mutates_when_driven_on_loop(fetcher):
+def test_clean_done_fetch_futures_only_mutates_when_driven_on_loop(fetcher, net):
     """_clean_done_fetch_futures is async so its rebind of _fetch_futures can
     only run when driven on the IO loop. A stray *synchronous* call from the
     foreground yields an inert coroutine (no mutation) rather than a silent
@@ -633,7 +633,7 @@ def test_clean_done_fetch_futures_only_mutates_when_driven_on_loop(fetcher):
         coro.close()  # avoid "coroutine was never awaited" warning
 
     # Driven on the IO loop, it actually evicts the completed future.
-    fetcher._manager.run(fetcher._clean_done_fetch_futures)
+    net.run(fetcher._clean_done_fetch_futures)
     assert list(fetcher._fetch_futures) == [pending]
 
 
@@ -697,7 +697,7 @@ def test_fetch_records_no_stall_when_response_arrives_before_wait(fetcher, topic
     assert len(records[tp]) == 1
 
 
-def test_fetch_records_blocks_once_stale_fetch_is_cleaned(fetcher, mocker):
+def test_fetch_records_blocks_once_stale_fetch_is_cleaned(fetcher, net, mocker):
     """Multi-broker busy-loop regression. A stale (already-drained) completion
     stranded behind an in-flight fetch must be evicted by the cleanup so the
     wait actually blocks on the in-flight future instead of returning
@@ -709,7 +709,7 @@ def test_fetch_records_blocks_once_stale_fetch_is_cleaned(fetcher, mocker):
     # could never reach the stale completion behind it.
     fetcher._fetch_futures.extend([inflight, stale_done])
 
-    fetcher._manager.run(fetcher._clean_done_fetch_futures)
+    net.run(fetcher._clean_done_fetch_futures)
     assert list(fetcher._fetch_futures) == [inflight]
 
     mocker.patch.object(fetcher, 'send_fetches', return_value=None)
@@ -1083,7 +1083,7 @@ def test_partition_records_compacted_offset(mocker):
     assert msgs[0].offset == fetch_offset + 1
 
 
-def test_reset_offsets_paused(subscription_state, client, manager, net, mocker):
+def test_reset_offsets_paused(subscription_state, client, net, mocker):
     fetcher = Fetcher(client, subscription_state)
     tp = TopicPartition('foo', 0)
     subscription_state.assign_from_user([tp])
@@ -1096,7 +1096,7 @@ def test_reset_offsets_paused(subscription_state, client, manager, net, mocker):
     mocker.patch.object(fetcher._client, 'ready', return_value=True)
     mocker.patch.object(fetcher, '_send_list_offsets_request', side_effect=fake_send)
     mocker.patch.object(fetcher._client.cluster, "leader_for_partition", return_value=0)
-    manager.run(fetcher._reset_offsets_async, 1000)
+    net.run(fetcher._reset_offsets_async, 1000)
 
     assert not subscription_state.is_offset_reset_needed(tp)
     assert not subscription_state.is_fetchable(tp) # because tp is paused
@@ -1104,7 +1104,7 @@ def test_reset_offsets_paused(subscription_state, client, manager, net, mocker):
     assert subscription_state.position(tp) == OffsetAndMetadata(10, '', -1)
 
 
-def test_reset_offsets_paused_without_valid(subscription_state, client, manager, net, mocker):
+def test_reset_offsets_paused_without_valid(subscription_state, client, net, mocker):
     fetcher = Fetcher(client, subscription_state)
     tp = TopicPartition('foo', 0)
     subscription_state.assign_from_user([tp])
@@ -1117,7 +1117,7 @@ def test_reset_offsets_paused_without_valid(subscription_state, client, manager,
     mocker.patch.object(fetcher._client, 'ready', return_value=True)
     mocker.patch.object(fetcher, '_send_list_offsets_request', side_effect=fake_send)
     mocker.patch.object(fetcher._client.cluster, "leader_for_partition", return_value=0)
-    manager.run(fetcher._reset_offsets_async, 1000)
+    net.run(fetcher._reset_offsets_async, 1000)
 
     assert not subscription_state.is_offset_reset_needed(tp)
     assert not subscription_state.is_fetchable(tp) # because tp is paused
@@ -1262,13 +1262,13 @@ class TestFetchOffsetsByTimes:
         result = fetcher.offsets_by_times(timestamps, timeout_ms=10000)
         assert result == {tp0: offset0, tp1: offset1}
 
-    def test_timeout_raises(self, fetcher, mocker):
+    def test_timeout_raises(self, fetcher, net, mocker):
         tp = TopicPartition('test', 0)
         timestamps = {tp: 1000}
 
         # Awaits a future that never completes
         async def fake_send(ts):
-            await fetcher._manager.create_future()
+            await net.create_future()
         mocker.patch.object(fetcher, '_send_list_offsets_requests', side_effect=fake_send)
 
         with pytest.raises(Errors.KafkaTimeoutError):
@@ -1428,7 +1428,7 @@ def test_maybe_validate_positions_no_op_when_epoch_current(fetcher, mocker):
 
 
 def test_validate_offsets_async_clears_validation_on_matching_epoch(
-        fetcher, manager, mocker):
+        fetcher, net, mocker):
     """OffsetForLeaderEpoch response with matching epoch and end_offset >=
     position.offset clears awaiting_validation."""
     tp = TopicPartition('foobar', 0)
@@ -1450,7 +1450,7 @@ def test_validate_offsets_async_clears_validation_on_matching_epoch(
     mocker.patch.object(fetcher, '_send_offset_for_leader_epoch_request',
                         side_effect=fake_send)
 
-    manager.run(fetcher._validate_offsets_async, 1000)
+    net.run(fetcher._validate_offsets_async, 1000)
 
     assert not fetcher._subscriptions.assignment[tp].awaiting_validation
     assert fetcher._subscriptions.assignment[tp].position.leader_epoch == 5
@@ -1618,7 +1618,7 @@ def test_validate_offsets_async_undefined_raises_when_no_reset_policy(
 
 
 def test_validate_offsets_async_retries_on_fenced_epoch(
-        fetcher, manager, mocker):
+        fetcher, net, mocker):
     """FENCED_LEADER_EPOCH on the validation RPC sleeps retry_backoff_ms
     and retries within a single _validate_offsets_async invocation."""
     tp = TopicPartition('foobar', 0)
@@ -1648,7 +1648,7 @@ def test_validate_offsets_async_retries_on_fenced_epoch(
                         side_effect=fake_send)
 
     start = time.monotonic()
-    manager.run(fetcher._validate_offsets_async, 1000)
+    net.run(fetcher._validate_offsets_async, 1000)
     elapsed = time.monotonic() - start
 
     assert call_count[0] == 2, (

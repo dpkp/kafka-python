@@ -275,7 +275,7 @@ class KafkaAdminClient(
         self._net = self._manager._net
 
         # Run all IO on a dedicated background thread; public admin methods
-        # block on cross-thread Events via self._manager.run(...).
+        # block on cross-thread Events via self._net.run(...).
         self._net.start()
 
         # Bootstrap on __init__

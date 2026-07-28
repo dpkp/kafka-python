@@ -110,7 +110,7 @@ class GroupAdminMixin:
                 of ConsumerSubscription and ConsumerAssignment metadata, and conversion
                 of acl set ints to semantic enums).
         """
-        return self._manager.run(self._async_describe_groups, group_ids, group_coordinator_id)
+        return self._net.run(self._async_describe_groups, group_ids, group_coordinator_id)
 
     # -- List groups --------------------------------------------------
 
@@ -179,8 +179,8 @@ class GroupAdminMixin:
         Returns:
             List of group data dicts, with key/vals from ListGroupsRequest
         """
-        return self._manager.run(self._async_list_groups, broker_ids,
-                                 states_filter, types_filter)
+        return self._net.run(
+            self._async_list_groups, broker_ids, states_filter, types_filter)
 
     # -- List group offsets -------------------------------------------
 
@@ -303,7 +303,7 @@ class GroupAdminMixin:
             group_specs = {group_id: None for group_id in group_specs}
         elif isinstance(group_specs, str):
             group_specs = {group_specs: None}
-        return self._manager.run(self._async_list_group_offsets, group_specs)
+        return self._net.run(self._async_list_group_offsets, group_specs)
 
     # -- Delete groups ------------------------------------------------
 
@@ -353,7 +353,7 @@ class GroupAdminMixin:
         Returns:
             A list of tuples (group_id, KafkaError)
         """
-        return self._manager.run(self._async_delete_groups, group_ids, group_coordinator_id)
+        return self._net.run(self._async_delete_groups, group_ids, group_coordinator_id)
 
     # -- Alter group offsets -----------------------------------------------
 
@@ -420,7 +420,7 @@ class GroupAdminMixin:
             partition-level :class:`~kafka.errors.KafkaError` class
             (``NoError`` on success).
         """
-        return self._manager.run(
+        return self._net.run(
             self._async_alter_group_offsets, group_id, offsets, group_coordinator_id)
 
     # -- Reset group offsets ----------------------------------------------
@@ -525,7 +525,7 @@ class GroupAdminMixin:
             {'error': :class:`~kafka.errors.KafkaError` class, 'offset': int}.
             The ``offset`` value is the post-clamp value that was committed.
         """
-        return self._manager.run(
+        return self._net.run(
             self._async_reset_group_offsets, group_id, offset_specs, group_coordinator_id)
 
     # -- Delete group offsets ----------------------------------------------
@@ -591,7 +591,7 @@ class GroupAdminMixin:
             KafkaError: If the response contains a top-level error (e.g.
                 ``GroupIdNotFoundError``, ``NonEmptyGroupError``).
         """
-        return self._manager.run(
+        return self._net.run(
             self._async_delete_group_offsets, group_id, partitions, group_coordinator_id)
 
     # -- Remove group members ---------------------------------------------
@@ -693,7 +693,7 @@ class GroupAdminMixin:
             UnsupportedVersionError: If the broker does not support batched
                 LeaveGroupRequest and any member uses ``group_instance_id``.
         """
-        return self._manager.run(
+        return self._net.run(
             self._async_remove_group_members, group_id, members, group_coordinator_id)
 
 

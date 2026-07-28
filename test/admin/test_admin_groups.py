@@ -1025,8 +1025,8 @@ class TestFindCoordinatorBatched:
         broker.respond_fn(FindCoordinatorRequest, find_handler)
         broker.respond_fn(FindCoordinatorRequest, find_handler)
 
-        group_node = admin._manager.run(admin._find_coordinator_id, 'x', 0)
-        txn_node = admin._manager.run(admin._find_coordinator_id, 'x', 1)
+        group_node = admin._net.run(admin._find_coordinator_id, 'x', 0)
+        txn_node = admin._net.run(admin._find_coordinator_id, 'x', 1)
 
         assert group_node == 1
         assert txn_node == 2

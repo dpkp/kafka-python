@@ -321,7 +321,7 @@ class KafkaConnectionManager:
         except Errors.NodeNotReadyError as e:
             # Pre-failed sibling of send_request()'s create_future(); awaited
             # on the loop by the same caller, so mint it from the backend too.
-            return self.create_future().failure(e)
+            return self._net.create_future().failure(e)
         else:
             return conn.send_request(request, request_timeout_ms=request_timeout_ms)
 
@@ -431,14 +431,6 @@ class KafkaConnectionManager:
             if self._owns_net and not self._net.on_io_thread():
                 self._net.close()
 
-    def create_future(self):
-        """Create a Future suitable for awaiting on the underlying loop.
-
-        Forwards to the backend so loop coroutines get the backend's native
-        awaitable type. See ``NetworkSelector.create_future``.
-        """
-        return self._net.create_future()
-
     def call_soon(self, coro, *args):
         """Accepts a coroutine / awaitable / function and schedules it on the event loop.
 
@@ -447,20 +439,3 @@ class KafkaConnectionManager:
         Returns: Future
         """
         return self._net.call_soon_with_future(coro, *args)
-
-    def run(self, coro, *args, timeout_ms=None):
-        """Schedules coro on the event loop, blocks until complete, returns value or raises.
-
-        If an IO thread is running (via start()), the caller thread blocks on
-        a cross-thread Event while the coroutine runs on the IO thread. Safe
-        to call concurrently from multiple caller threads.
-
-        If no IO thread is running, falls back to driving the loop on the
-        caller thread (legacy behavior).
-
-        The blocking wait is bounded by ``timeout_ms`` (or the backend's
-        ``default_api_timeout_ms`` when None) plus a grace margin; see
-        :meth:`NetworkSelector.run`.
-        """
-        self._maybe_start()
-        return self._net.run(coro, *args, timeout_ms=timeout_ms)

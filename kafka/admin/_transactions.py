@@ -181,7 +181,7 @@ class TransactionsAdminMixin:
             dict: A dict mapping broker ``node_id`` to a list of
             :class:`TransactionListing`.
         """
-        return self._manager.run(
+        return self._net.run(
             self._async_list_transactions, broker_ids, producer_id_filters,
             state_filters, duration_filter_ms, transactional_id_pattern)
 
@@ -250,7 +250,7 @@ class TransactionsAdminMixin:
                 to its coordinator.
             BrokerResponseError: For any other per-id error.
         """
-        return self._manager.run(self._async_describe_transactions, transactional_ids)
+        return self._net.run(self._async_describe_transactions, transactional_ids)
 
     # -- DescribeProducers --------------------------------------------------
 
@@ -333,7 +333,7 @@ class TransactionsAdminMixin:
                 ``NotLeaderOrFollowerError`` if the chosen broker is not
                 a replica).
         """
-        return self._manager.run(self._async_describe_producers, partitions, broker_id)
+        return self._net.run(self._async_describe_producers, partitions, broker_id)
 
     # -- AbortTransaction (WriteTxnMarkers) --------------------------------
 
@@ -382,7 +382,7 @@ class TransactionsAdminMixin:
             spec (:class:`AbortTransactionSpec`): Target partition,
                 producer id/epoch, and optional coordinator epoch.
         """
-        return self._manager.run(self._async_abort_transaction, spec)
+        return self._net.run(self._async_abort_transaction, spec)
 
     # -- find_hanging convenience ------------------------------------------
 
@@ -445,6 +445,6 @@ class TransactionsAdminMixin:
             ``state``, ``age_ms``, ``coordinator_id``,
             ``topic_partitions``.
         """
-        return self._manager.run(
+        return self._net.run(
             self._async_find_hanging_transactions, broker_ids, max_transaction_timeout_ms)
 

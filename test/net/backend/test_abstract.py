@@ -11,6 +11,7 @@ import threading
 
 import pytest
 
+import kafka.errors as Errors
 from kafka.net.backend.abstract import (
     NetBackend, NetTransport, resolve_backend, register_backend, _BACKENDS,
 )
@@ -221,3 +222,38 @@ class TestClientNetConfig:
         c = KafkaNetClient(net=sel, bootstrap_servers='localhost:9092')
         assert c._net is sel
         sel.close()
+
+
+class TestNetBackendRun:
+    def test_run_function(self, net):
+        def test_coro():
+            return 42
+        assert net.run(test_coro) == 42
+
+    def test_run_async_coro_function(self, net):
+        async def test_coro():
+            return 100
+        assert net.run(test_coro) == 100
+
+    def test_run_async_coro_with_args(self, net):
+        async def test_coro(foo):
+            return foo
+        assert net.run(test_coro, 123) == 123
+
+    def test_run_async_coro(self, net):
+        async def test_coro():
+            return 49
+        assert net.run(test_coro()) == 49
+
+    def test_run_async_chain(self, net):
+        async def test_coro_foo():
+            return 'foo!'
+        async def test_coro_bar():
+            return await test_coro_foo()
+        assert net.run(test_coro_bar()) == 'foo!'
+
+    def test_run_raises(self, net):
+        async def bad_coro():
+            raise ValueError('bad_coro')
+        with pytest.raises(ValueError, match='bad_coro'):
+            net.run(bad_coro)

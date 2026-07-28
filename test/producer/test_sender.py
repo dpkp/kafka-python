@@ -49,9 +49,9 @@ class _RecordingWakeup:
 
 def _drive(sender, coro_method):
     """Run one of the sender's coroutine methods to completion on the test
-    selector (no IO thread is started in unit tests, so manager.run drives
+    selector (no IO thread is started in unit tests, so net.run drives
     the loop on the calling thread)."""
-    return sender._manager.run(coro_method)
+    return sender._net.run(coro_method)
 
 
 def _partition_response(error_cls=None, **kwargs):
