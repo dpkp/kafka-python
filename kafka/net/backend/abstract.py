@@ -318,14 +318,21 @@ class NetBackend(abc.ABC):
             if timer is not None:
                 self.cancel(timer)
 
-    def wait_for(self, future: Any, timeout_ms: float, raise_error: bool=True) -> NetBackendFuture:
-        """Block until ``future`` resolves with a timeout in ms.
+    def wait_for(self, future: Any, timeout_ms: Optional[float], raise_error: bool=True) -> Any:
+        """Block the calling thread until ``future`` resolves, with a timeout in ms.
 
-        Must be awaited from a coroutine running on this loop. The underlying
-        future is not cancelled on timeout -- it continues to run; the timeout
-        only unblocks the awaiter.
+        The cross-thread blocking bridge for ``await_for``: schedules the await on
+        the loop and blocks the caller until it resolves, then returns its value
+        (or raises). Must be called from a user thread, never the IO thread
+        (``run`` raises ``RuntimeError`` there). The underlying future is not
+        cancelled on timeout -- it continues to run; the timeout only unblocks
+        the awaiter.
         """
-        return self.run(self.await_for, future, timeout_ms, raise_error, timeout_ms=timeout_ms)
+        try:
+            return self.run(self.await_for, future, timeout_ms, raise_error, timeout_ms=timeout_ms)
+        except Exception:
+            if raise_error:
+                raise
 
 
 # --- backend selection ----------------------------------------------------
