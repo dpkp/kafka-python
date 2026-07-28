@@ -321,7 +321,7 @@ class KafkaConnectionManager:
         except Errors.NodeNotReadyError as e:
             # Pre-failed sibling of send_request()'s create_future(); awaited
             # on the loop by the same caller, so mint it from the backend too.
-            return self.create_future().failure(e)
+            return self._net.create_future().failure(e)
         else:
             return conn.send_request(request, request_timeout_ms=request_timeout_ms)
 
@@ -430,14 +430,6 @@ class KafkaConnectionManager:
             # join that thread) -- same guard the producer's close() uses.
             if self._owns_net and not self._net.on_io_thread():
                 self._net.close()
-
-    def create_future(self):
-        """Create a Future suitable for awaiting on the underlying loop.
-
-        Forwards to the backend so loop coroutines get the backend's native
-        awaitable type. See ``NetworkSelector.create_future``.
-        """
-        return self._net.create_future()
 
     def call_soon(self, coro, *args):
         """Accepts a coroutine / awaitable / function and schedules it on the event loop.

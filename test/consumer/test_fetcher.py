@@ -370,7 +370,7 @@ def test__send_list_offsets_requests_multiple_nodes(fetcher, manager, net, mocke
 
     send_futures = []
     async def fake_send(node_id, timestamps):
-        f = fetcher._manager.create_future()  # awaited below
+        f = net.create_future()  # awaited below
         send_futures.append((node_id, timestamps, f))
         return await f
     mocked_send = mocker.patch.object(fetcher, "_send_list_offsets_request", side_effect=fake_send)

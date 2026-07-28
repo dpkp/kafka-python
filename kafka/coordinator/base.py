@@ -357,7 +357,7 @@ class BaseCoordinator(ABC):
                 if maybe_coordinator_id is None:
                     # Pre-failed sibling of lookup_coordinator(); consumed via
                     # wait_for on the loop, so mint it from the backend too.
-                    future = self._manager.create_future().failure(Errors.NodeNotReadyError('coordinator'))
+                    future = self._net.create_future().failure(Errors.NodeNotReadyError('coordinator'))
                 else:
                     self.coordinator_id = maybe_coordinator_id
                     return not timer.expired
