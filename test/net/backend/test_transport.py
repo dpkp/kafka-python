@@ -316,7 +316,7 @@ class TestTransportWaiterCleanup:
     read/write coroutine tasks parked in the event loop.
 
     These tests fail until ``KafkaTCPTransport._close`` cancels its read/write
-    waiter tasks (``net.cancel(task)``); the selector's existing WAIT_IO branch
+    waiter tasks (``task.cancel()``); the selector's existing WAIT_IO branch
     in ``cancel()`` then drives the io_guard finalizer and discards the task.
     """
 

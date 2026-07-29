@@ -216,10 +216,6 @@ class NetBackend(abc.ABC):
     def call_later(self, delay: float, task: Any) -> Any:
         """Schedule ``task`` to run after ``delay`` seconds."""
 
-    @abc.abstractmethod
-    def cancel(self, task: Any) -> None:
-        """Cancel a scheduled task/timer previously returned by call_*."""
-
     # --- timing (core coroutines await this) ------------------------------
     @abc.abstractmethod
     def sleep(self, delay: float) -> Any:
@@ -313,7 +309,7 @@ class NetBackend(abc.ABC):
                 raise
         finally:
             if timer is not None:
-                self.cancel(timer)
+                timer.cancel()
 
     def wait_for(self, future: Any, timeout_ms: Optional[float], raise_error: bool=True) -> Any:
         """Block the calling thread until ``future`` resolves, with a timeout in ms.
