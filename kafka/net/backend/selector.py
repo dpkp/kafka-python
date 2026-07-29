@@ -90,6 +90,7 @@ class Task:
         self._stack = (_initialize_coro(coro), None)
         self._res = None
         self._exc = None
+        self._callbacks = []
         self.scheduled_at = None
         self.state = TaskState.CREATED
 
@@ -129,10 +130,9 @@ class Task:
 
             except StopIteration as final:
                 self._stack = self._stack[1]
-                if not self._stack:
+                if self.is_done:
                     # we're done, back to event loop
-                    self.state = TaskState.DONE
-                    self._res = final.value
+                    self._complete(res=final.value)
                     raise
                 else:
                     ret = final.value
@@ -140,15 +140,22 @@ class Task:
 
             except BaseException as e:
                 self._stack = self._stack[1]
-                if not self._stack:
-                    self.state = TaskState.DONE
-                    self._exc = e
+                if self.is_done:
+                    self._complete(exc=e)
                     raise
                 else:
                     ret = None
                     exc = e
             else:
                 exc = None
+
+    def _complete(self, res=None, exc=None):
+        self._res = res
+        self._exc = exc
+        self.state = TaskState.DONE
+        for cb in self._callbacks:
+            cb(self)
+        self._callbacks = []
 
     def push_stack(self, coro):
         self._stack = (_initialize_coro(coro), self._stack)
@@ -177,6 +184,9 @@ class Task:
         self._stack = None
         self.state = TaskState.CANCELLED
         self._exc = Errors.Cancelled()
+
+    def add_done_callback(self, fn):
+        self._callbacks.append(fn)
 
     @property
     def is_done(self):
