@@ -149,10 +149,11 @@ class Task:
             else:
                 exc = None
 
-    def _complete(self, res=None, exc=None):
+    def _complete(self, res=None, exc=None, state=TaskState.DONE):
+        assert self._stack is None, "Cannot complete Task with non-empty stack!"
         self._res = res
         self._exc = exc
-        self.state = TaskState.DONE
+        self.state = state
         for cb in self._callbacks:
             cb(self)
         self._callbacks = []
@@ -182,8 +183,7 @@ class Task:
                 except Exception:
                     log.exception('Error closing coroutine for cancelled task')
         self._stack = None
-        self.state = TaskState.CANCELLED
-        self._exc = Errors.Cancelled()
+        self._complete(exc=Errors.Cancelled(), state=TaskState.CANCELLED)
 
     def add_done_callback(self, fn):
         self._callbacks.append(fn)
@@ -456,16 +456,15 @@ class NetworkSelector(NetBackend):
         if self._closed:
             raise RuntimeError('NetworkSelector closed!')
         if not isinstance(task, Task):
-            task = Task(task)
+            task = self._create_task(task)
         task.scheduled_at = when
         task.state = TaskState.SCHEDULED
         heapq.heappush(self._scheduled, (when, task))
-        self._pending_tasks.add(task)
         return task
 
     def call_later(self, delay, task):
         if not isinstance(task, Task):
-            task = Task(task)
+            task = self._create_task(task)
         self.call_at(time.monotonic() + delay, task)
         return task
 
@@ -473,11 +472,11 @@ class NetworkSelector(NetBackend):
         self._ready.append(task)
         task.state = TaskState.READY
 
-    def _task_done(self, task):
-        if not task.is_done:
-            raise RuntimeError('Task is not done yet!')
-        self._pending_tasks.discard(task)
-        task.state = TaskState.DONE
+    def _create_task(self, task):
+        task = Task(task)
+        task.add_done_callback(lambda t: self._pending_tasks.discard(t))
+        self._pending_tasks.add(task)
+        return task
 
     def call_soon(self, task):
         """Schedule a coroutine/callable on the loop; return its Task handle.
@@ -504,9 +503,8 @@ class NetworkSelector(NetBackend):
             elif self._closed:
                 raise RuntimeError('NetworkSelector closed!')
         if not isinstance(task, Task):
-            task = Task(task)
+            task = self._create_task(task)
         self._add_ready_task(task)
-        self._pending_tasks.add(task)
         if threadsafe:
             self.wakeup()
         return task
@@ -537,7 +535,6 @@ class NetworkSelector(NetBackend):
             # close() below drives the io_guard finalizer, which unregisters
             # the fileobj and cancels any paired timeout timer.
             pass
-        self._pending_tasks.discard(task)
         task.close()
 
     def reschedule(self, when, task):
@@ -821,17 +818,14 @@ class NetworkSelector(NetBackend):
                     event = self._current()
 
                 except StopIteration:
-                    self._task_done(self._current)
+                    pass
 
                 except BaseException:
                     log.exception('Unhandled exception in task %s:', self._current)
-                    # Same as StopIteration -- task is done either way.
-                    self._task_done(self._current)
 
                 else:
                     if self._current.state is TaskState.CANCELLED:
                         # ignores any returned KernelEvent/Future
-                        self._pending_tasks.discard(self._current)
                         self._current.close()
                     elif isinstance(event, KernelEvent):
                         log_trace('kernel event %s', event.method)
