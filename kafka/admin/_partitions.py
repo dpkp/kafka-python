@@ -45,21 +45,22 @@ class PartitionAdminMixin:
         topics = []
         for topic, count in topic_partitions.items():
             if isinstance(count, int):
-                topics.append(_Topic(name=topic, count=count))
+                total_count, new_assignments = count, None
             elif isinstance(count, dict):
-                topics.append(
-                    _Topic(
-                        name=topic,
-                        count=count['count'],
-                        assignments=[_Assignment(broker_ids=broker_ids)
-                                     for broker_ids in count['assignments']]))
+                total_count, new_assignments = count['count'], count.get('assignments')
             else:
-                topics.append(
-                    _Topic(
-                        name=topic,
-                        count=count.total_count,
-                        assignments=[_Assignment(broker_ids=broker_ids)
-                                     for broker_ids in count.new_assignments]))
+                total_count, new_assignments = count.total_count, count.new_assignments
+            # new_assignments is None -> no manual assignment; leave the request's
+            # assignments field as None so it serialises to null (the broker then
+            # auto-assigns replicas). Passing an empty list instead of None makes
+            # the broker treat it as a manual assignment and reject the request
+            # with InvalidReplicationAssignmentError. See issue #3146.
+            if new_assignments is None:
+                assignments = None
+            else:
+                assignments = [_Assignment(broker_ids=broker_ids)
+                               for broker_ids in new_assignments]
+            topics.append(_Topic(name=topic, count=total_count, assignments=assignments))
         return topics
 
     def create_partitions(self, topic_partitions, timeout_ms=None, validate_only=False, raise_errors=True):
