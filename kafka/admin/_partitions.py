@@ -54,12 +54,17 @@ class PartitionAdminMixin:
                         assignments=[_Assignment(broker_ids=broker_ids)
                                      for broker_ids in count['assignments']]))
             else:
+                # Deprecated dict[topic, NewPartitions]
+                if count.new_assignments is not None:
+                    new_assignments = [_Assignment(broker_ids=broker_ids)
+                                       for broker_ids in count.new_assignments]
+                else:
+                    new_assignments = None
                 topics.append(
                     _Topic(
                         name=topic,
                         count=count.total_count,
-                        assignments=[_Assignment(broker_ids=broker_ids)
-                                     for broker_ids in count.new_assignments]))
+                        assignments=new_assignments))
         return topics
 
     def create_partitions(self, topic_partitions, timeout_ms=None, validate_only=False, raise_errors=True):

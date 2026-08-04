@@ -17,7 +17,12 @@ class DeleteTopicsRequest(ApiMessage):
 
 class DeleteTopicsResponse(ApiMessage): pass
 
-class CreatePartitionsRequest(ApiMessage): pass
+class CreatePartitionsRequest(ApiMessage):
+    @classmethod
+    def json_patch(cls, json):
+        json['fields'][0]['fields'][2]['default'] = 'null'
+        return json
+
 class CreatePartitionsResponse(ApiMessage): pass
 
 class AlterPartitionReassignmentsRequest(ApiMessage): pass
