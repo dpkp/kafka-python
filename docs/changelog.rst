@@ -1,6 +1,14 @@
 Changelog
 =========
 
+3.0.10 (Aug 4, 2026)
+####################
+
+Fixes
+-----
+* Admin: Fix `create_partitions` sending empty assignments array instead of null (#3148)
+
+
 3.0.9 (Jul 21, 2026)
 ####################
 
