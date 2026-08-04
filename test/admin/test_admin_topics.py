@@ -22,6 +22,40 @@ def test_new_partitions():
     assert good_partitions.new_assignments == [[1, 2, 3]]
 
 
+def test_process_create_partitions_input_auto_assign_is_null():
+    # When the caller does not supply manual replica assignments, the request's
+    # `assignments` field must be None so it serialises to null (broker
+    # auto-assigns). An empty list [] serialises to a present-but-empty array,
+    # which the broker reads as "manual assignment" and rejects with
+    # InvalidReplicationAssignmentError. See issue #3146.
+    proc = KafkaAdminClient._process_create_partitions_input
+
+    # int total-count -> auto-assign
+    topics = proc({'foo': 6})
+    assert len(topics) == 1
+    assert topics[0].name == 'foo'
+    assert topics[0].count == 6
+    assert topics[0].assignments is None
+
+    # bare NewPartitions with no manual assignments -> auto-assign
+    topics = proc({'foo': NewPartitions(6)})
+    assert topics[0].assignments is None
+
+
+def test_process_create_partitions_input_manual_assignments():
+    # Explicit manual assignments must be preserved, for both the dict form
+    # and the (deprecated) NewPartitions form.
+    proc = KafkaAdminClient._process_create_partitions_input
+
+    topics = proc({'foo': {'count': 7, 'assignments': [[1, 2, 3]]}})
+    assert topics[0].count == 7
+    assert [a.broker_ids for a in topics[0].assignments] == [[1, 2, 3]]
+
+    topics = proc({'foo': NewPartitions(7, [[1, 2, 3]])})
+    assert topics[0].count == 7
+    assert [a.broker_ids for a in topics[0].assignments] == [[1, 2, 3]]
+
+
 def test_new_topic():
     good_topic = NewTopic('foo')
     assert good_topic.name == 'foo'

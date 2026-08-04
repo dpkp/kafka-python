@@ -12,7 +12,7 @@ import uuid
 
 import kafka.errors as Errors
 from kafka.errors import IncompatibleBrokerVersion
-from kafka.protocol.admin import CreateTopicsRequest, DeleteTopicsRequest, CreatePartitionsRequest
+from kafka.protocol.admin import CreateTopicsRequest, DeleteTopicsRequest
 from ._configs import ConfigResourceType
 
 if TYPE_CHECKING:
