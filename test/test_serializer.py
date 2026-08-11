@@ -8,7 +8,7 @@ from kafka.serializer import DefaultSerializer, JsonSerializer
 @pytest.mark.parametrize('encoding', ['utf-8', 'utf-16'])
 def test_default_serializer_roundtrip(encoding):
     ser = DefaultSerializer(encoding)
-    data = 'héllo wörld'
+    data = 'h\u00e9llo w\u00f6rld'
     encoded = ser.serialize('topic', [], data)
     assert isinstance(encoded, bytes)
     assert ser.deserialize('topic', [], encoded) == data
