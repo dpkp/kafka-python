@@ -1,3 +1,8 @@
+# 3.0.11 (Aug 16, 2026)
+
+### Fixes
+* Fix JsonSerializer returning None and raising TypeError on deserialize (#3150)
+
 # 3.0.10 (Aug 4, 2026)
 
 ### Fixes
