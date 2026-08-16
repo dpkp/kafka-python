@@ -1,9 +1,9 @@
 import json
 
-from .abstract import Serializer, Deserializer
+from .default import DefaultSerializer
 
 
-class JsonSerializer(Serializer, Deserializer):
+class JsonSerializer(DefaultSerializer):
     def serialize(self, topic, headers, data):
         if data is None:
             return None
