@@ -63,7 +63,7 @@ class WakeupNotifier:
         finally:
             self._fut = None
             if timer is not None:
-                self._net.cancel(timer)
+                timer.cancel()
 
     def notify(self):
         # Coalesce: if a _wakeup is already scheduled and not yet consumed,
