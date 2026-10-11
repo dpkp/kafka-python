@@ -238,8 +238,12 @@ def test_create_produce_requests_uses_configured_acks(client, accumulator, mocke
     assert requests[0].acks == -1
 
 
-def test_complete_batch_success(sender):
+@pytest.mark.parametrize('guarantee_message_order', [False, True])
+def test_complete_batch_success(sender, accumulator, guarantee_message_order):
+    sender.config['guarantee_message_order'] = guarantee_message_order
     batch = producer_batch()
+    if guarantee_message_order:
+        accumulator.muted.add(batch.topic_partition)
     assert not batch.produce_future.is_done
 
     # No error, base_offset 0
@@ -248,6 +252,47 @@ def test_complete_batch_success(sender):
     assert batch.produce_future.is_done
     assert batch.produce_future.succeeded()
     assert batch.produce_future.value == (0, 123, None)
+    assert not accumulator.muted
+
+
+@pytest.mark.parametrize('guarantee_message_order', [False, True])
+def test_expire_undrained_batches(client, mocker, guarantee_message_order):
+    accumulator = RecordAccumulator(delivery_timeout_ms=100, request_timeout_ms=50)
+    sender = Sender(client, client.cluster, accumulator,
+                    guarantee_message_order=guarantee_message_order)
+    futures = [accumulator.append(TopicPartition('foo', partition), 0, None, b'value', [], now=10)[0]
+               for partition in (0, 1)]
+    assert not accumulator.muted
+
+    mocker.patch('kafka.producer.sender.time.monotonic', return_value=11)
+    sender._send_producer_data(now=11)
+
+    for future in futures:
+        assert future.failed()
+        assert isinstance(future.exception, Errors.KafkaTimeoutError)
+    assert not accumulator.has_incomplete
+    accumulator.begin_flush()
+    accumulator.await_flush_completion(timeout=0)
+    assert not accumulator.flush_in_progress()
+
+
+@pytest.mark.parametrize('error', [None, Errors.NotEnoughReplicasError])
+def test_complete_expired_batch_response(sender, accumulator, error):
+    sender.config['guarantee_message_order'] = True
+    batch = producer_batch()
+    batch.created -= accumulator.delivery_timeout_ms / 1000 + 1
+    future = batch._record_futures[0]
+    accumulator.muted.add(batch.topic_partition)
+    sender._complete_batch_with_exception(batch, Errors.KafkaTimeoutError('expired'))
+    assert batch.topic_partition not in accumulator.muted
+    assert future.failed()
+    assert isinstance(future.exception, Errors.KafkaTimeoutError)
+
+    sender._complete_batch(batch, _partition_response(error_cls=error, base_offset=42))
+
+    assert future.failed()
+    assert isinstance(future.exception, Errors.KafkaTimeoutError)
+    assert not accumulator.muted
 
 
 def test_complete_batch_transaction(sender, transaction_manager):
