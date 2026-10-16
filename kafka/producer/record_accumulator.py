@@ -461,17 +461,22 @@ class RecordAccumulator(object):
         # This is a tight loop but should be able to get through very quickly.
         error = Errors.IllegalStateError("Producer is closed forcefully.")
         while True:
-            self._abort_batches(error)
+            self.abort_batches(error)
             if not self._appends_in_progress.get():
                 break
         # After this point, no thread will append any messages because they will see the close
         # flag set. We need to do the last abort after no thread was appending in case the there was a new
         # batch appended by the last appending thread.
-        self._abort_batches(error)
+        self.abort_batches(error)
         self._batches.clear()
 
-    def _abort_batches(self, error):
-        """Go through incomplete batches and abort them."""
+    def abort_batches(self, error):
+        """Abort incomplete batches, including in-flight ones.
+
+        Used for fatal-error / force-close paths so pending futures
+        resolve instead of hanging. (Public name required by Sender;
+        see issue #3161.)
+        """
         for batch in self._incomplete.all():
             tp = batch.topic_partition
             # Close the batch before aborting
