@@ -925,6 +925,25 @@ class TestSplitAndReenqueue:
         assert result_holder[0] is not None
         assert result_holder[0].offset == 42
 
+    def test_get_times_out_when_rebind_wakes_at_deadline(self, mocker):
+        from kafka.producer.future import FutureProduceResult
+
+        tp = TopicPartition('foo', 0)
+        old_pf = FutureProduceResult(tp)
+        new_pf = FutureProduceResult(tp)
+        future = FutureRecordMetadata(old_pf, 0, 1000, None, 3, 5, -1)
+        clock = mocker.patch('kafka.util.time.monotonic', return_value=100.0)
+
+        def rebind_at_deadline(timeout):
+            future.rebind(new_pf, 0)
+            clock.return_value += timeout
+            return True
+
+        mocker.patch.object(FutureProduceResult, 'wait', side_effect=rebind_at_deadline)
+        with pytest.raises(Errors.KafkaTimeoutError):
+            future.get(timeout=1)
+        assert not future.is_done
+
     def test_get_rewait_after_multiple_rebinds(self):
         """get() survives multiple rebinds (batch split more than once)."""
         import threading
@@ -1583,5 +1602,39 @@ class TestProducerAcks:
             # "no errors, but did it actually send?").
             assert received.wait(timeout=5)
             assert captured.get('acks') == 0
+        finally:
+            producer.close(timeout=2)
+
+    @pytest.mark.parametrize("timeout", [0, 0.01])
+    @pytest.mark.parametrize("error_code", [0, Errors.TopicAuthorizationFailedError.errno])
+    def test_pending_send_get_times_out_without_completing(self, timeout, error_code):
+        broker = MockBroker(broker_version=self._API_VERSION)
+        broker.set_metadata(topics=[self._metadata_topic()])
+        broker.respond(ProduceRequest, self._produce_response(
+            self._API_VERSION, error_code=error_code))
+
+        producer = KafkaProducer(
+            kafka_client=broker.client_factory(),
+            bootstrap_servers=['%s:%d' % (broker.host, broker.port)],
+            api_version=self._API_VERSION,
+            enable_idempotence=False,
+            acks=1,
+            linger_ms=60000,
+            request_timeout_ms=5000,
+        )
+        try:
+            future = producer.send(self._TOPIC, value=b'payload', partition=0)
+            with pytest.raises(Errors.KafkaTimeoutError):
+                future.get(timeout=timeout)
+            assert not future.is_done
+
+            # A get timeout must leave the send pending. Flush the lingered
+            # batch, then observe its actual delivery result, even at zero timeout.
+            producer.flush(timeout=5)
+            if error_code:
+                with pytest.raises(Errors.TopicAuthorizationFailedError):
+                    future.get(timeout=0)
+            else:
+                assert future.get(timeout=0).offset == self._BASE_OFFSET
         finally:
             producer.close(timeout=2)
