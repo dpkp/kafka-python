@@ -1,14 +1,5 @@
 import struct
 
-# needed for SASL_GSSAPI authentication:
-try:
-    import gssapi
-    from gssapi.raw.misc import GSSError
-except (ImportError, OSError):
-    #no gssapi available, will disable gssapi mechanism
-    gssapi = None
-    GSSError = None
-
 from .abc import SaslMechanism
 
 
@@ -21,7 +12,9 @@ class SaslMechanismGSSAPI(SaslMechanism):
     SASL_QOP_AUTH_CONF = 4
 
     def __init__(self, **config):
-        if gssapi is None:
+        try:
+            import gssapi
+        except (ImportError, OSError):
             raise RuntimeError('GSSAPI lib not found!')
         if 'sasl_kerberos_name' not in config and 'sasl_kerberos_service_name' not in config:
             raise ValueError('sasl_kerberos_service_name or sasl_kerberos_name required for GSSAPI sasl configuration')
