@@ -305,7 +305,7 @@ class TestKafkaTCPTransport:
     def test_ssl_wrapper_transport(self, net, socketpair):
         rsock, wsock = socketpair
         t = KafkaTCPTransport(net, wsock)
-        ssl_wrapper = KafkaSSLTransport(net, KafkaSSLTransport.build_ssl_context({}))
+        ssl_wrapper = KafkaSSLTransport(net, KafkaSSLTransport.build_ssl_context({}), host='localhost')
         ssl_wrapper.connection_made(t)
         assert isinstance(ssl_wrapper, NetTransport)
         assert isinstance(ssl_wrapper, NetProtocol)
