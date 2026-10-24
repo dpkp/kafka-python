@@ -1,18 +1,15 @@
 import datetime
 import json
-import sys
 from unittest import mock
 
 from kafka.net.sasl.msk import AwsMskIamClient, SaslMechanismAwsMskIam
 
 
 def client_factory(token=None):
-    if sys.version_info >= (3, 3):
-        now = datetime.datetime.fromtimestamp(1629321911, datetime.timezone.utc)
-    else:
-        now = datetime.datetime.utcfromtimestamp(1629321911)
+    now = datetime.datetime.fromtimestamp(1629321911, datetime.timezone.utc)
     with mock.patch('kafka.net.sasl.msk.datetime') as mock_dt:
-        mock_dt.datetime.utcnow = mock.Mock(return_value=now)
+        mock_dt.timezone.utc = datetime.timezone.utc
+        mock_dt.datetime.now = mock.Mock(return_value=now)
         return AwsMskIamClient(
             host='localhost',
             access_key='XXXXXXXXXXXXXXXXXXXX',
