@@ -457,7 +457,7 @@ class Sender(threading.Thread):
                 self._transaction_manager.update_last_acked_offset(
                     batch.topic_partition, base_offset, batch.record_count)
             if self.config['guarantee_message_order']:
-                self._accumulator.muted.remove(batch.topic_partition)
+                self._accumulator.muted.discard(batch.topic_partition)
             return
 
         # Error path: construct the exception with context-specific wrappers
@@ -585,7 +585,7 @@ class Sender(threading.Thread):
         if issubclass(error_cls, Errors.InvalidMetadataError):
             self._metadata.request_update()
         if self.config['guarantee_message_order']:
-            self._accumulator.muted.remove(batch.topic_partition)
+            self._accumulator.muted.discard(batch.topic_partition)
 
     def _record_retries(self, batch):
         if self._sensors:
