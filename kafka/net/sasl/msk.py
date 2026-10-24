@@ -92,7 +92,7 @@ class AwsMskIamClient:
         self.service = 'kafka-cluster'
         self.action = '{}:Connect'.format(self.service)
 
-        now = datetime.datetime.utcnow()
+        now = datetime.datetime.now(datetime.timezone.utc)
         self.datestamp = now.strftime('%Y%m%d')
         self.timestamp = now.strftime('%Y%m%dT%H%M%SZ')
 
