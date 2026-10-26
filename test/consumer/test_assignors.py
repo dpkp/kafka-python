@@ -9,7 +9,7 @@ from kafka.structs import TopicPartition
 from kafka.coordinator.assignors.abstract import ConsumerProtocolAssignment
 from kafka.coordinator.assignors.range import RangePartitionAssignor
 from kafka.coordinator.assignors.roundrobin import RoundRobinPartitionAssignor
-from kafka.coordinator.assignors.sticky.sticky_assignor import StickyPartitionAssignor
+from kafka.coordinator.assignors.sticky.sticky_assignor import StickyAssignmentExecutor, StickyPartitionAssignor
 from kafka.protocol.consumer import JoinGroupResponse
 
 
@@ -799,6 +799,51 @@ def test_assignment_with_conflicting_previous_generations(mocker, sticky_assigno
 
     assignment = sticky_assignor.assign(cluster, make_join_group_response_members(member_metadata))
     verify_validity_and_balance({'C1': {'t'}, 'C2': {'t'}, 'C3': {'t'}}, assignment)
+    assert sticky_assignor._latest_partition_movements.are_sticky()
+
+
+def test_reassignment_with_mixed_subscriptions_terminates(mocker, sticky_assignor):
+    partitions = {'t5': 1, 't8': 12, 't10': 6, 't11': 11, 't12': 24, 't15': 1, 't17': 4}
+    cluster = create_cluster(mocker, topics=set(partitions), topic_partitions_lambda=lambda t: set(range(partitions[t])))
+
+    subscriptions = {
+        'C2': {'t11'},
+        'C5': {'t15', 't10'},
+        'C8': {'t11', 't10', 't8'},
+        'C10': {'t10', 't17'},
+    }
+    for i in range(4):
+        subscriptions['C11-{}'.format(i)] = {'t5', 't12', 't11'}
+        subscriptions['C12-{}'.format(i)] = {'t5', 't8', 't10'}
+    member_assignments = {
+        'C5': [('t10', 0), ('t10', 1)],
+        'C10': [('t10', 4)],
+        'C11-0': [('t11', 4), ('t11', 8)],
+        'C11-1': [('t11', 5), ('t11', 9)],
+        'C11-2': [('t11', 6), ('t11', 10)],
+        'C11-3': [('t11', 3), ('t11', 7)],
+        'C12-0': [('t10', 5), ('t8', 0), ('t8', 4), ('t8', 8)],
+        'C12-1': [('t8', 1), ('t8', 5), ('t8', 9)],
+        'C12-2': [('t10', 2), ('t8', 2), ('t8', 6), ('t8', 10)],
+        'C12-3': [('t10', 3), ('t8', 3), ('t8', 7), ('t8', 11)],
+    }
+    member_metadata = {}
+    for member, topics in subscriptions.items():
+        owned = [TopicPartition(t, p) for t, p in member_assignments.get(member, [])]
+        member_metadata[member] = sticky_assignor._metadata(topics, owned)
+
+    # this input used to loop forever in _perform_reassignments; fail fast instead of hanging
+    move_partition = StickyAssignmentExecutor._move_partition
+    moves = []
+
+    def capped_move_partition(self, partition, new_consumer):
+        moves.append(partition)
+        assert len(moves) < 1000, 'Too many partition movements; reassignment is not converging'
+        move_partition(self, partition, new_consumer)
+    mocker.patch.object(StickyAssignmentExecutor, '_move_partition', capped_move_partition)
+
+    assignment = sticky_assignor.assign(cluster, make_join_group_response_members(member_metadata))
+    verify_validity_and_balance(subscriptions, assignment)
     assert sticky_assignor._latest_partition_movements.are_sticky()
 
 
