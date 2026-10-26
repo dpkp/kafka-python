@@ -11,7 +11,6 @@ def test_list_offsets_request_roundtrip(version):
     Topic = ListOffsetsRequest.ListOffsetsTopic
     Partition = Topic.ListOffsetsPartition
     request = ListOffsetsRequest(
-        replica_id=-1,
         isolation_level=1 if version >= 2 else 0,
         topics=[
             Topic(

@@ -490,7 +490,6 @@ class PartitionAdminMixin:
             topic2partitions[tp.topic].append(
                 _Partition(partition_index=tp.partition, timestamp=ts))
         return ListOffsetsRequest(
-            replica_id=-1,
             isolation_level=isolation_level_int,
             topics=[_Topic(name=name, partitions=parts)
                     for name, parts in topic2partitions.items()],

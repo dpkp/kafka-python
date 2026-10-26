@@ -42,6 +42,11 @@ class OffsetTimestamp(int):
 
 class ListOffsetsRequest(ApiMessage):
     @classmethod
+    def json_patch(cls, json):
+        json['fields'][0]['default'] = -1
+        return json
+
+    @classmethod
     def min_version_for_timestamp(cls, ts):
         ts = OffsetSpec(ts)
         if ts == OffsetSpec.MAX_TIMESTAMP:
