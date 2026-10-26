@@ -340,7 +340,7 @@ class Sender(threading.Thread):
     def _maybe_abort_batches(self, exc):
         if self._accumulator.has_incomplete:
             log.error("%s: Aborting producer batches due to fatal error: %s", str(self), exc)
-            self._accumulator.abort_batches(exc)
+            self._accumulator._abort_batches(exc)
 
     def initiate_close(self):
         """Start closing the sender (won't complete until all data is sent)."""

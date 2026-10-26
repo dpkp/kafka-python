@@ -270,3 +270,10 @@ def test__record_exceptions_fn(sender):
 
     record_exceptions_fn = sender._record_exceptions_fn(Errors.KafkaError('top-level'), [(0, 'err-0')], 'message')
     assert record_exceptions_fn(0) == Errors.KafkaError('err-0')
+
+
+def test_maybe_abort_batches(sender, accumulator):
+    now = time.time()
+    tp = TopicPartition('foo', 0)
+    accumulator.append(tp, 0, b'key', b'value', [], now=now)
+    sender._maybe_abort_batches(Exception('foo'))
