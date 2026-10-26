@@ -100,8 +100,8 @@ class FutureRecordMetadata(Future):
         # multiple times, so each rebind wakes us and we re-wait on the
         # (possibly new) _produce_future.
         timer = Timer(timeout * 1000 if timeout is not None else None)
-        while not self.is_done and not timer.expired:
-            if not self._produce_future.wait(timer.timeout_secs):
+        while not self.is_done:
+            if timer.expired or not self._produce_future.wait(timer.timeout_secs):
                 raise Errors.KafkaTimeoutError(
                     "Timeout after waiting for %s secs." % (timeout,))
         if self.failed():
