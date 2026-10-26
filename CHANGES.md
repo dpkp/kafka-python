@@ -1,3 +1,13 @@
+# 3.0.12 (Oct 26, 2026)
+
+### Fixes
+* Fix StickyPartitionAssignor infinite loop with mixed subscriptions (#3164)
+* ListOffsetsRequest default `replica_id=-1` (#3174)
+* Fix pending producer future get timeout fallthrough (#3169)
+* Fix producer flush hangs when undrained batches expire (#3165)
+* Import botocore and gssapi lazily in SASL mechanisms (#3171)
+* Replace deprecated datetime.utcnow() in AWS MSK IAM client (#3156)
+
 # 3.0.11 (Aug 16, 2026)
 
 ### Fixes
