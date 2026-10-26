@@ -1,3 +1,8 @@
+# 2.2.21 (Oct 26, 2026)
+
+Fixes
+* Fix producer sender._maybe_abort_batches AttributeError
+
 # 2.2.20 (Jun 3, 2026)
 
 Fixes
