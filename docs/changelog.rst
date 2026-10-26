@@ -1,6 +1,14 @@
 Changelog
 =========
 
+2.3.3 (Oct 26, 2026)
+####################
+
+Fixes
+-----
+* Fix producer sender._maybe_abort_batches AttributeError
+
+
 2.3.2 (Jun 3, 2026)
 ###################
 
