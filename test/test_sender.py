@@ -253,3 +253,10 @@ def test__send_producer_data_expiry_time_reset(sender, accumulator, mocker):
     now += accumulator.config['delivery_timeout_ms']
     poll_timeout_ms = sender._send_producer_data(now=now)
     assert poll_timeout_ms > 0
+
+
+def test_maybe_abort_batches(sender, accumulator):
+    now = time.time()
+    tp = TopicPartition('foo', 0)
+    accumulator.append(tp, 0, b'key', b'value', [], now=now)
+    sender._maybe_abort_batches(Exception('foo'))
