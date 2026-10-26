@@ -1,6 +1,9 @@
 import datetime
 import json
+import sys
 from unittest import mock
+
+import pytest
 
 from kafka.net.sasl.msk import AwsMskIamClient, SaslMechanismAwsMskIam
 
@@ -65,7 +68,7 @@ def test_aws_msk_iam_client_temporary_credentials():
 
 
 def test_aws_msk_iam_sasl_mechanism():
-    with mock.patch('kafka.net.sasl.msk.BotoSession'):
+    with mock.patch.dict(sys.modules, {'botocore': mock.MagicMock(), 'botocore.session': mock.MagicMock()}):
         sasl = SaslMechanismAwsMskIam(security_protocol='SASL_SSL', host='localhost')
         with mock.patch.object(sasl, '_build_client', return_value=client_factory(token=None)):
             assert sasl.auth_bytes() != b''
@@ -76,3 +79,9 @@ def test_aws_msk_iam_sasl_mechanism():
             assert sasl.is_done()
             assert sasl.is_authenticated()
             assert sasl.auth_details()
+
+
+def test_aws_msk_iam_botocore_unavailable():
+    with mock.patch.dict(sys.modules, {'botocore': None, 'botocore.session': None}):
+        with pytest.raises(RuntimeError, match='AWS_MSK_IAM requires the "botocore" package'):
+            SaslMechanismAwsMskIam(security_protocol='SASL_SSL', host='localhost')
