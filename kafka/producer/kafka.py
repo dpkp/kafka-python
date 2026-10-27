@@ -960,6 +960,12 @@ class KafkaProducer:
         if type(value_bytes) not in (bytes, bytearray, memoryview, type(None)):
             raise TypeError("Unsupported type for serialized value: %s" % type(value_bytes))
 
+        # Partitioners and record lengths operate on bytes, not buffer elements.
+        if isinstance(key_bytes, memoryview):
+            key_bytes = key_bytes.cast('B') if key_bytes.c_contiguous else key_bytes.tobytes()
+        if isinstance(value_bytes, memoryview):
+            value_bytes = value_bytes.cast('B') if value_bytes.c_contiguous else value_bytes.tobytes()
+
         if self._metadata.partitions_for_topic(topic) is None:
             try:
                 self._wait_on_metadata(topic, self.config['max_block_ms'])
