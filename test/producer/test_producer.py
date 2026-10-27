@@ -1,14 +1,17 @@
 import gc
 import platform
 import threading
+from array import array
+from ctypes import c_uint32
 from unittest.mock import MagicMock
 
 import pytest
 
 from kafka import KafkaProducer
-from kafka.errors import KafkaConfigurationError
-from kafka.partitioner import Partitioner, StickyPartitioner
+from kafka.errors import KafkaConfigurationError, MessageSizeTooLargeError
+from kafka.partitioner import DefaultPartitioner, Partitioner, StickyPartitioner
 from kafka.producer.transaction_manager import TransactionManager, ProducerIdAndEpoch
+from kafka.record.memory_records import MemoryRecordsBuilder
 
 from test.mock_broker import MockBroker
 
@@ -132,6 +135,74 @@ def _success_result():
                 FutureProduceResult(TopicPartition('t', 0)),
                 0, 0, 0, 0, 0, 0),
             False, True, False)
+
+
+@pytest.mark.parametrize('magic,api_version', [(0, (0, 9)), (1, (0, 10)), (2, (0, 11))])
+@pytest.mark.parametrize('field', ['key', 'value'])
+@pytest.mark.parametrize('data_factory', [
+    pytest.param(lambda: memoryview(array('H', [0x1234, 0x5678])), id='typed'),
+    pytest.param(lambda: memoryview(bytearray(b'abcd')).cast('B', [2, 2]), id='multidimensional'),
+    pytest.param(lambda: memoryview(c_uint32(0x12345678)), id='scalar'),
+    pytest.param(lambda: memoryview(b'abcdef')[::2], id='strided-bytes'),
+    pytest.param(lambda: memoryview(array('H', [1, 2, 3]))[::2], id='strided-typed'),
+    pytest.param(lambda: memoryview(b'abcdef')[::-1], id='reversed'),
+    pytest.param(lambda: memoryview(b'abcdef')[1:4], id='offset-byte-view'),
+    pytest.param(lambda: memoryview(array('H')), id='empty-typed'),
+    pytest.param(lambda: memoryview(b'bytes'), id='byte-view'),
+    pytest.param(lambda: b'bytes', id='bytes'),
+    pytest.param(lambda: bytearray(b'bytes'), id='bytearray'),
+    pytest.param(lambda: None, id='none'),
+])
+def test_send_buffer_payload_matches_its_bytes(data_factory, field, magic, api_version):
+    """Accepted views must reach partitioning and record encoding as bytes."""
+    original = data_factory()
+    data = {'key': b'key', 'value': b'value'}
+    data[field] = original
+    expected = {name: bytes(value) if value is not None else None for name, value in data.items()}
+    partitioner = DefaultPartitioner()
+    with _producer_for_send_test(partitioner) as producer:
+        producer.config['api_version'] = api_version
+        producer._accumulator.append.return_value = _success_result()
+        producer.send('t', timestamp_ms=1000, **data)
+        tp, timestamp, key, value, headers = producer._accumulator.append.call_args.args
+
+        # Exercise actual wire encoding/decoding after the public send path.
+        # The broker and accumulator are test doubles; this isn't a broker test.
+        builder = MemoryRecordsBuilder(magic, compression_type=0, batch_size=10000)
+        builder.append(timestamp, key, value, headers)
+        builder.close()
+        batch = builder.records().next_batch()
+        assert batch.validate_crc()
+        record, = list(batch)
+        assert record.key == expected['key']
+        assert record.value == expected['value']
+        assert producer._estimate_size_in_bytes(key, value) == producer._estimate_size_in_bytes(
+            expected['key'], expected['value'])
+        if expected['key'] is not None:
+            assert tp.partition == partitioner.partition(
+                't', data['key'], expected['key'], data['value'], expected['value'], producer._metadata)
+
+        serialized = key if field == 'key' else value
+        if isinstance(original, memoryview):
+            assert bytes(serialized) == bytes(original)
+            if original.c_contiguous:
+                assert isinstance(serialized, memoryview)
+                assert serialized.obj is original.obj
+        else:
+            assert serialized is original
+
+
+@pytest.mark.parametrize('api_version', [(0, 9), (0, 10), (0, 11)])
+def test_send_memoryview_checks_byte_size_limit(api_version):
+    """Typed views must not bypass the configured serialized record size bound."""
+    value = memoryview(array('H', range(100)))
+    with _producer_for_send_test(DefaultPartitioner()) as producer:
+        producer.config['api_version'] = api_version
+        producer.config['max_request_size'] = producer._estimate_size_in_bytes(b'key', bytes(value)) - 1
+        producer._accumulator.append.return_value = _success_result()
+        with pytest.raises(MessageSizeTooLargeError):
+            producer.send('t', key=b'key', value=value)
+        producer._accumulator.append.assert_not_called()
 
 
 def test_send_null_key_triggers_on_new_batch_via_abort_retry():
