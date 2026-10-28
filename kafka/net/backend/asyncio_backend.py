@@ -267,10 +267,6 @@ class AsyncioBackend(NetBackend):
             lambda: box._arm(self._loop.call_later(delay, cb)))
         return box
 
-    def cancel(self, task):
-        if task is not None:
-            task.cancel()
-
     def sleep(self, delay):
         return asyncio.sleep(delay)
 

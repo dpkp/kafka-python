@@ -214,7 +214,7 @@ class KafkaTCPTransport:
             sock.close()
         for task in (self._read_task, self._write_task):
             if task is not None:
-                self._net.cancel(task)
+                task.cancel()
         self._read_task = self._write_task = None
         proto = self._protocol
         self._protocol = None
