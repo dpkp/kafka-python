@@ -85,8 +85,9 @@ class TransactionState(IntEnum):
                               cls.COMMITTING_TRANSACTION, cls.ABORTING_TRANSACTION,
                               cls.ABORTABLE_ERROR)
         elif target == cls.UNINITIALIZED:
-            # Disallow transitions to UNITIALIZED
-            return False
+            # Allow resetting an idempotent producer from READY back to UNINITIALIZED
+            # so init_producer_id() can request a fresh producer_id.
+            return source in (cls.UNINITIALIZED, cls.READY)
         elif target == cls.FATAL_ERROR:
             # We can transition to FATAL_ERROR unconditionally.
             # FATAL_ERROR is never a valid starting state for any transition. So the only option is to close the
@@ -481,6 +482,7 @@ class TransactionManager:
                     "Cannot reset producer state for a transactional producer."
                     " You must either abort the ongoing transaction or"
                     " reinitialize the transactional producer instead")
+            self._transition_to(TransactionState.UNINITIALIZED)
             self.set_producer_id_and_epoch(ProducerIdAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH))
             self._sequence_numbers.clear()
             self._last_acked_offset.clear()
