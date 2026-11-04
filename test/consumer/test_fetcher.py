@@ -955,6 +955,77 @@ def test_fetchable_partitions_excludes_parked_pause_data(fetcher, topic, mocker)
     assert tp not in fetcher._fetchable_partitions()
 
 
+def test_fetched_records_restores_parked_records_after_revoked_batch_drained(fetcher, assignment):
+    """Parked records must be restored even when the in-line slot holds a
+    drained batch. Here a rebalance revokes a partition whose records are
+    parked; its parked batch is restored (an unassigned partition is not
+    paused), drained as no longer assigned, and left in the slot. If that
+    blocks the restore of the other parked batches, their partitions are
+    neither fetched (parked data excludes them) nor returned: the consumer
+    stops consuming while remaining a group member."""
+    fetcher.config['check_crcs'] = False
+    tp0, tp1, tp2 = assignment
+
+    # One record of tp0 is handled with everything paused meanwhile; the
+    # remainder of tp0's batch is parked as parsed records.
+    fetcher._completed_fetches.append(_build_completed_fetch(tp0, _paused_msgs(5)))
+    records, _ = fetcher.fetched_records(max_records=1)
+    assert len(records[tp0]) == 1
+    for tp in assignment:
+        fetcher._subscriptions.pause(tp)
+    assert fetcher.fetched_records() == ({}, False)
+    assert tp0 in fetcher._paused_partition_records
+
+    # Same for one record of tp2.
+    fetcher._subscriptions.resume(tp2)
+    fetcher._completed_fetches.append(_build_completed_fetch(tp2, _paused_msgs(3)))
+    records, _ = fetcher.fetched_records(max_records=1)
+    assert len(records[tp2]) == 1
+    fetcher._subscriptions.pause(tp2)
+    assert fetcher.fetched_records() == ({}, False)
+    assert set(fetcher._paused_partition_records) == {tp0, tp2}
+    assert fetcher._next_partition_records is None
+
+    # A rebalance revokes tp2 while everything is still paused.
+    fetcher._subscriptions.assign_from_subscribed([tp0, tp1])
+    assert fetcher.fetched_records() == ({}, False)
+    assert tp2 not in fetcher._paused_partition_records
+
+    fetcher._subscriptions.resume(tp0)
+    fetcher._subscriptions.resume(tp1)
+    records, _ = fetcher.fetched_records()
+    assert len(records[tp0]) == 4
+    assert not fetcher._paused_partition_records
+    assert set(fetcher._fetchable_partitions()) == {tp0, tp1}
+
+
+def test_fetched_records_restores_parked_records_once_in_line_batch_drains(fetcher, assignment):
+    """Once the in-line batch of another partition is drained, the parked
+    records of a resumed partition are restored on the next call."""
+    fetcher.config['check_crcs'] = False
+    tp0, tp1, _ = assignment
+
+    fetcher._completed_fetches.append(_build_completed_fetch(tp0, _paused_msgs(5)))
+    fetcher.fetched_records(max_records=1)
+    fetcher._subscriptions.pause(tp0)
+    fetcher.fetched_records()  # parks tp0's remaining 4 records
+    assert tp0 in fetcher._paused_partition_records
+
+    fetcher._completed_fetches.append(_build_completed_fetch(tp1, _paused_msgs(3)))
+    records, _ = fetcher.fetched_records(max_records=1)
+    assert len(records[tp1]) == 1
+    assert fetcher._next_partition_records.topic_partition == tp1
+
+    fetcher._subscriptions.resume(tp0)
+    records, _ = fetcher.fetched_records()
+    assert len(records[tp1]) == 2
+    assert not fetcher._next_partition_records
+
+    records, _ = fetcher.fetched_records()
+    assert len(records[tp0]) == 4
+    assert tp0 not in fetcher._paused_partition_records
+
+
 def test_close_drains_parked_paused_records(fetcher, topic):
     """close() must release any parked records so the test fixture doesn't
     leak memory and the metric aggregators see their per-tp record."""

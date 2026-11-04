@@ -581,12 +581,12 @@ class Fetcher:
 
         # KAFKA-7548: restore parked data for any partition that the user
         # has since resumed. Raw completions go back into the fetch queue;
-        # parsed records take the in-line slot when free, otherwise stay
-        # parked and get picked up on a subsequent call.
+        # parsed records take the in-line slot when free (None or drained),
+        # otherwise stay parked and get picked up on a subsequent call.
         for tp in list(self._paused_completed_fetches):
             if not self._subscriptions.is_paused(tp):
                 self._completed_fetches.append(self._paused_completed_fetches.pop(tp))
-        if self._next_partition_records is None:
+        if not self._next_partition_records:
             for tp in list(self._paused_partition_records):
                 if not self._subscriptions.is_paused(tp):
                     self._next_partition_records = self._paused_partition_records.pop(tp)
