@@ -1753,7 +1753,7 @@ class Fetcher:
                 global _LOGGED_DESERIALIZE_WARNING
                 if not _LOGGED_DESERIALIZE_WARNING:
                     warnings.warn('deserializer does not implement deserialize(topic, headers, data)', category=DeprecationWarning)
-                    LOGGED_DESERIALIZE_WARNING = True
+                    _LOGGED_DESERIALIZE_WARNING = True
                 return deserializer.deserialize(topic, data)
 
         def _consume_aborted_transactions_up_to(self, offset):

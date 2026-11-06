@@ -7,7 +7,9 @@ from collections import OrderedDict
 import itertools
 import time
 from unittest.mock import MagicMock
+import warnings
 
+import kafka.consumer.fetcher as fetcher_module
 from kafka.consumer.fetcher import (
     CompletedFetch, ConsumerRecord, Fetcher
 )
@@ -26,6 +28,7 @@ from kafka.errors import (
 )
 from kafka.future import Future
 from kafka.record.memory_records import MemoryRecordsBuilder, MemoryRecords
+from kafka.serializer import Deserializer
 from kafka.structs import OffsetAndMetadata, OffsetAndTimestamp, TopicPartition
 
 
@@ -2011,3 +2014,29 @@ class TestKip392PreferredReadReplica:
             fetcher._manager.cluster, 'is_replica_node', return_value=None)
         assert fetcher._select_read_replica(tp) == 7
         assert fetcher._subscriptions.assignment[tp].preferred_read_replica() is None
+
+
+def test_legacy_deserializer_deprecation_warning_emitted_once(fetcher, topic, monkeypatch):
+    class LegacyDeserializer(Deserializer):
+        def deserialize(self, topic, data):  # pylint: disable=arguments-differ
+            return '%s:%s' % (topic, data.decode('utf-8'))
+
+    monkeypatch.setattr(fetcher_module, '_LOGGED_DESERIALIZE_WARNING', False)
+    fetcher.config['value_deserializer'] = LegacyDeserializer()
+    tp = TopicPartition(topic, 0)
+    msgs = [(None, b'a', None), (None, b'b', None), (None, b'c', None)]
+    fetcher._completed_fetches.append(_build_completed_fetch(tp, msgs))
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always', DeprecationWarning)
+        records, _ = fetcher.fetched_records()
+
+    assert [r.value for r in records[tp]] == [
+        '%s:a' % (topic,),
+        '%s:b' % (topic,),
+        '%s:c' % (topic,),
+    ]
+    dep_warnings = [w for w in caught if issubclass(w.category, DeprecationWarning)]
+    assert len(dep_warnings) == 1
+    assert 'deserializer does not implement deserialize(topic, headers, data)' in str(dep_warnings[0].message)
+    assert fetcher_module._LOGGED_DESERIALIZE_WARNING is True
