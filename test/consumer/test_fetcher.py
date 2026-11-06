@@ -574,6 +574,28 @@ def test_fetch_records_not_idle_when_reset_task_pending(fetcher, mocker):
     assert idle is False
 
 
+def test_fetch_records_detaches_wake_callback_from_pending_futures(fetcher, mocker):
+    """Issue #3183: when fetch_records returns before an in-flight fetch or
+    reset task completes, the temporary _wake callback must be detached so
+    repeated calls do not accumulate closures on pending futures."""
+    pending_fetch = Future()
+    pending_reset = Future()
+    fetcher._fetch_futures.append(pending_fetch)
+    fetcher._reset_task = pending_reset
+    mocker.patch.object(fetcher, 'send_fetches', return_value=None)
+    mocker.patch.object(fetcher._net, 'wait_for', return_value=None)
+
+    for _ in range(25):
+        records, idle = fetcher.fetch_records(timeout_ms=0)
+        assert records == {}
+        assert idle is False
+
+    assert pending_fetch._callbacks == []
+    assert pending_fetch._errbacks == []
+    assert pending_reset._callbacks == []
+    assert pending_reset._errbacks == []
+
+
 def test_clean_done_fetch_futures_removes_out_of_order_done(fetcher, net):
     """Completed fetch futures must be dropped regardless of position, not
     just a contiguous run from the head. With multiple brokers, fetches

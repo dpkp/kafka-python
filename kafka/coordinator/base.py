@@ -441,6 +441,8 @@ class BaseCoordinator(ABC):
             # if we have not joined the group, we don't need to send heartbeats
             if self.state is MemberState.UNJOINED:
                 return float('inf')
+            if self.heartbeat.heartbeat_in_flight:
+                return self.heartbeat.config['heartbeat_interval_ms'] / 1000
             return self.heartbeat.time_to_next_heartbeat()
 
     @property
@@ -1040,6 +1042,8 @@ class BaseCoordinator(ABC):
             else:
                 heartbeat_log.debug('Heartbeat failure: %s', exc)
                 self.heartbeat.fail_heartbeat()
+        finally:
+            self.heartbeat.heartbeat_in_flight = False
 
     def close(self, timeout_ms=None):
         """Close the coordinator, leave the current group,
