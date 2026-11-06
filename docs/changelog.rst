@@ -1,6 +1,15 @@
 Changelog
 =========
 
+3.0.13 (Nov 5, 2026)
+####################
+
+Fixes
+-----
+* fix consumer stall after rebalance with paused partitions (#3180)
+* fix: transition idempotent producer to UNINITIALIZED in `reset_producer_id` (#3182)
+
+
 3.0.12 (Oct 26, 2026)
 #####################
 
