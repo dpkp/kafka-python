@@ -2,13 +2,16 @@ import gc
 import platform
 import threading
 from unittest.mock import MagicMock
+import warnings
 
 import pytest
 
 from kafka import KafkaProducer
 from kafka.errors import KafkaConfigurationError
 from kafka.partitioner import Partitioner, StickyPartitioner
+import kafka.producer.kafka as producer_module
 from kafka.producer.transaction_manager import TransactionManager, ProducerIdAndEpoch
+from kafka.serializer import Serializer
 
 from test.mock_broker import MockBroker
 
@@ -204,3 +207,25 @@ def test_idempotent_producer_reset_producer_id(cluster):
     assert transaction_manager.producer_id_and_epoch == test_producer_id_and_epoch
     transaction_manager.reset_producer_id()
     assert transaction_manager.producer_id_and_epoch == ProducerIdAndEpoch(-1, -1)
+
+
+def test_legacy_serializer_deprecation_warning_emitted_once(monkeypatch):
+    class LegacySerializer(Serializer):
+        def serialize(self, topic, data):  # pylint: disable=arguments-differ
+            return ('%s:%s' % (topic, data)).encode('utf-8')
+
+    monkeypatch.setattr(producer_module, '_LOGGED_SERIALIZE_WARNING', False)
+    producer = KafkaProducer.__new__(KafkaProducer)
+    producer.config = {}
+    serializer = LegacySerializer()
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always', DeprecationWarning)
+        assert producer._serialize(serializer, 't', [('h', b'1')], 'a') == b't:a'
+        assert producer._serialize(serializer, 't', [('h', b'1')], 'b') == b't:b'
+        assert producer._serialize(serializer, 't', [('h', b'1')], 'c') == b't:c'
+
+    dep_warnings = [w for w in caught if issubclass(w.category, DeprecationWarning)]
+    assert len(dep_warnings) == 1
+    assert 'serializer does not implement serialize(topic, headers, data)' in str(dep_warnings[0].message)
+    assert producer_module._LOGGED_SERIALIZE_WARNING is True
