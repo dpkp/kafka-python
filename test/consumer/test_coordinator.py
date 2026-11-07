@@ -1536,6 +1536,24 @@ def test_heartbeat(mocker, net, coordinator):
     net.poll(timeout_ms=50)
 
 
+def test_time_to_next_heartbeat_while_in_flight(coordinator):
+    coordinator.state = MemberState.STABLE
+    coordinator.heartbeat.sent_heartbeat()
+    assert coordinator.heartbeat.heartbeat_in_flight is True
+    # Simulate an unresponsive broker holding the in-flight HeartbeatRequest
+    # past heartbeat_interval_ms.
+    past = time.monotonic() - 60
+    coordinator.heartbeat.last_send = past
+    coordinator.heartbeat.last_reset = past
+    assert coordinator.heartbeat.time_to_next_heartbeat() == 0
+    assert coordinator.time_to_next_heartbeat() == (
+        coordinator.heartbeat.config['heartbeat_interval_ms'] / 1000)
+
+    coordinator.heartbeat.fail_heartbeat()
+    assert coordinator.heartbeat.heartbeat_in_flight is False
+    assert coordinator.time_to_next_heartbeat() == 0
+
+
 def test_lookup_coordinator_failure(mocker, net, manager, coordinator):
     # _send_group_coordinator_request is now an async coroutine scheduled
     # via manager.call_soon, so we drive the event loop to let the mock

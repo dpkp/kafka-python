@@ -34,6 +34,25 @@ class TestFutureCallbacks:
         assert isinstance(f2.exception, ValueError)
 
 
+    def test_remove_cb_eb(self):
+        f = Future()
+        results = []
+        keep_cb = lambda v: results.append(('keep', v))
+        drop_cb = lambda v: results.append(('drop_cb', v))
+        drop_eb = lambda e: results.append(('drop_eb', e))
+        f.add_callback(keep_cb)
+        f._add_cb_eb(drop_cb, drop_eb)
+        f._remove_cb_eb(drop_cb, drop_eb)
+        # Missing callables are ignored without error.
+        f._remove_cb_eb(drop_cb, drop_eb)
+        assert f._callbacks == [keep_cb]
+        assert f._errbacks == []
+        f.success('ok')
+        assert results == [('keep', 'ok')]
+        # Calling after completion is a safe no-op.
+        f._remove_cb_eb(keep_cb, drop_eb)
+
+
 class TestFutureNotAwaitable:
     """The plain Future is a thread-safe handoff primitive, not loop-awaitable.
     __await__ lives on the backend future (e.g. SelectorFuture from
