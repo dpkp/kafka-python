@@ -620,7 +620,7 @@ class KafkaClient(object):
         # we will need to call send_pending_requests()
         # to trigger network I/O
         future = conn.send(request, blocking=False, request_timeout_ms=request_timeout_ms)
-        if not future.is_done:
+        if not future.failed():
             self._sending.add(conn)
 
         # Wakeup signal is useful in case another thread is
