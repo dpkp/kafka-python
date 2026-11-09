@@ -2768,6 +2768,47 @@ def test_leader_rejoins_when_metadata_changes_after_assignment(coordinator):
     assert coordinator.need_rejoin()
 
 
+@pytest.mark.parametrize('pattern_subscription', [False, True])
+@pytest.mark.parametrize('other_topic_known', [False, True])
+def test_leader_rejoin_after_group_subscription_expands(
+        coordinator, pattern_subscription, other_topic_known):
+    """An unchanged group topic layout must not cause a second rebalance.
+
+    Partition metadata discovered after assignment still requires a rejoin.
+    """
+    if pattern_subscription:
+        coordinator._subscription.subscribe(pattern='^leader-topic$')
+    else:
+        coordinator._subscription.subscribe(topics=['leader-topic'])
+    topics = [('leader-topic', 1)]
+    if other_topic_known:
+        topics.append(('other-topic', 1))
+    _apply_group_topic_metadata(coordinator._cluster, topics)
+    assert coordinator._metadata_snapshot == {'leader-topic': {0}}
+
+    members = [
+        _single_member('leader-topic', 'leader')[0],
+        _single_member('other-topic', 'follower')[0],
+    ]
+    assignments = coordinator._perform_assignment('leader', 'range', members)
+    assert set(assignments['leader'].partitions()) == {TopicPartition('leader-topic', 0)}
+    if other_topic_known:
+        assert set(assignments['follower'].partitions()) == {TopicPartition('other-topic', 0)}
+
+    coordinator._joined_subscription = {'leader-topic'}
+    coordinator._generation = Generation(1, 'leader', 'range')
+    coordinator.state = MemberState.STABLE
+    coordinator.rejoin_needed = False
+
+    _apply_group_topic_metadata(
+        coordinator._cluster, [('leader-topic', 1), ('other-topic', 1)])
+    assert coordinator.need_rejoin() is (not other_topic_known)
+
+    _apply_group_topic_metadata(
+        coordinator._cluster, [('leader-topic', 1), ('other-topic', 2)])
+    assert coordinator.need_rejoin()
+
+
 def test_follower_does_not_rejoin_on_metadata_change(coordinator):
     """Only the leader watches metadata for partition changes. A follower
     (assignment_snapshot is None, cleared in _on_join_complete) must not rejoin
@@ -2883,3 +2924,13 @@ def test_metadata_growth_triggers_rejoin_end_to_end(net, metrics):
         coordinator.close(timeout_ms=0)
         client.close()
         manager.close()
+
+
+def _apply_group_topic_metadata(cluster, topics):
+    Broker = MetadataResponse.MetadataResponseBroker
+    response = MetadataResponse(
+        version=8, throttle_time_ms=0,
+        brokers=[Broker(node_id=0, host='localhost', port=9092, rack=None, version=8)],
+        cluster_id='mock-cluster', controller_id=0,
+        topics=[_metadata_topic(name, count) for name, count in topics])
+    cluster.update_metadata(MetadataResponse.decode(response.encode(), version=8))

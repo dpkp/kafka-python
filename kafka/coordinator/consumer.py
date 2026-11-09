@@ -468,6 +468,9 @@ class ConsumerCoordinator(BaseCoordinator):
         # after rebalance completion whether anything has changed
         self._cluster.request_update()
         self._is_leader = True
+        # Group subscriptions may include topics absent from the previous snapshot.
+        self._metadata_snapshot = self._build_metadata_snapshot(
+            self._subscription, self._cluster)
         self._assignment_snapshot = self._metadata_snapshot
 
         log.debug("Performing assignment for group %s using strategy %s"
