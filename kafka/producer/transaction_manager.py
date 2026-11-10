@@ -856,7 +856,9 @@ class TxnRequestHandler(ABC):
             self.fatal_error(RuntimeError("Detected more than one in-flight transactional request."))
         else:
             self.transaction_manager.clear_in_flight_transactional_request_correlation_id()
-            if isinstance(response_or_exc, Errors.KafkaConnectionError):
+            # A request timeout closes the connection with RequestTimedOutError, failing every
+            # request in flight on it. Retry it like any other disconnect (as the Java client does).
+            if isinstance(response_or_exc, (Errors.KafkaConnectionError, Errors.RequestTimedOutError)):
                 log.debug("Disconnected from node. Will retry.")
                 if self.needs_coordinator():
                     self.transaction_manager._lookup_coordinator(self.coordinator_type, self.coordinator_key)
