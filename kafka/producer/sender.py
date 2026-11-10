@@ -227,7 +227,15 @@ class Sender:
         not_ready_timeout_ms = float('inf')
         for node in list(ready_nodes):
             if not self._client.is_ready(node):
-                node_delay_ms = self._manager.connection_delay(node)
+                throttle_delay_ms = self._client.throttle_delay(node)
+                if throttle_delay_ms > 0:
+                    # Connected but throttled by the broker (KIP-219):
+                    # wait until the throttle expires instead of polling
+                    # with a zero timeout.
+                    node_delay_ms = throttle_delay_ms
+                else:
+                    # connection_delay is in seconds
+                    node_delay_ms = self._manager.connection_delay(node) * 1000
                 log.debug('%s: Node %s not ready; delaying produce of accumulated batch (%f ms)', str(self), node, node_delay_ms)
                 self._client.maybe_connect(node, wakeup=False)
                 ready_nodes.remove(node)
