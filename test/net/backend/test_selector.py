@@ -392,7 +392,7 @@ class TestNetworkSelector:
             net.drain()                        # park on I/O
             assert task.state is TaskState.WAIT_IO
             assert net._selector.get_key(rsock) is not None
-            net.cancel(task)
+            task.cancel()
             assert task.state is TaskState.CANCELLED
             with pytest.raises(KeyError):
                 net._selector.get_key(rsock)
@@ -414,7 +414,7 @@ class TestNetworkSelector:
         holder = {}
 
         async def self_cancel():
-            net.cancel(holder['task'])      # cancel self while RUNNING
+            holder['task'].cancel()      # cancel self while RUNNING
             await net.wait_read(rsock)      # short-circuited; must not register
             raise AssertionError('cancelled task must not run past the await')
 
@@ -452,7 +452,7 @@ class TestNetworkSelector:
             # simulate connection teardown: drop the registration, then close
             net.unregister_event(rsock, selectors.EVENT_READ)
             rsock.close()                      # fileno() -> -1
-            net.cancel(task)                   # io_guard unregisters a dead fd
+            task.cancel()                   # io_guard unregisters a dead fd
             assert task.state is TaskState.CANCELLED
         finally:
             wsock.close()
@@ -488,7 +488,7 @@ class TestNetworkSelector:
     def test_running_task_demoted_when_left_running(self):
         # Defensive backstop: a kernel-event handler that returns without
         # parking the task leaves it stranded in RUNNING. _poll_once's finally
-        # must demote it to UNSCHEDULED (with a warning) -- not crash the loop
+        # must demote it to STOPPED (with a warning) -- not crash the loop
         # -- so a later cancel()/close() can reclaim it instead of tripping
         # cancel()'s `task is self._current` assert. Simulate a buggy handler
         # with a no-op method that parks nothing.
@@ -500,10 +500,10 @@ class TestNetworkSelector:
 
         task = net.call_soon(coro)
         net.drain()                                # demotes + warns, no crash
-        assert task.state is TaskState.UNSCHEDULED, task.state
+        assert task.state is TaskState.STOPPED, task.state
         assert net._current is None
         # cancel() must reclaim the demoted task without asserting.
-        net.cancel(task)
+        task.cancel()
         assert task.state is TaskState.CANCELLED
         assert task not in net._pending_tasks
 
@@ -524,7 +524,7 @@ class TestNetworkSelector:
             net.drain()
             assert len(net._scheduled) == 1
             timer = net._scheduled[0][1]
-            net.cancel(task)
+            task.cancel()
             with pytest.raises(KeyError):
                 net._selector.get_key(rsock)
             assert timer.is_done               # paired timer cancelled/closed
@@ -542,15 +542,6 @@ class TestNetworkSelector:
         net._unschedule(t)
         assert len(net._scheduled) == 0
         assert t.scheduled_at is None
-
-    def test_unschedule_unscheduled_raises(self):
-        net = NetworkSelector()
-        def task():
-            yield
-        assert len(net._scheduled) == 0
-        with pytest.raises(AssertionError):
-            net._unschedule(Task(task))
-        assert len(net._scheduled) == 0
 
     def test_reschedule(self):
         net = NetworkSelector()
@@ -735,7 +726,7 @@ class TestNetworkSelector:
         assert timer in net._ready
         assert timer.scheduled_at is None
 
-        net.cancel(timer)
+        timer.cancel()
 
         assert timer in net._ready  # timer still in ready queue
         assert timer.is_done, \

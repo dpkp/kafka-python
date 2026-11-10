@@ -209,7 +209,8 @@ class KafkaConnection:
             if req_correlation_id != resp_correlation_id:
                 return self.close(Errors.KafkaConnectionError('Received unrecognized correlation id'))
 
-            self.net.cancel(timeout_task)
+            if timeout_task is not None:
+                timeout_task.cancel()
             latency_ms = (time.monotonic() - sent_time) * 1000
             if self._sensors:
                 self._sensors.request_time.record(latency_ms)
@@ -251,7 +252,8 @@ class KafkaConnection:
             future.failure(error)
         while self.in_flight_requests:
             _, future, _, _, timeout_task = self.in_flight_requests.popleft()
-            self.net.cancel(timeout_task)
+            if timeout_task is not None:
+                timeout_task.cancel()
             future.failure(error)
 
     def connection_made(self, transport):
@@ -548,7 +550,7 @@ class SaslReauthenticator:
         """Cancel any pending re-auth and fail the drain awaiter if present.
         Called from KafkaConnection.connection_lost."""
         if self._task is not None:
-            self._conn.net.cancel(self._task)
+            self._task.cancel()
             self._task = None
         if self._drain_future is not None and not self._drain_future.is_done:
             self._drain_future.failure(Errors.KafkaConnectionError())

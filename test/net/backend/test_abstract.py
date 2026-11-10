@@ -23,7 +23,7 @@ from kafka.net.backend.transport import KafkaTCPTransport
 CONTRACT_METHODS = (
     'start', 'stop', 'close', 'on_io_thread',
     'call_soon', 'call_soon_with_future',
-    'call_at', 'call_later', 'cancel',
+    'call_at', 'call_later',
     'sleep', 'create_connection',
     'run', 'create_future', 'wakeup',
 )
