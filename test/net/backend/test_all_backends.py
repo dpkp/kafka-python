@@ -93,6 +93,16 @@ def test_await_for_success_and_timeout(all_net):
         all_net.run(never_resolves)
 
 
+def test_await_for_detaches_callbacks_on_timeout(all_net):
+    """Repeated timed-out waits on a long-lived pending future must detach
+    their temporary wrapper callbacks so callbacks do not accumulate."""
+    fut = all_net.create_future()
+    for _ in range(10):
+        all_net.wait_for(fut, timeout_ms=5, raise_error=False)
+    assert fut._callbacks == []
+    assert fut._errbacks == []
+
+
 def test_consumer_group_join_assigns_partitions(all_net, metrics):
     """A consumer joins a MockCluster group, is elected leader, runs the
     assignor, and is assigned every partition -- exercising find-coordinator +

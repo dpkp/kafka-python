@@ -314,6 +314,10 @@ class NetBackend(abc.ABC):
         finally:
             if timer is not None:
                 self.cancel(timer)
+            if not getattr(future, 'is_done', True):
+                remove_cb_eb = getattr(future, '_remove_cb_eb', None)
+                if remove_cb_eb is not None:
+                    remove_cb_eb(_on_success, _on_failure)
 
     def wait_for(self, future: Any, timeout_ms: Optional[float], raise_error: bool=True) -> Any:
         """Block the calling thread until ``future`` resolves, with a timeout in ms.
