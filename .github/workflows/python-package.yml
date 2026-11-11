@@ -4,9 +4,9 @@ name: Python Package
 
 on:
   push:
-    branches: ["master"]
+    branches: ["master", "3.0", "2.3", "2.2"]
   pull_request:
-    branches: ["master"]
+    branches: ["master", "3.0", "2.3", "2.2"]
   workflow_dispatch:
 
 env:
