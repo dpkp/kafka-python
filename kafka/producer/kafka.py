@@ -1114,7 +1114,7 @@ class KafkaProducer:
             global _LOGGED_SERIALIZE_WARNING
             if not _LOGGED_SERIALIZE_WARNING:
                 warnings.warn('serializer does not implement serialize(topic, headers, data)', category=DeprecationWarning)
-                LOGGED_SERIALIZE_WARNING = True
+                _LOGGED_SERIALIZE_WARNING = True
             return serializer.serialize(topic, data)
 
     def _partition(self, topic, partition, key, value,

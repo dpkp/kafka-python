@@ -1,6 +1,60 @@
 Changelog
 =========
 
+3.0.13 (Nov 5, 2026)
+####################
+
+Fixes
+-----
+* fix consumer stall after rebalance with paused partitions (#3180)
+* fix: transition idempotent producer to UNINITIALIZED in `reset_producer_id` (#3182)
+
+
+3.0.12 (Oct 26, 2026)
+#####################
+
+Fixes
+-----
+* Fix StickyPartitionAssignor infinite loop with mixed subscriptions (#3164)
+* ListOffsetsRequest default `replica_id=-1` (#3174)
+* Fix pending producer future get timeout fallthrough (#3169)
+* Fix producer flush hangs when undrained batches expire (#3165)
+* Import botocore and gssapi lazily in SASL mechanisms (#3171)
+* Replace deprecated datetime.utcnow() in AWS MSK IAM client (#3156)
+
+
+3.0.11 (Aug 16, 2026)
+#####################
+
+Fixes
+-----
+* Fix JsonSerializer returning None and raising TypeError on deserialize (#3150)
+
+
+3.0.10 (Aug 4, 2026)
+####################
+
+Fixes
+-----
+* Admin: Fix `create_partitions` sending empty assignments array instead of null (#3148)
+
+
+3.0.9 (Jul 21, 2026)
+####################
+
+Fixes
+-----
+* Consumer: fix stuck partitions retained after rebalance with listener (#3132)
+
+
+3.0.8 (Jul 9, 2026)
+###################
+
+Fixes
+-----
+* transport: Fix TLS SNI when `ssl_check_hostname=False` (#3114)
+
+
 3.0.7 (Jun 28, 2026)
 ####################
 
@@ -543,6 +597,25 @@ Project Infra
 * Bump actions/cache from 4 to 5; actions/upload-artifact from 4 to 7 (#2702, #2789)
 
 
+2.3.3 (Oct 26, 2026)
+####################
+
+Fixes
+-----
+* Fix producer sender._maybe_abort_batches AttributeError
+
+
+2.3.2 (Jun 3, 2026)
+###################
+
+Fixes
+-----
+* kafka.conn: Improve error handling for sasl authenticate mechanisms
+* kafka.net: Validate SASL/SCRAM iterations (#3026)
+* KafkaProtocol: validate network frame size (backport of #3019)
+* Clear `_callbacks`/`_errbacks` list when future `is_done` to avoid reference cycles (#2891)
+
+
 2.3.1 (Apr 9, 2026)
 ###################
 
@@ -596,6 +669,25 @@ Project Infra
 * Bump actions/checkout from 4 to 5 (#2669)
 * Bump actions/checkout from 5 to 6 (#2694)
 * NixOS helpers
+
+
+2.2.21 (Oct 26, 2026)
+#####################
+
+Fixes
+-----
+* Fix producer sender._maybe_abort_batches AttributeError
+
+
+2.2.20 (Jun 3, 2026)
+####################
+
+Fixes
+-----
+* kafka.conn: Improve error handling for sasl authenticate mechanisms
+* kafka.net: Validate SASL/SCRAM iterations (#3026)
+* KafkaProtocol: validate network frame size (backport of #3019)
+* Clear `_callbacks`/`_errbacks` list when future `is_done` to avoid reference cycles (#2891)
 
 
 2.2.19 (Apr 9, 2026)

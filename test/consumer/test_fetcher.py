@@ -7,7 +7,9 @@ from collections import OrderedDict
 import itertools
 import time
 from unittest.mock import MagicMock
+import warnings
 
+import kafka.consumer.fetcher as fetcher_module
 from kafka.consumer.fetcher import (
     CompletedFetch, ConsumerRecord, Fetcher
 )
@@ -26,6 +28,7 @@ from kafka.errors import (
 )
 from kafka.future import Future
 from kafka.record.memory_records import MemoryRecordsBuilder, MemoryRecords
+from kafka.serializer import Deserializer
 from kafka.structs import OffsetAndMetadata, OffsetAndTimestamp, TopicPartition
 
 
@@ -953,6 +956,77 @@ def test_fetchable_partitions_excludes_parked_pause_data(fetcher, topic, mocker)
     # Even though the partition is now resumed, parked data is pending -
     # exclude from the fetchable set so we don't refetch.
     assert tp not in fetcher._fetchable_partitions()
+
+
+def test_fetched_records_restores_parked_records_after_revoked_batch_drained(fetcher, assignment):
+    """Parked records must be restored even when the in-line slot holds a
+    drained batch. Here a rebalance revokes a partition whose records are
+    parked; its parked batch is restored (an unassigned partition is not
+    paused), drained as no longer assigned, and left in the slot. If that
+    blocks the restore of the other parked batches, their partitions are
+    neither fetched (parked data excludes them) nor returned: the consumer
+    stops consuming while remaining a group member."""
+    fetcher.config['check_crcs'] = False
+    tp0, tp1, tp2 = assignment
+
+    # One record of tp0 is handled with everything paused meanwhile; the
+    # remainder of tp0's batch is parked as parsed records.
+    fetcher._completed_fetches.append(_build_completed_fetch(tp0, _paused_msgs(5)))
+    records, _ = fetcher.fetched_records(max_records=1)
+    assert len(records[tp0]) == 1
+    for tp in assignment:
+        fetcher._subscriptions.pause(tp)
+    assert fetcher.fetched_records() == ({}, False)
+    assert tp0 in fetcher._paused_partition_records
+
+    # Same for one record of tp2.
+    fetcher._subscriptions.resume(tp2)
+    fetcher._completed_fetches.append(_build_completed_fetch(tp2, _paused_msgs(3)))
+    records, _ = fetcher.fetched_records(max_records=1)
+    assert len(records[tp2]) == 1
+    fetcher._subscriptions.pause(tp2)
+    assert fetcher.fetched_records() == ({}, False)
+    assert set(fetcher._paused_partition_records) == {tp0, tp2}
+    assert fetcher._next_partition_records is None
+
+    # A rebalance revokes tp2 while everything is still paused.
+    fetcher._subscriptions.assign_from_subscribed([tp0, tp1])
+    assert fetcher.fetched_records() == ({}, False)
+    assert tp2 not in fetcher._paused_partition_records
+
+    fetcher._subscriptions.resume(tp0)
+    fetcher._subscriptions.resume(tp1)
+    records, _ = fetcher.fetched_records()
+    assert len(records[tp0]) == 4
+    assert not fetcher._paused_partition_records
+    assert set(fetcher._fetchable_partitions()) == {tp0, tp1}
+
+
+def test_fetched_records_restores_parked_records_once_in_line_batch_drains(fetcher, assignment):
+    """Once the in-line batch of another partition is drained, the parked
+    records of a resumed partition are restored on the next call."""
+    fetcher.config['check_crcs'] = False
+    tp0, tp1, _ = assignment
+
+    fetcher._completed_fetches.append(_build_completed_fetch(tp0, _paused_msgs(5)))
+    fetcher.fetched_records(max_records=1)
+    fetcher._subscriptions.pause(tp0)
+    fetcher.fetched_records()  # parks tp0's remaining 4 records
+    assert tp0 in fetcher._paused_partition_records
+
+    fetcher._completed_fetches.append(_build_completed_fetch(tp1, _paused_msgs(3)))
+    records, _ = fetcher.fetched_records(max_records=1)
+    assert len(records[tp1]) == 1
+    assert fetcher._next_partition_records.topic_partition == tp1
+
+    fetcher._subscriptions.resume(tp0)
+    records, _ = fetcher.fetched_records()
+    assert len(records[tp1]) == 2
+    assert not fetcher._next_partition_records
+
+    records, _ = fetcher.fetched_records()
+    assert len(records[tp0]) == 4
+    assert tp0 not in fetcher._paused_partition_records
 
 
 def test_close_drains_parked_paused_records(fetcher, topic):
@@ -1940,3 +2014,29 @@ class TestKip392PreferredReadReplica:
             fetcher._manager.cluster, 'is_replica_node', return_value=None)
         assert fetcher._select_read_replica(tp) == 7
         assert fetcher._subscriptions.assignment[tp].preferred_read_replica() is None
+
+
+def test_legacy_deserializer_deprecation_warning_emitted_once(fetcher, topic, monkeypatch):
+    class LegacyDeserializer(Deserializer):
+        def deserialize(self, topic, data):  # pylint: disable=arguments-differ
+            return '%s:%s' % (topic, data.decode('utf-8'))
+
+    monkeypatch.setattr(fetcher_module, '_LOGGED_DESERIALIZE_WARNING', False)
+    fetcher.config['value_deserializer'] = LegacyDeserializer()
+    tp = TopicPartition(topic, 0)
+    msgs = [(None, b'a', None), (None, b'b', None), (None, b'c', None)]
+    fetcher._completed_fetches.append(_build_completed_fetch(tp, msgs))
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always', DeprecationWarning)
+        records, _ = fetcher.fetched_records()
+
+    assert [r.value for r in records[tp]] == [
+        '%s:a' % (topic,),
+        '%s:b' % (topic,),
+        '%s:c' % (topic,),
+    ]
+    dep_warnings = [w for w in caught if issubclass(w.category, DeprecationWarning)]
+    assert len(dep_warnings) == 1
+    assert 'deserializer does not implement deserialize(topic, headers, data)' in str(dep_warnings[0].message)
+    assert fetcher_module._LOGGED_DESERIALIZE_WARNING is True

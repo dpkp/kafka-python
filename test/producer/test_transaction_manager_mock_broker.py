@@ -56,12 +56,12 @@ _PRODUCER_EPOCH = 5
 # ---------------------------------------------------------------------------
 
 
-def _make_client(broker):
+def _make_client(broker, request_timeout_ms=5000):
     """Build a KafkaNetClient wired to the MockBroker (version-negotiated)."""
     client = KafkaNetClient(
         bootstrap_servers='%s:%d' % (broker.host, broker.port),
         api_version=broker.broker_version,
-        request_timeout_ms=5000,
+        request_timeout_ms=request_timeout_ms,
         metadata_max_age_ms=300000,
     )
     broker.attach(client._net)
@@ -354,6 +354,103 @@ class TestInitProducerIdHandlerMockBroker:
         assert tm._current_state == TransactionState.READY
         assert tm.producer_id_and_epoch.producer_id == _PRODUCER_ID
         assert tm.producer_id_and_epoch.epoch == _PRODUCER_EPOCH + 1
+
+    def test_idempotent_producer_init_then_reset_then_reinit(self, broker, client):
+        """After reset_producer_id() (e.g. when a retried batch expires or a
+        pre-KIP-360 sequence error occurs), an idempotent producer returns to
+        UNINITIALIZED so a subsequent init_producer_id() acquires a new
+        producer_id and transitions back to READY."""
+        tm = TransactionManager(
+            transactional_id=None,
+            api_version=_API_VERSION,
+            metadata=client.cluster,
+        )
+        tm.init_producer_id()
+        broker.respond(InitProducerIdResponse, InitProducerIdResponse(
+            throttle_time_ms=0,
+            error_code=0,
+            producer_id=_PRODUCER_ID,
+            producer_epoch=_PRODUCER_EPOCH,
+        ))
+        _, future = _dispatch_next(client, tm)
+        _poll_for_future(client, future)
+        assert tm._current_state == TransactionState.READY
+        assert tm.has_producer_id()
+
+        tm.reset_producer_id()
+        assert tm._current_state == TransactionState.UNINITIALIZED
+        assert not tm.has_producer_id()
+
+        tm.init_producer_id()
+        assert tm._current_state == TransactionState.INITIALIZING
+        broker.respond(InitProducerIdResponse, InitProducerIdResponse(
+            throttle_time_ms=0,
+            error_code=0,
+            producer_id=_PRODUCER_ID + 1,
+            producer_epoch=0,
+        ))
+        _, future = _dispatch_next(client, tm)
+        _poll_for_future(client, future)
+        assert tm._current_state == TransactionState.READY
+        assert tm.producer_id_and_epoch.producer_id == _PRODUCER_ID + 1
+        assert tm.producer_id_and_epoch.epoch == 0
+
+    def test_idempotent_producer_reinit_retries_after_request_timeout(self, broker):
+        """If the InitProducerId that follows reset_producer_id() fails because
+        the client's request timeout fired, it is retried and the producer
+        acquires a new producer_id, instead of going to FATAL_ERROR for good.
+
+        A request timeout closes the connection with RequestTimedOutError and
+        fails every request in flight on it, including a newer one such as this
+        InitProducerId. Like KafkaConnectionError, which is already retried,
+        that says nothing about the request itself (the Java client treats a
+        timed-out request as a disconnect and retries it too)."""
+        client = _make_client(broker, request_timeout_ms=300)
+        try:
+            tm = TransactionManager(
+                transactional_id=None,
+                api_version=_API_VERSION,
+                metadata=client.cluster,
+            )
+            tm.init_producer_id()
+            broker.respond(InitProducerIdResponse, InitProducerIdResponse(
+                throttle_time_ms=0,
+                error_code=0,
+                producer_id=_PRODUCER_ID,
+                producer_epoch=_PRODUCER_EPOCH,
+            ))
+            _, future = _dispatch_next(client, tm)
+            _poll_for_future(client, future)
+            assert tm._current_state == TransactionState.READY
+
+            tm.reset_producer_id()
+            tm.init_producer_id()
+
+            async def _never_answers(api_key, api_version, correlation_id, request_bytes):
+                await client._net.sleep(60)
+
+            broker.respond_fn(InitProducerIdRequest, _never_answers)
+            handler, future = _dispatch_next(client, tm)
+            _poll_for_future(client, future)
+            assert isinstance(future.exception, Errors.RequestTimedOutError)
+
+            assert not tm.has_fatal_error()
+            assert tm._current_state == TransactionState.INITIALIZING
+            assert _pending_handlers(tm) == [handler]
+
+            broker.respond(InitProducerIdResponse, InitProducerIdResponse(
+                throttle_time_ms=0,
+                error_code=0,
+                producer_id=_PRODUCER_ID + 1,
+                producer_epoch=0,
+            ))
+            _, future = _dispatch_next(client, tm)
+            _poll_for_future(client, future)
+            assert tm._current_state == TransactionState.READY
+            assert tm.producer_id_and_epoch.producer_id == _PRODUCER_ID + 1
+            assert tm.producer_id_and_epoch.epoch == 0
+        finally:
+            client.close()
 
 
 # ---------------------------------------------------------------------------

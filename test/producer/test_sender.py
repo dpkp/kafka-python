@@ -1683,3 +1683,29 @@ class TestProducerAcks:
                 assert future.get(timeout=0).offset == self._BASE_OFFSET
         finally:
             producer.close(timeout=2)
+
+
+def _ready_node_zero(sender, accumulator, mocker):
+    mocker.patch.object(accumulator, 'ready', return_value=({0}, float('inf'), False))
+    mocker.patch.object(sender._client, 'maybe_connect')
+
+
+def test__send_producer_data_waits_for_throttle_expiry(sender, accumulator, manager, mocker):
+    # A broker-throttled connection must delay the sender until the throttle
+    # expires, not poll with a zero timeout or sleep until delivery timeout.
+    manager.bootstrap(timeout_ms=5000)
+    sender._client.await_ready(0)
+    conn = manager._conns[0]
+    conn._maybe_throttle(ProduceResponse(throttle_time_ms=1000, responses=[]))
+    assert not sender._client.is_ready(0)
+    _ready_node_zero(sender, accumulator, mocker)
+    poll_timeout_ms = sender._send_producer_data()
+    assert 900 < poll_timeout_ms <= 1000
+
+
+def test__send_producer_data_reconnect_backoff_in_ms(sender, accumulator, manager, mocker):
+    # ClusterConnectionManager.connection_delay returns seconds
+    mocker.patch.object(manager, 'connection_delay', return_value=0.5)
+    _ready_node_zero(sender, accumulator, mocker)
+    poll_timeout_ms = sender._send_producer_data()
+    assert math.isclose(poll_timeout_ms, 500)
