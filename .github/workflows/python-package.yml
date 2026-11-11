@@ -63,7 +63,9 @@ jobs:
           - python: "3.14"
             kafka: "4.3.0"
             net: "selector"
-
+          - python: "3.15"
+            kafka: "4.3.0"
+            net: "random"
 
     steps:
       - uses: actions/checkout@v7
