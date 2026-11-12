@@ -836,6 +836,75 @@ def test__unpack_records_corrupted(mocker):
     assert len(records) == 2
     with pytest.raises(Errors.CorruptRecordError):
         part_records.take(10)
+    # The error is not lost: it is raised again until the records are drained
+    with pytest.raises(Errors.CorruptRecordError):
+        part_records.take(10)
+
+
+class _FailingDeserializer(Deserializer):
+    def deserialize(self, topic, headers, data):
+        if data == b'bad':
+            raise ValueError('cannot deserialize')
+        return data
+
+
+def test_partition_records_keeps_raising_deserialization_error():
+    tp = TopicPartition('foo', 0)
+    messages = [(None, b'a', None), (None, b'bad', None), (None, b'c', None)]
+    memory_records = MemoryRecords(_build_record_batch(messages))
+    part_records = Fetcher.PartitionRecords(
+        0, tp, memory_records, value_deserializer=_FailingDeserializer())
+    assert [r.value for r in part_records.take(10)] == [b'a']
+    assert part_records.next_fetch_offset == 1
+    for _ in range(3):
+        with pytest.raises(ValueError):
+            part_records.take(10)
+    assert part_records
+    assert part_records.next_fetch_offset == 1
+    part_records.drain()
+    assert not part_records
+
+
+@pytest.mark.timeout(10, method='signal')
+def test_fetched_records_keeps_raising_deserialization_error(fetcher, topic):
+    fetcher.config['value_deserializer'] = _FailingDeserializer()
+    tp = TopicPartition(topic, 0)
+    msgs = [(None, b'a', None), (None, b'b', None), (None, b'bad', None), (None, b'c', None)]
+    fetcher._completed_fetches.append(_build_completed_fetch(tp, msgs))
+
+    records, _ = fetcher.fetched_records()
+    assert [r.value for r in records[tp]] == [b'a', b'b']
+    assert fetcher._subscriptions.position(tp).offset == 2
+
+    # Every later call raises again (rather than returning nothing while the
+    # partition records stay in line, which made fetched_records() loop forever)
+    for _ in range(3):
+        with pytest.raises(ValueError):
+            fetcher.fetched_records()
+        assert fetcher._subscriptions.position(tp).offset == 2
+
+
+def test_fetched_records_seek_past_bad_record_in_batch(fetcher, topic):
+    fetcher.config['value_deserializer'] = _FailingDeserializer()
+    tp = TopicPartition(topic, 0)
+    msgs = [(None, b'a', None), (None, b'bad', None), (None, b'c', None), (None, b'd', None)]
+    fetcher._completed_fetches.append(_build_completed_fetch(tp, msgs))
+
+    records, _ = fetcher.fetched_records()
+    assert [r.value for r in records[tp]] == [b'a']
+    with pytest.raises(ValueError):
+        fetcher.fetched_records()
+
+    # Skip the bad record. The broker returns the whole batch again for
+    # the next fetch, starting before the requested offset.
+    fetcher._subscriptions.seek(tp, 2)
+    records, _ = fetcher.fetched_records()
+    assert records == {}
+    fetcher._completed_fetches.append(
+        _build_completed_fetch(tp, msgs)._replace(fetched_offset=2))
+    records, _ = fetcher.fetched_records()
+    assert [r.value for r in records[tp]] == [b'c', b'd']
+    assert fetcher._subscriptions.position(tp).offset == 4
 
 
 def test__parse_fetched_data(fetcher, topic, mocker):

@@ -1613,23 +1613,9 @@ class Fetcher:
             )
             self.metric_aggregator = metric_aggregator
             self.check_crcs = check_crcs
-            self.record_iterator = itertools.dropwhile(
-                self._maybe_skip_record,
-                self._unpack_records(tp, records, key_deserializer, value_deserializer))
+            self.record_iterator = self._unpack_records(tp, records, key_deserializer, value_deserializer)
             self.on_drain = on_drain
-            self._next_inline_exception = None
-
-        def _maybe_skip_record(self, record):
-            # When fetching an offset that is in the middle of a
-            # compressed batch, we will get all messages in the batch.
-            # But we want to start 'take' at the fetch_offset
-            # (or the next highest offset in case the message was compacted)
-            if record.offset < self.fetch_offset:
-                log.debug("Skipping message offset: %s (expecting %s)",
-                          record.offset, self.fetch_offset)
-                return True
-            else:
-                return False
+            self._cached_exception = None
 
         # For truthiness evaluation
         def __bool__(self):
@@ -1638,27 +1624,28 @@ class Fetcher:
         def drain(self):
             if self.record_iterator is not None:
                 self.record_iterator = None
-                self._next_inline_exception = None
+                self._cached_exception = None
                 if self.metric_aggregator:
                     self.metric_aggregator.record(self.topic_partition, self.bytes_read, self.records_read)
                 self.on_drain(self)
 
-        def _maybe_raise_next_inline_exception(self):
-            if self._next_inline_exception:
-                exc, self._next_inline_exception = self._next_inline_exception, None
-                raise exc
-
         def take(self, n=None):
-            self._maybe_raise_next_inline_exception()
+            # A generator cannot be resumed after it raises, so once unpacking
+            # fails (corrupt record, deserializer error) there is nothing left
+            # to iterate. Keep raising the same error until the records are
+            # drained, e.g. because the user seeks past the failed offset.
+            if self._cached_exception is not None:
+                raise self._cached_exception
             records = []
             try:
                 # Note that records.extend(iter) will extend partially when exception raised mid-stream
                 records.extend(itertools.islice(self.record_iterator, 0, n))
             except Exception as e:
+                self._cached_exception = e
                 if not records:
                     raise e
-                # To be thrown in the next call of this method
-                self._next_inline_exception = e
+                # Records before the failed one are returned now; the error is
+                # raised by the next call.
             return records
 
         def _unpack_records(self, tp, records, key_deserializer, value_deserializer):
@@ -1706,6 +1693,16 @@ class Fetcher:
                             continue
 
                     for record in batch:
+                        # When fetching an offset that is in the middle of a
+                        # batch, we will get all messages in the batch.
+                        # But we want to start 'take' at the fetch_offset
+                        # (or the next highest offset in case the message was compacted).
+                        # Skip before validating or deserializing, so a bad record
+                        # that the user has seeked past does not fail the fetch again.
+                        if record.offset < self.fetch_offset:
+                            log.debug("Skipping message offset: %s (expecting %s)",
+                                      record.offset, self.fetch_offset)
+                            continue
                         if self.check_crcs and not record.validate_crc():
                             raise Errors.CorruptRecordError(
                                     "Record for partition %s at offset %s failed crc check" % (
