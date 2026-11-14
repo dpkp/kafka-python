@@ -280,6 +280,7 @@ class KafkaConnectionManager:
             self._sensors.connection_created.record()
         if reset_backoff_on_connect:
             self.reset_backoff(node.node_id)
+            self.reset_backoff('metadata')
         self._auth_failures.pop(node.node_id, None)
         if conn.broker_version_data is not None:
             if self.cluster.is_bootstrap(node.node_id):

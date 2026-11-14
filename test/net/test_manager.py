@@ -139,6 +139,50 @@ class TestKafkaConnectionManagerBackoff:
         manager.reset_backoff('node-1')
         assert manager.connection_delay('node-1') == 0
 
+    @pytest.mark.parametrize('reset_backoff_on_connect', [True, False])
+    def test_metadata_retry_after_connect(self, manager, net, reset_backoff_on_connect):
+        # No available broker leaves metadata in exponential backoff, even
+        # when the cluster still needs an update after a broker recovers.
+        manager.config['reconnect_backoff_ms'] = 30000
+        manager.update_backoff('metadata')
+        manager.update_backoff('bootstrap-0')
+        manager.update_backoff('other-node')
+        assert manager.cluster.need_update
+        assert manager.cluster.ttl() > 0
+
+        node = manager.cluster.broker_metadata('bootstrap-0')
+        conn = KafkaConnection(net, node_id=node.node_id, **manager.config)
+        try:
+            net.run(manager._connect(node, conn, reset_backoff_on_connect=reset_backoff_on_connect))
+            assert conn.connected
+            if reset_backoff_on_connect:
+                assert manager.cluster.ttl() == 0
+                assert manager.connection_delay(node.node_id) == 0
+            else:
+                # Bootstrap deliberately retains backoff until metadata has
+                # succeeded; a connection alone must not reset that policy.
+                assert manager.cluster.ttl() > 0
+                assert manager.connection_delay(node.node_id) > 0
+            assert manager.connection_delay('other-node') > 0
+        finally:
+            conn.close()
+
+    def test_failed_connect_preserves_metadata_backoff(self, manager, net):
+        manager.config['reconnect_backoff_ms'] = 30000
+        manager.update_backoff('metadata')
+        node = manager.cluster.broker_metadata('bootstrap-0')
+        conn = KafkaConnection(net, node_id=node.node_id, **manager.config)
+
+        async def fail_connect(*args, **kwargs):
+            raise Errors.KafkaConnectionError('broker unavailable')
+
+        with patch.object(net, 'create_connection', side_effect=fail_connect):
+            net.run(manager._connect(node, conn))
+
+        assert conn.closed
+        assert manager.cluster.ttl() > 0
+        assert manager.connection_delay(node.node_id) > 0
+
 
 class TestKafkaConnectionManagerAuthFailure:
     def test_no_failure_by_default(self, manager):
