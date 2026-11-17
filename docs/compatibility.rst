@@ -2,7 +2,7 @@ Compatibility
 -------------
 
 .. image:: https://img.shields.io/badge/kafka-4.3--0.8-brightgreen.svg
-    :target: https://kafka-python.readthedocs.io/compatibility.html
+    :target: https://kafka-python.readthedocs.io/en/master/compatibility.html
 .. image:: https://img.shields.io/pypi/pyversions/kafka-python.svg
     :target: https://pypi.python.org/pypi/kafka-python
 
