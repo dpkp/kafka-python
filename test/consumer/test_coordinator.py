@@ -2883,3 +2883,80 @@ def test_metadata_growth_triggers_rejoin_end_to_end(net, metrics):
         coordinator.close(timeout_ms=0)
         client.close()
         manager.close()
+
+
+@pytest.mark.parametrize('instances,order,expected', [
+    ((None, None, None), (2, 0, 1),
+     {'C0': [('t0', [0])], 'C1': [('t1', [0])],
+      'C2': [('t1', [1]), ('t2', [0, 1, 2])]}),
+    (('z', 'a', 'm'), (0, 2, 1),
+     {'C0': [], 'C1': [('t0', [0]), ('t1', [1])],
+      'C2': [('t1', [0]), ('t2', [0, 1, 2])]}),
+    (('z', None, 'a'), (0, 1, 2),
+     {'C0': [], 'C1': [('t1', [0])],
+      'C2': [('t0', [0]), ('t1', [1]), ('t2', [0, 1, 2])]}),
+])
+def test_perform_roundrobin_assignment_with_different_subscriptions(
+        coordinator, instances, order, expected):
+    coordinator._subscription.subscribe(topics=['t0'])
+    Broker = MetadataResponse.MetadataResponseBroker
+    Topic = MetadataResponse.MetadataResponseTopic
+    Partition = Topic.MetadataResponsePartition
+    response = MetadataResponse[0](
+        brokers=[Broker(0, 'localhost', 9092, version=0)],
+        topics=[Topic(0, 't%d' % topic,
+                      [Partition(0, part, 0, [0], [0], version=0)
+                       for part in range(topic + 1)], version=0)
+                for topic in range(3)])
+    coordinator._client.cluster.update_metadata(
+        MetadataResponse.decode(response.encode(), version=0))
+    members = [JoinGroupResponse.JoinGroupResponseMember(
+        member_id='C%d' % i, group_instance_id=instances[i],
+        metadata=ConsumerProtocolSubscription(
+            0, ['t%d' % topic for topic in range(i + 1)], b'').encode())
+        for i in order]
+    assignments = coordinator._perform_assignment('C0', 'roundrobin', members)
+    assert {member: assignment.assignment for member, assignment in assignments.items()} == expected
+    assert coordinator._subscription.group_subscription() == {'t0', 't1', 't2'}
+    for assignment in assignments.values():
+        assert ConsumerProtocolAssignment.decode(assignment.encode()) == assignment
+
+
+def test_roundrobin_join_sends_differing_subscription_assignments(broker, seeded_coord):
+    Topic = MetadataResponse.MetadataResponseTopic
+    Partition = Topic.MetadataResponsePartition
+    topics = [Topic(error_code=0, name='t%d' % topic, is_internal=False,
+                    partitions=[Partition(error_code=0, partition_index=part,
+                                          leader_id=0, leader_epoch=0,
+                                          replica_nodes=[0], isr_nodes=[0],
+                                          offline_replicas=[])
+                                for part in range(topic + 1)])
+              for topic in range(3)]
+    broker.set_metadata(topics=topics)
+    metadata = broker._metadata_response
+    seeded_coord._client.cluster.update_metadata(
+        MetadataResponse.decode(metadata.encode(), version=metadata._version))
+    seeded_coord._subscription.subscribe(topics=['t0'])
+    members = [JoinGroupResponse.JoinGroupResponseMember(
+        member_id='C%d' % i, group_instance_id=instance,
+        metadata=ConsumerProtocolSubscription(
+            0, ['t%d' % topic for topic in range(i + 1)], b'').encode())
+        for i, instance in enumerate(('z', None, 'a'))]
+    broker.respond(JoinGroupRequest, _join_response_object(
+        leader='C0', member_id='C0', protocol_name='roundrobin', members=members))
+    captured = {}
+    expected = {'C0': [], 'C1': [('t1', [0])],
+                'C2': [('t0', [0]), ('t1', [1]), ('t2', [0, 1, 2])]}
+
+    def sync_handler(api_key, api_version, correlation_id, request_bytes):
+        request = SyncGroupRequest.decode(request_bytes, version=api_version, header=True)
+        captured.update({member.member_id: ConsumerProtocolAssignment.decode(member.assignment).assignment
+                         for member in request.assignments})
+        return _sync_response_object(
+            protocol_name='roundrobin',
+            assignment=ConsumerProtocolAssignment(0, expected['C0'], b'').encode())
+
+    broker.respond_fn(SyncGroupRequest, sync_handler)
+    result = seeded_coord._net.run(seeded_coord._do_join_and_sync_async)
+    assert captured == expected
+    assert ConsumerProtocolAssignment.decode(result).assignment == expected['C0']

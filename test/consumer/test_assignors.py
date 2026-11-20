@@ -4,6 +4,7 @@ from collections import defaultdict
 from random import randint, sample
 
 import pytest
+from itertools import permutations
 
 from kafka.structs import TopicPartition
 from kafka.coordinator.assignors.abstract import ConsumerProtocolAssignment
@@ -1051,3 +1052,40 @@ class TestCooperativeStickyAssignor:
         cluster = create_cluster(mocker, {'t'}, topics_partitions={0, 1})
         ret = assignor.assign(cluster, members)
         assert set(ret) == {'C0', 'C1'}
+
+
+@pytest.mark.parametrize('order', list(permutations(range(3))))
+@pytest.mark.parametrize('instances,expected', [
+    ((None, None, None), {'C0': [('t0', [0])], 'C1': [('t1', [0])],
+                          'C2': [('t1', [1]), ('t2', [0, 1, 2])]}),
+    (('z', 'a', 'm'), {'C0': [], 'C1': [('t0', [0]), ('t1', [1])],
+                       'C2': [('t1', [0]), ('t2', [0, 1, 2])]}),
+    (('z', None, 'a'), {'C0': [], 'C1': [('t1', [0])],
+                        'C2': [('t0', [0]), ('t1', [1]), ('t2', [0, 1, 2])]}),
+])
+def test_roundrobin_differing_subscriptions(mocker, order, instances, expected):
+    subscriptions = [('t0',), ('t0', 't1'), ('t0', 't1', 't2')]
+    members = [JoinGroupResponse.JoinGroupResponseMember(
+        member_id='C%d' % i, group_instance_id=instances[i],
+        metadata=RoundRobinPartitionAssignor.metadata(subscriptions[i]))
+        for i in order]
+    partitions = {'t0': {0}, 't1': {0, 1}, 't2': {0, 1, 2}}
+    cluster = create_cluster(mocker, set(partitions),
+                             topic_partitions_lambda=partitions.get)
+    result = RoundRobinPartitionAssignor.assign(cluster, members)
+    assert set(result) == set(expected)
+    for member_id, assignment in expected.items():
+        assert result[member_id].assignment == assignment
+        assert ConsumerProtocolAssignment.decode(result[member_id].encode()) == result[member_id]
+
+
+def test_roundrobin_missing_metadata_and_idle_members(mocker):
+    members = make_join_group_response_members({
+        'C0': RoundRobinPartitionAssignor.metadata({'active', 'missing'}),
+        'C1': RoundRobinPartitionAssignor.metadata(set()),
+    })
+    cluster = create_cluster(mocker, {'active', 'missing'},
+                             topic_partitions_lambda={'active': {0}}.get)
+    assignments = RoundRobinPartitionAssignor.assign(cluster, members)
+    assert assignments['C0'].assignment == [('active', [0])]
+    assert assignments['C1'].assignment == []
