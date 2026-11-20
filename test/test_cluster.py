@@ -532,8 +532,10 @@ class TestClusterMetadataRefresh:
         """Calling bootstrap() multiple times must not spawn multiple refresh
         loop tasks."""
         cluster = manager.cluster
-        manager.bootstrap(timeout_ms=100)
+        # This checks refresh-loop identity, not a 100 ms bootstrap speed limit.
+        timeout_ms = manager.config['request_timeout_ms']
+        manager.bootstrap(timeout_ms=timeout_ms)
         future = cluster._refresh_loop_future
         assert future is not None
-        manager.bootstrap(timeout_ms=100)
+        manager.bootstrap(timeout_ms=timeout_ms)
         assert cluster._refresh_loop_future is future

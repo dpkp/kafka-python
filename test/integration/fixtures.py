@@ -140,12 +140,20 @@ def _extract_topic_command_error(stdout):
     return ''
 
 
-def get_open_port():
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    port = sock.getsockname()[1]
-    sock.close()
-    return port
+def get_open_port(exclude=()):
+    sockets = []
+    try:
+        while True:
+            sock = socket.socket()
+            sockets.append(sock)
+            sock.bind(("127.0.0.1", 0))
+            port = sock.getsockname()[1]
+            if port not in exclude:
+                return port
+            # Keep excluded ports bound so the next bind cannot reuse them.
+    finally:
+        for sock in sockets:
+            sock.close()
 
 
 def gen_ssl_resources(directory):
@@ -398,7 +406,7 @@ class KafkaFixture(Fixture):
         else:
             self.auto_port = False
             self.port = port
-        self.controller_port = get_open_port()
+        self.controller_port = get_open_port(exclude=(self.port,))
 
         self.cluster_id = self._gen_cluster_id()
         self.broker_id = broker_id
@@ -606,7 +614,7 @@ class KafkaFixture(Fixture):
             # so we will try a different port on each retry
             # unless the fixture was passed a specific port
             if self.auto_port:
-                self.port = get_open_port()
+                self.port = get_open_port(exclude=(self.controller_port,))
             self.out('Attempting to start on port %d (try #%d)' % (self.port, tries))
             self.render_template(properties_template, properties, vars(self))
 
