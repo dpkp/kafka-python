@@ -17,7 +17,7 @@ env:
 jobs:
   build:
 
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner || 'ubuntu-latest' }}
     name: "py ${{ matrix.python }} / kafka ${{ matrix.kafka }} / net ${{ matrix.net }}"
     continue-on-error: ${{ matrix.experimental || false }}
     strategy:
@@ -42,9 +42,11 @@ jobs:
           - python: "3.8"
             kafka: "4.3.0"
             net: "random"
+            runner: ubuntu-24.04
           - python: "3.9"
             kafka: "4.3.0"
             net: "random"
+            runner: ubuntu-24.04
           - python: "3.10"
             kafka: "4.3.0"
             net: "random"
