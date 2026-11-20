@@ -1,3 +1,8 @@
+# 2.3.4 (unreleased)
+
+Fixes
+* Schedule the connection for writing after a successful acks=0 send
+
 # 2.3.3 (Oct 26, 2026)
 
 Fixes

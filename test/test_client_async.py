@@ -14,7 +14,7 @@ import pytest
 
 from kafka.client_async import KafkaClient, IdleConnectionManager
 from kafka.cluster import ClusterMetadata
-from kafka.conn import ConnectionStates
+from kafka.conn import BrokerConnection, ConnectionStates
 import kafka.errors as Errors
 from kafka.future import Future
 from kafka.protocol.metadata import MetadataRequest
@@ -236,6 +236,67 @@ def test_send(client_selector_mocked, conn):
     request = MetadataRequest[0]([])
     client_selector_mocked.send(0, request)
     conn.send.assert_called_with(request, blocking=False, request_timeout_ms=None)
+
+
+@pytest.mark.parametrize('outcome, should_schedule', [
+    ('pending', True),
+    ('success', True),
+    ('failure', False),
+])
+def test_send_schedules_unless_failed(client_selector_mocked, conn, outcome,
+                                     should_schedule):
+    conn.state = ConnectionStates.CONNECTED
+    client_selector_mocked._init_connect(0)
+    client_selector_mocked._sending.clear()
+    future = Future()
+    request = ProduceRequest[0](0, 0, [])
+    if outcome == 'pending':
+        request = MetadataRequest[0]([])
+    elif outcome == 'success':
+        future.success(None)
+    else:
+        future.failure(Errors.KafkaConnectionError())
+    conn.send.return_value = future
+
+    assert client_selector_mocked.send(0, request) is future
+    assert (conn in client_selector_mocked._sending) == should_schedule
+
+
+@pytest.mark.skipif(not hasattr(socket, 'socketpair'), reason='socketpair is unavailable')
+@pytest.mark.parametrize('acks', [0, 1])
+def test_send_transmits_produce_request(acks):
+    client = KafkaClient(bootstrap_servers=[], api_version=(1, 0))
+    local, peer = socket.socketpair()
+    local.setblocking(False)
+    peer.setblocking(False)
+    conn = BrokerConnection('localhost', 9092, socket.AF_INET,
+                            node_id=0, api_version=(1, 0))
+    conn._sock = local
+    conn.state = ConnectionStates.CONNECTED
+    client._conns[0] = conn
+    client._selector.register(local, selectors.EVENT_READ, conn)
+    try:
+        for value in (b'first', b'second', b'third'):
+            request = ProduceRequest[2](
+                required_acks=acks,
+                timeout=3000,
+                topics=[('test-topic', [(0, value)])],
+            )
+            future = client.send(0, request, wakeup=False)
+            if acks == 0:
+                assert future.succeeded()
+            else:
+                assert not future.is_done
+
+            client._poll(0)
+
+            assert peer.recv(4096).endswith(request.encode())
+            assert not client._sending
+            assert client._selector.get_key(local).events == selectors.EVENT_READ
+    finally:
+        client.close()
+        local.close()
+        peer.close()
 
 
 def test_poll(mocker, client_poll_mocked):
