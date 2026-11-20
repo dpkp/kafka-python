@@ -13,7 +13,7 @@ from kafka.cluster import ClusterMetadata
 import kafka.errors as Errors
 from kafka.producer.kafka import KafkaProducer
 from kafka.protocol.producer import ProduceRequest
-from kafka.producer.future import FutureRecordMetadata
+from kafka.producer.future import FutureProduceResult, FutureRecordMetadata
 from kafka.producer.producer_batch import ProducerBatch
 from kafka.producer.record_accumulator import RecordAccumulator
 from kafka.producer.sender import Sender
@@ -1647,6 +1647,63 @@ class TestProducerAcks:
             # "no errors, but did it actually send?").
             assert received.wait(timeout=5)
             assert captured.get('acks') == 0
+        finally:
+            producer.close(timeout=2)
+
+    def test_flush_waits_for_split_batches(self, mocker):
+        broker = MockBroker(broker_version=self._API_VERSION)
+        broker.set_metadata(topics=[self._metadata_topic()])
+        waiting = threading.Event()
+        callback_started = threading.Event()
+        callback_finished = threading.Event()
+        original_wait = FutureProduceResult.wait
+
+        def wait(future, timeout=None):
+            waiting.set()
+            ready = original_wait(future, timeout)
+            # Resume flush while the final record callback is still running.
+            assert callback_started.wait(timeout=5)
+            return ready
+
+        mocker.patch.object(FutureProduceResult, 'wait', wait)
+
+        def reject_batch(api_key, api_version, correlation_id, request_bytes):
+            # Split only after flush has started waiting on the original batch.
+            assert waiting.wait(timeout=5)
+            return self._produce_response(
+                api_version, error_code=Errors.MessageSizeTooLargeError.errno)
+
+        broker.respond_fn(ProduceRequest, reject_batch)
+        broker.respond(ProduceRequest, self._produce_response(
+            self._API_VERSION, base_offset=77))
+
+        async def acknowledge_last(api_key, api_version, correlation_id, request_bytes):
+            await producer._sender._net.sleep(0.05)
+            return self._produce_response(api_version, base_offset=78)
+
+        broker.respond_fn(ProduceRequest, acknowledge_last)
+        producer = KafkaProducer(
+            kafka_client=broker.client_factory(),
+            bootstrap_servers=['%s:%d' % (broker.host, broker.port)],
+            api_version=self._API_VERSION,
+            enable_idempotence=False,
+            acks=1,
+            linger_ms=60000,
+            request_timeout_ms=5000,
+        )
+
+        def on_delivery(metadata):
+            callback_started.set()
+            time.sleep(0.2)
+            callback_finished.set()
+
+        try:
+            futures = [producer.send(self._TOPIC, value=b'payload', partition=0)
+                       for _ in range(2)]
+            futures[-1].add_callback(on_delivery)
+            producer.flush(timeout=5)
+            assert callback_finished.is_set()
+            assert [future.get(timeout=0).offset for future in futures] == [77, 78]
         finally:
             producer.close(timeout=2)
 

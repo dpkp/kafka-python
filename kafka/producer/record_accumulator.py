@@ -8,6 +8,7 @@ import kafka.errors as Errors
 from kafka.producer.producer_batch import ProducerBatch
 from kafka.record.memory_records import MemoryRecords, MemoryRecordsBuilder
 from kafka.structs import TopicPartition
+from kafka.util import Timer
 
 
 log = logging.getLogger(__name__)
@@ -543,10 +544,21 @@ class RecordAccumulator:
             for batch in self._incomplete.all():
                 log.debug('Waiting on produce to %s',
                           batch.produce_future.topic_partition)
-                if not batch.produce_future.wait(timeout=timeout):
+                timer = Timer(timeout * 1000 if timeout is not None else None)
+                if not batch.produce_future.wait(timeout=timer.timeout_secs):
                     raise Errors.KafkaTimeoutError('Timeout waiting for future')
                 if not batch.produce_future.is_done:
-                    raise Errors.UnknownError('Future not done')
+                    # Splitting wakes the original batch without completing it.
+                    # Its record futures follow the replacement batches.
+                    for future in list(batch._record_futures):
+                        # Wait on the replacement batch latch, which is set
+                        # after record callbacks run, as for unsplit batches.
+                        while True:
+                            produce_future = future._produce_future
+                            if not produce_future.wait(timeout=timer.timeout_secs):
+                                raise Errors.KafkaTimeoutError('Timeout waiting for future')
+                            if produce_future.is_done:
+                                break
 
                 if batch.produce_future.failed():
                     log.warning(batch.produce_future.exception)
