@@ -257,7 +257,14 @@ class Fetcher:
                 wakeup.success(None)
         for fut in waited_on:
             fut.add_both(_wake)
-        self._net.wait_for(wakeup, timeout_ms=timeout_ms, raise_error=False)
+        try:
+            self._net.wait_for(wakeup, timeout_ms=timeout_ms, raise_error=False)
+        finally:
+            for fut in waited_on:
+                if not getattr(fut, 'is_done', True):
+                    remove_cb_eb = getattr(fut, '_remove_cb_eb', None)
+                    if remove_cb_eb is not None:
+                        remove_cb_eb(_wake, _wake)
 
         records, _ = self.fetched_records(
             max_records, update_offsets=update_offsets)

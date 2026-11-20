@@ -923,7 +923,10 @@ class KafkaConsumer:
         # when the coordinator wants to send the next heartbeat.
         poll_timeout_ms = timer.timeout_ms
         if self.config['group_id'] is not None:
-            poll_timeout_ms = min(poll_timeout_ms, self._coordinator.time_to_next_poll() * 1000)
+            coordinator_timeout_ms = self._coordinator.time_to_next_poll() * 1000
+            if coordinator_timeout_ms <= 0:
+                coordinator_timeout_ms = self.config['retry_backoff_ms']
+            poll_timeout_ms = min(poll_timeout_ms, coordinator_timeout_ms)
 
         records, idle = self._fetcher.fetch_records(
             max_records, update_offsets=update_offsets, timeout_ms=poll_timeout_ms)

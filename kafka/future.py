@@ -168,6 +168,26 @@ class Future:
         self.add_errback(f, *args, **kwargs)
         return self
 
+    def _remove_cb_eb(self, cb, eb):
+        """Remove a previously registered (callback, errback) pair under a
+        single lock acquire. No-op if the future has already resolved or if
+        either callable is not present.
+        """
+        lock = self._lock
+        lock.acquire()
+        try:
+            if not self.is_done:
+                try:
+                    self._callbacks.remove(cb)
+                except ValueError:
+                    pass
+                try:
+                    self._errbacks.remove(eb)
+                except ValueError:
+                    pass
+        finally:
+            lock.release()
+
     def chain(self, future):
         self._add_cb_eb(future.success, future.failure)
         return self

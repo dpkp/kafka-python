@@ -36,19 +36,23 @@ class Heartbeat:
         self.last_poll = -1 * float('inf')
         self.last_reset = time.monotonic()
         self.heartbeat_failed = None
+        self.heartbeat_in_flight = False
 
     def poll(self):
         self.last_poll = time.monotonic()
 
     def sent_heartbeat(self):
         self.last_send = time.monotonic()
+        self.heartbeat_in_flight = True
         self.heartbeat_failed = False
 
     def fail_heartbeat(self):
         self.heartbeat_failed = True
+        self.heartbeat_in_flight = False
 
     def received_heartbeat(self):
         self.last_receive = time.monotonic()
+        self.heartbeat_in_flight = False
 
     def time_to_next_heartbeat(self):
         """Returns seconds (float) remaining before next heartbeat should be sent"""
@@ -67,6 +71,7 @@ class Heartbeat:
         return (time.monotonic() - last_recv) > (self.config['session_timeout_ms'] / 1000)
 
     def reset_timeouts(self):
+        self.heartbeat_in_flight = False
         self.last_reset = time.monotonic()
         self.last_poll = time.monotonic()
         self.heartbeat_failed = False
