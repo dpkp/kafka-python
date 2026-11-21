@@ -133,7 +133,7 @@ class TestTimers:
 
         async def schedule_and_cancel():
             handle = started_backend.call_later(0.5, fired.set)
-            started_backend.cancel(handle)
+            handle.cancel()
         started_backend.run(schedule_and_cancel)
         assert not fired.wait(timeout=0.3)
 
