@@ -76,6 +76,31 @@ def test_metadata_refresh(all_net):
         manager.close()
 
 
+def test_metadata_refresh_after_connection_recovery(all_net):
+    cluster = MockCluster(num_brokers=1)
+    cluster.set_metadata(topics=[_metadata_topic('t', num_partitions=1)])
+    manager = _manager(all_net, cluster)
+    try:
+        manager.bootstrap(timeout_ms=5000)
+
+        async def recover():
+            # During an outage, no node may be available for metadata refresh.
+            # Reconnecting must let a requested refresh bypass that backoff.
+            manager.close(0)
+            manager.config['reconnect_backoff_ms'] = 30000
+            manager.update_backoff('metadata')
+            cluster.set_metadata(topics=[_metadata_topic('t', num_partitions=2)])
+            conn = manager.get_connection(0)
+            await conn
+            update = manager.cluster.request_update()
+            await all_net.await_for(update, timeout_ms=1000)
+
+        all_net.run(recover, timeout_ms=5000)
+        assert manager.cluster.partitions_for_topic('t') == {0, 1}
+    finally:
+        manager.close()
+
+
 def test_await_for_success_and_timeout(all_net):
     """The shared ``NetBackend.await_for`` helper behaves identically on both
     backends: a resolved future passes its value through, and a future that
