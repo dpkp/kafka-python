@@ -197,6 +197,15 @@ class Sender(threading.Thread):
         for node in list(ready_nodes):
             if not self._client.is_ready(node):
                 node_delay_ms = self._client.connection_delay(node)
+                throttle_delay_ms = self._client.throttle_delay(node)
+                if throttle_delay_ms > 0:
+                    # Connected but throttled by the broker (KIP-219). Throttle
+                    # expiry does not wake the sender, so wake up when it ends
+                    # rather than sleeping until the batch delivery timeout.
+                    node_delay_ms = min(node_delay_ms, throttle_delay_ms)
+                elif self._client.is_ready(node):
+                    # Throttling expired between the two readiness checks.
+                    node_delay_ms = 0
                 log.debug('%s: Node %s not ready; delaying produce of accumulated batch (%f ms)', str(self), node, node_delay_ms)
                 self._client.maybe_connect(node, wakeup=False)
                 ready_nodes.remove(node)

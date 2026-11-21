@@ -277,3 +277,27 @@ def test_maybe_abort_batches(sender, accumulator):
     tp = TopicPartition('foo', 0)
     accumulator.append(tp, 0, b'key', b'value', [], now=now)
     sender._maybe_abort_batches(Exception('foo'))
+
+
+def _sendable_node_not_ready(sender, accumulator, mocker, throttle_delay_ms, ready_after_check=False):
+    mocker.patch.object(accumulator, 'ready', return_value=({0}, float('inf'), False))
+    ready_calls = []
+    def is_ready(node_id, **kwargs):
+        ready_calls.append(node_id)
+        return ready_after_check and len(ready_calls) > 1
+    mocker.patch.object(sender._client, 'is_ready', side_effect=is_ready)
+    mocker.patch.object(sender._client, 'connection_delay', return_value=float('inf'))
+    mocker.patch.object(sender._client, 'throttle_delay', return_value=throttle_delay_ms)
+    mocker.patch.object(sender._client, 'maybe_connect')
+
+
+def test__send_producer_data_waits_for_throttle_expiry(sender, accumulator, mocker):
+    # A connected node throttled by the broker must wake the sender when the
+    # throttle expires instead of sleeping until the batch delivery timeout.
+    _sendable_node_not_ready(sender, accumulator, mocker, throttle_delay_ms=1000)
+    assert sender._send_producer_data() == 1000
+
+
+def test__send_producer_data_throttle_expired_during_check(sender, accumulator, mocker):
+    _sendable_node_not_ready(sender, accumulator, mocker, throttle_delay_ms=0, ready_after_check=True)
+    assert sender._send_producer_data() == 0
