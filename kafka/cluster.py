@@ -102,6 +102,10 @@ class ClusterMetadata:
         self.closed = True
         self._wakeup.notify()
 
+    def on_connection_ready(self):
+        """Allow metadata refresh to retry when a connection becomes available."""
+        self._manager.reset_backoff('metadata')
+
     def start_refresh_loop(self):
         """Spawn the periodic refresh coroutine. Idempotent. Triggers bootstrap if needed."""
         if self._manager is None:
