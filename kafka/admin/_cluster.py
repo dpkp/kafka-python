@@ -70,7 +70,8 @@ class ClusterAdminMixin:
             metadata = response.to_dict()
             metadata.pop('error_code')
             metadata.pop('error_message')
-            metadata.pop('endpoint_type')
+            # DescribeClusterResponse v0 (Kafka 2.8-3.6) has no endpoint_type
+            metadata.pop('endpoint_type', None)
             metadata.pop('throttle_time_ms', None)
             self._process_acl_operations(metadata)
             return metadata
