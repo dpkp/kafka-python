@@ -1,4 +1,8 @@
 import io
+import os
+import subprocess
+import sys
+import textwrap
 
 import pytest
 
@@ -38,3 +42,36 @@ def test_tagged_fields_struct():
     decoded = tags.decode(io.BytesIO(encoded), version=0)
     assert decoded == val
 
+
+def test_tagged_fields_decode_empty():
+    data = io.BytesIO(UnsignedVarInt32.encode(0) + b'\x01')
+    TaggedFields.decode_empty(data)
+    assert data.tell() == 1
+
+
+def test_tagged_fields_decode_empty_not_empty():
+    with pytest.raises(ValueError):
+        TaggedFields.decode_empty(io.BytesIO(UnsignedVarInt32.encode(1)))
+
+
+def test_decode_nested_structs_with_python_optimize():
+    # decode_empty must not rely on assert, which is stripped by python -O
+    script = textwrap.dedent("""
+        import io
+        from kafka.protocol.metadata.api_versions import ApiVersionsResponse
+        R = ApiVersionsResponse[4]
+        data = R(
+            error_code=0,
+            api_keys=[R.ApiVersion(api_key=18, min_version=0, max_version=4)],
+            throttle_time_ms=0,
+            supported_features=[R.SupportedFeatureKey(name='metadata.version', min_version=1, max_version=21)],
+            finalized_features_epoch=1,
+            finalized_features=[R.FinalizedFeatureKey(name='metadata.version', max_version_level=21, min_version_level=21)],
+        ).encode()
+        print(R.decode(io.BytesIO(data)).finalized_features[0].max_version_level)
+    """)
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    result = subprocess.run([sys.executable, '-O', '-c', script], cwd=repo_root,
+                            capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == '21'

@@ -100,7 +100,9 @@ class TaggedFields:
 
     @classmethod
     def decode_empty(cls, data):
-        assert UnsignedVarInt32.decode(data) == 0
+        num_fields = UnsignedVarInt32.decode(data)
+        if num_fields != 0:
+            raise ValueError('Expected empty tagged fields, got %d' % num_fields)
 
     @classmethod
     def encode_empty(cls):
