@@ -377,8 +377,14 @@ class _AsyncioProtocolAdapter(asyncio.Protocol):
         self.transport._bump_read()
         self._conn.data_received(data)
 
+    def eof_received(self):
+        # peer closed the socket: report it as KafkaTCPTransport does
+        self.transport._close_error = Errors.KafkaConnectionError('socket disconnected')
+
     def connection_lost(self, exc):
-        self._conn.connection_lost(exc)
+        if exc is not None and not isinstance(exc, Errors.KafkaError):
+            exc = Errors.KafkaConnectionError(exc)
+        self._conn.connection_lost(exc or self.transport._close_error)
 
     def pause_writing(self):
         self._conn.pause_writing()
@@ -401,6 +407,7 @@ class _AsyncioTransport:
         self.host = host
         self._port = port
         self._protocol = None
+        self._close_error = None
         self.last_write = time.monotonic()
         self.last_read = time.monotonic()
 
@@ -426,6 +433,9 @@ class _AsyncioTransport:
         self._t.close()
 
     def abort(self, error=None):
+        # asyncio reports connection_lost(None) after abort(); keep the error for the adapter
+        if not self._t.is_closing():
+            self._close_error = error
         self._t.abort()
 
     def is_closing(self):

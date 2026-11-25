@@ -7,6 +7,7 @@ AsyncioBackend -- the both-backend coverage for the async paths.
 """
 import asyncio
 import socket
+import struct
 import threading
 import time
 
@@ -15,7 +16,9 @@ import pytest
 import kafka.errors as Errors
 from kafka.net.backend import NetBackend
 from kafka.net.backend.asyncio_backend import AsyncioBackend, AsyncioFuture
+from kafka.net.connection import KafkaConnection
 from kafka.net.manager import KafkaConnectionManager
+from kafka.protocol.broker_version_data import BrokerVersionData
 from kafka.protocol.metadata import MetadataRequest
 from test.mock_broker import MockBroker
 from test.net.backend.test_net_backend_future import NetBackendFutureContract
@@ -184,6 +187,7 @@ class _StubProtocol:
     def __init__(self):
         self.received = bytearray()
         self.closed = False
+        self.lost_exc = None
         self.transport = None
     def connection_made(self, transport):
         # Mirror KafkaConnection.connection_made: adopt + wire + start reading.
@@ -195,6 +199,7 @@ class _StubProtocol:
         self.received += data
     def connection_lost(self, exc):
         self.closed = True
+        self.lost_exc = exc
     def pause_writing(self):
         pass
     def resume_writing(self):
@@ -316,6 +321,91 @@ class TestCreateConnection:
                 started_backend.run(do)
             # The transport was aborted, so it is closing (not leaked).
             assert proto.transport.is_closing()
+        finally:
+            srv.close()
+
+    def _lost_exc(self, started_backend, srv, proto, *calls):
+        host, port = srv.getsockname()
+
+        async def do():
+            await started_backend.create_connection(proto, host, port)
+            for call in calls:
+                call(proto.transport)
+            for _ in range(100):
+                if proto.closed:
+                    break
+                await started_backend.sleep(0.01)
+
+        try:
+            started_backend.run(do)
+        finally:
+            srv.close()
+        assert proto.closed
+        return proto.lost_exc
+
+    # KafkaTCPTransport hands abort(error) to connection_lost and reports a
+    # peer EOF or socket error as KafkaConnectionError.
+    def test_abort_error_reaches_connection_lost(self, started_backend):
+        err = Errors.RequestTimedOutError('boom')
+        srv, _, _ = _echo_server()
+        assert self._lost_exc(started_backend, srv, _StubProtocol(), lambda t: t.abort(err)) is err
+
+    def test_close_then_abort_stays_graceful(self, started_backend):
+        err = Errors.RequestTimedOutError('boom')
+        srv, _, _ = _echo_server()
+        assert self._lost_exc(started_backend, srv, _StubProtocol(),
+                              lambda t: t.close(), lambda t: t.abort(err)) is None
+
+    def test_protocol_error_reaches_connection_lost(self, started_backend):
+        err = Errors.KafkaProtocolError('bad frame')
+
+        class _BadFrameProtocol(_StubProtocol):
+            def data_received(self, data):
+                raise err
+
+        srv, _, _ = _echo_server()
+        assert self._lost_exc(started_backend, srv, _BadFrameProtocol(), lambda t: t.write(b'ping')) is err
+
+    @pytest.mark.parametrize('reset', [False, True], ids=['eof', 'reset'])
+    def test_peer_close_reaches_connection_lost_as_connection_error(self, started_backend, reset):
+        srv = socket.socket()
+        srv.bind(('127.0.0.1', 0))
+        srv.listen(1)
+
+        def serve():
+            conn, _ = srv.accept()
+            if reset:
+                conn.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack('ii', 1, 0))
+            conn.close()
+
+        threading.Thread(target=serve, daemon=True).start()
+        exc = self._lost_exc(started_backend, srv, _StubProtocol())
+        assert isinstance(exc, Errors.KafkaConnectionError)
+
+    def test_request_timeout_fails_in_flight_requests_with_timeout_error(self, started_backend):
+        srv = socket.socket()
+        srv.bind(('127.0.0.1', 0))
+        srv.listen(1)
+        host, port = srv.getsockname()
+
+        def serve():  # accept and never answer
+            conn, _ = srv.accept()
+            while conn.recv(4096):
+                pass
+
+        threading.Thread(target=serve, daemon=True).start()
+        conn = KafkaConnection(started_backend, node_id=0,
+                               broker_version_data=BrokerVersionData((0, 9)),
+                               request_timeout_ms=100)
+
+        async def do():
+            await started_backend.create_connection(conn, host, port)
+            await conn.initialize()
+            await conn.send_request(MetadataRequest[0]([]))
+
+        try:
+            with pytest.raises(Errors.RequestTimedOutError):
+                started_backend.run(do)
         finally:
             srv.close()
 
