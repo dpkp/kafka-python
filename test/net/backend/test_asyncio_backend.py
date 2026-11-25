@@ -374,12 +374,13 @@ class TestCreateConnection:
 
         def serve():
             conn, _ = srv.accept()
+            conn.recv(4, socket.MSG_WAITALL)  # close only after connect completed
             if reset:
                 conn.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack('ii', 1, 0))
             conn.close()
 
         threading.Thread(target=serve, daemon=True).start()
-        exc = self._lost_exc(started_backend, srv, _StubProtocol())
+        exc = self._lost_exc(started_backend, srv, _StubProtocol(), lambda t: t.write(b'ping'))
         assert isinstance(exc, Errors.KafkaConnectionError)
 
     def test_request_timeout_fails_in_flight_requests_with_timeout_error(self, started_backend):
