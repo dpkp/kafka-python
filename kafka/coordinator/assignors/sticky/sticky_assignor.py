@@ -184,7 +184,11 @@ class StickyAssignmentExecutor:
             for partitions in member_metadata.partitions:
                 if partitions in sorted_partition_consumers_by_generation:
                     consumers = sorted_partition_consumers_by_generation[partitions]
-                    if member_metadata.generation and member_metadata.generation in consumers:
+                    if (
+                        member_metadata.generation is not None
+                        and member_metadata.generation >= 0
+                        and member_metadata.generation in consumers
+                    ):
                         # same partition is assigned to two consumers during the same rebalance.
                         # log a warning and skip this record
                         log.warning(
@@ -413,17 +417,17 @@ class StickyAssignmentExecutor:
                 if consumer is None:
                     log.error("Expected partition {} to be assigned to a consumer".format(partition))
 
-                if (
-                    partition in self.previous_assignment
-                    and len(self.current_assignment[consumer])
-                    > len(self.current_assignment[self.previous_assignment[partition].consumer]) + 1
-                ):
-                    self._reassign_partition_to_consumer(
-                        partition, self.previous_assignment[partition].consumer,
-                    )
-                    reassignment_performed = True
-                    modified = True
-                    continue
+                if partition in self.previous_assignment:
+                    prev_consumer = self.previous_assignment[partition].consumer
+                    if (
+                        prev_consumer in self.current_assignment
+                        and prev_consumer in self.partition_to_all_potential_consumers[partition]
+                        and len(self.current_assignment[consumer]) > len(self.current_assignment[prev_consumer]) + 1
+                    ):
+                        self._reassign_partition_to_consumer(partition, prev_consumer)
+                        reassignment_performed = True
+                        modified = True
+                        continue
 
                 # check if a better-suited consumer exist for the partition; if so, reassign it
                 for other_consumer in self.partition_to_all_potential_consumers[partition]:
