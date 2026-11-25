@@ -847,6 +847,66 @@ def test_reassignment_with_mixed_subscriptions_terminates(mocker, sticky_assigno
     assert sticky_assignor._latest_partition_movements.are_sticky()
 
 
+def test_reassignment_does_not_assign_unsubscribed_topic_from_previous_assignment(mocker, sticky_assignor):
+    partitions = {'t1': 1, 't2': 7}
+    cluster = create_cluster(mocker, topics=set(partitions), topic_partitions_lambda=lambda t: set(range(partitions[t])))
+
+    subscriptions = {
+        'C1': {'t1', 't2'},
+        'C2': {'t2'},
+        'C3': {'t1'},
+    }
+    member_metadata = {
+        'C1': sticky_assignor._metadata(subscriptions['C1'], []),
+        'C2': sticky_assignor._metadata(subscriptions['C2'], [TopicPartition('t2', 2)], generation=2),
+        'C3': sticky_assignor._metadata(subscriptions['C3'], [TopicPartition('t2', 2)], generation=1),
+    }
+
+    assignment = sticky_assignor.assign(cluster, make_join_group_response_members(member_metadata))
+    verify_validity_and_balance(subscriptions, assignment)
+    assert sum(len(a.partitions()) for a in assignment.values()) == 8
+    assert TopicPartition('t2', 2) not in assignment['C3'].partitions()
+    assert sticky_assignor._latest_partition_movements.are_sticky()
+
+
+def test_reassignment_skips_fixed_previous_consumer(mocker, sticky_assignor):
+    partitions = {'t0': 0, 't1': 4}
+    cluster = create_cluster(mocker, topics=set(partitions), topic_partitions_lambda=lambda t: set(range(partitions[t])))
+
+    subscriptions = {
+        'C0': {'t0'},
+        'C1': {'t1'},
+        'C2': {'t1'},
+    }
+    member_metadata = {
+        'C0': sticky_assignor._metadata(subscriptions['C0'], [TopicPartition('t1', 0)], generation=1),
+        'C1': sticky_assignor._metadata(subscriptions['C1'], [TopicPartition('t1', p) for p in range(4)], generation=2),
+        'C2': sticky_assignor._metadata(subscriptions['C2'], []),
+    }
+
+    assignment = sticky_assignor.assign(cluster, make_join_group_response_members(member_metadata))
+    verify_validity_and_balance(subscriptions, assignment)
+    assert assignment['C0'].partitions() == []
+    assert len(assignment['C1'].partitions()) == 2
+    assert len(assignment['C2'].partitions()) == 2
+
+
+def test_conflicting_generation_zero_preserves_first_owner(mocker, sticky_assignor, caplog):
+    cluster = create_cluster(mocker, topics={'t0'}, topics_partitions={0, 1})
+    member_metadata = {
+        'C0': sticky_assignor.parse_member_metadata(
+            sticky_assignor._metadata({'t0'}, [TopicPartition('t0', 0)], generation=0)
+        ),
+        'C1': sticky_assignor.parse_member_metadata(
+            sticky_assignor._metadata({'t0'}, [TopicPartition('t0', 0)], generation=0)
+        ),
+    }
+    with caplog.at_level('WARNING'):
+        executor = StickyAssignmentExecutor(cluster, member_metadata)
+    assert executor.current_partition_consumer[TopicPartition('t0', 0)] == 'C0'
+    assert 'following sticky assignment generation 0' in caplog.text
+
+
 def assert_assignment(result_assignment, expected_assignment):
     assert result_assignment == expected_assignment
     assert set(result_assignment) == set(expected_assignment)
