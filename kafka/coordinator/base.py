@@ -407,7 +407,9 @@ class BaseCoordinator(ABC):
         Returns:
             bool: True if it should, False otherwise
         """
-        return self.rejoin_needed
+        # A rebalance that has started stays pending until it completes,
+        # even if the trigger (e.g. a metadata change) has been handled.
+        return self.rejoin_needed or self.rejoining
 
     def poll_heartbeat(self):
         """
@@ -494,7 +496,9 @@ class BaseCoordinator(ABC):
             # consumer.poll(timeout_ms=N) that gives up on the first iteration
             # would send a fresh JoinGroup on the next iteration, confusing
             # the broker.
-            if self._join_task is None or self._join_task.is_done:
+            # A task that already succeeded is reused so its result is not
+            # lost; a failed one is replaced by a fresh attempt.
+            if self._join_task is None or self._join_task.failed():
                 # Call _on_join_prepare once per rebalance attempt. The rejoining
                 # flag survives across loop iterations so we don't re-run user
                 # listeners or auto-commit on retry.

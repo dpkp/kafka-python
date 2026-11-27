@@ -1441,6 +1441,135 @@ def test_join_group_async_returns_false_on_short_timeout_and_caches_task(
     assert seeded_coord.state == MemberState.STABLE
 
 
+def test_join_group_async_collects_pending_sync_after_leader_assignment(
+        request, broker, net, seeded_coord):
+    """A leader rejoining because of a metadata change refreshes its
+    assignment snapshot while performing the assignment, so need_rejoin()
+    no longer reports the metadata change. If SyncGroup is still pending
+    when the poll times out, the next poll must still await the in-flight
+    join and complete it instead of returning with the member stuck in
+    REBALANCING.
+    """
+    request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
+    broker.set_metadata(topics=[_metadata_topic('foobar', 2)])
+
+    # Stable leader that assigned 'foobar' while it had a single partition.
+    _apply_topic_metadata(seeded_coord._cluster, 'foobar', num_partitions=1)
+    seeded_coord._perform_assignment('member-1', 'range', _single_member('foobar'))
+    seeded_coord._joined_subscription = {'foobar'}
+    seeded_coord._generation = Generation(1, 'member-1', 'range')
+    assert not seeded_coord.need_rejoin()
+
+    # The topic grows: the leader must rejoin although rejoin_needed is False.
+    _apply_topic_metadata(seeded_coord._cluster, 'foobar', num_partitions=2)
+    assert seeded_coord.rejoin_needed is False
+    assert seeded_coord.need_rejoin()
+
+    broker.respond(JoinGroupRequest, _join_response_object(
+        generation_id=2, leader='member-1', member_id='member-1',
+        members=_single_member('foobar')))
+    sync_response_pending = net.create_future()
+
+    async def slow_sync_handler(api_key, api_version, correlation_id, request_bytes):
+        await sync_response_pending
+        return _sync_response_object(assignment=ConsumerProtocolAssignment(
+            0, [('foobar', [0, 1])], b'').encode())
+
+    broker.respond_fn(SyncGroupRequest, slow_sync_handler)
+
+    # First poll: JoinGroup completes and the leader assigns, SyncGroup hangs.
+    result = seeded_coord._net.run(seeded_coord.join_group_async, 50)
+    assert result is False
+    assert seeded_coord.state == MemberState.REBALANCING
+
+    # Second poll after the broker answers SyncGroup: the join completes.
+    sync_response_pending.success(None)
+    result = seeded_coord._net.run(seeded_coord.join_group_async, 5000)
+    assert result is True
+    assert seeded_coord.state == MemberState.STABLE
+    assert seeded_coord._generation.generation_id == 2
+    assert seeded_coord._subscription.assigned_partitions() == {
+        TopicPartition('foobar', 0), TopicPartition('foobar', 1)}
+
+
+def test_join_group_async_uses_join_completed_between_polls(
+        request, broker, net, seeded_coord):
+    """A cached join task that completes between two polls must be
+    collected by the next poll, not discarded in favour of a new JoinGroup.
+    """
+    request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
+    seeded_coord.rejoin_needed = True
+    seeded_coord.state = MemberState.UNJOINED
+
+    join_request_count = [0]
+
+    def join_handler(api_key, api_version, correlation_id, request_bytes):
+        join_request_count[0] += 1
+        return _join_response_object(
+            leader='leader-x', member_id='member-1', members=[])
+
+    broker.respond_fn(JoinGroupRequest, join_handler)
+    sync_response_pending = net.create_future()
+
+    async def slow_sync_handler(api_key, api_version, correlation_id, request_bytes):
+        await sync_response_pending
+        return _sync_response_object(assignment=ConsumerProtocolAssignment(
+            0, [('foobar', [0, 1])], b'').encode())
+
+    broker.respond_fn(SyncGroupRequest, slow_sync_handler)
+
+    result = seeded_coord._net.run(seeded_coord.join_group_async, 50)
+    assert result is False
+    join_task = seeded_coord._join_task
+    assert join_task is not None
+
+    # The broker answers SyncGroup and the task finishes before the next poll.
+    sync_response_pending.success(None)
+    seeded_coord._net.wait_for(join_task, 5000)
+    assert join_task.is_done
+
+    result = seeded_coord._net.run(seeded_coord.join_group_async, 5000)
+    assert result is True
+    assert join_request_count[0] == 1, 'completed join was discarded and resent'
+    assert seeded_coord.state == MemberState.STABLE
+    assert seeded_coord._subscription.assigned_partitions() == {
+        TopicPartition('foobar', 0), TopicPartition('foobar', 1)}
+
+
+def test_join_group_async_retries_after_join_task_timeout(
+        request, mocker, broker, seeded_coord):
+    """A join task that itself fails with KafkaTimeoutError (e.g. a request
+    timeout) must not be re-awaited by later polls; the next poll starts a
+    fresh JoinGroup."""
+    request.addfinalizer(lambda: setattr(seeded_coord, 'state', MemberState.UNJOINED))
+    seeded_coord.rejoin_needed = True
+    seeded_coord.state = MemberState.UNJOINED
+
+    original = seeded_coord._do_join_and_sync_async
+    attempts = [0]
+
+    async def join_times_out_once():
+        attempts[0] += 1
+        if attempts[0] == 1:
+            raise Errors.KafkaTimeoutError('request timed out')
+        return await original()
+
+    mocker.patch.object(seeded_coord, '_do_join_and_sync_async', join_times_out_once)
+
+    result = seeded_coord._net.run(seeded_coord.join_group_async, 5000)
+    assert result is False
+    assert attempts[0] == 1
+
+    broker.respond(JoinGroupRequest, _join_response_object(
+        leader='leader-x', member_id='member-1', members=[]))
+    broker.respond(SyncGroupRequest, _sync_response_object(
+        assignment=ConsumerProtocolAssignment(0, [('foobar', [0, 1])], b'').encode()))
+    result = seeded_coord._net.run(seeded_coord.join_group_async, 5000)
+    assert result is True
+    assert attempts[0] == 2
+    assert seeded_coord.state == MemberState.STABLE
+
+
 @pytest.mark.parametrize("broker", [(0, 8, 0)], indirect=True)
 def test_join_group_async_unsupported_version(broker, coordinator):
     with pytest.raises(Errors.UnsupportedVersionError):
