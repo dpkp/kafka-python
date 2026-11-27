@@ -407,7 +407,9 @@ class BaseCoordinator(ABC):
         Returns:
             bool: True if it should, False otherwise
         """
-        return self.rejoin_needed
+        # A rebalance that has started stays pending until it completes,
+        # even if the trigger (e.g. a metadata change) has been handled.
+        return self.rejoin_needed or self.rejoining
 
     def poll_heartbeat(self):
         """
